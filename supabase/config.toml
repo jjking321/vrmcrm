@@ -1,1 +1,13 @@
 project_id = "csizkmiplkjyawbscrlx"
+
+[functions.generate-marketing]
+verify_jwt = false
+
+[functions.enrich-zillow]
+verify_jwt = false
+
+[functions.enrich-airroi]
+verify_jwt = false
+
+[functions.verify-address]
+verify_jwt = false

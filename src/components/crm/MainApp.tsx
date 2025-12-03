@@ -41,10 +41,6 @@ const MainApp: React.FC = () => {
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // API Keys
-  const [geocodioApiKey, setGeocodioApiKey] = useState(() => localStorage.getItem('geocodio_api_key') || '');
-  const [rapidApiKey, setRapidApiKey] = useState(() => localStorage.getItem('rapid_api_key') || '');
-  const [airRoiApiKey, setAirRoiApiKey] = useState(() => localStorage.getItem('airroi_api_key') || '');
 
   // Load data on mount
   useEffect(() => {
@@ -375,12 +371,6 @@ const MainApp: React.FC = () => {
           fields={fields}
           onAddField={handleAddField}
           onDeleteField={handleDeleteField}
-          geocodioApiKey={geocodioApiKey}
-          onGeocodioApiKeyChange={(key) => { setGeocodioApiKey(key); localStorage.setItem('geocodio_api_key', key); }}
-          rapidApiKey={rapidApiKey}
-          onRapidApiKeyChange={(key) => { setRapidApiKey(key); localStorage.setItem('rapid_api_key', key); }}
-          airRoiApiKey={airRoiApiKey}
-          onAirRoiApiKeyChange={(key) => { setAirRoiApiKey(key); localStorage.setItem('airroi_api_key', key); }}
         />
       );
     }
@@ -503,7 +493,6 @@ const MainApp: React.FC = () => {
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportData}
         fields={fields}
-        geocodioApiKey={geocodioApiKey}
       />
     </div>
   );

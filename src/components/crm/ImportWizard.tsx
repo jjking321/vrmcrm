@@ -8,7 +8,6 @@ interface ImportWizardProps {
   onClose: () => void;
   onImport: (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => void;
   fields: FieldDefinition[];
-  geocodioApiKey: string;
 }
 
 export const ImportWizard: React.FC<ImportWizardProps> = ({ 
@@ -16,7 +15,6 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   onClose, 
   onImport, 
   fields,
-  geocodioApiKey 
 }) => {
   const [step, setStep] = useState<'upload' | 'map' | 'summary'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -128,7 +126,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
         });
 
         onImport(parsedData, {
-          standardize: !!geocodioApiKey,
+          standardize: true,
           globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
           listName: createList && listName ? listName : undefined,
         });

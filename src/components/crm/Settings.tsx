@@ -1,31 +1,18 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType } from '@/types';
-import { Plus, Trash2, Key, Database, Zap, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 
 interface SettingsProps {
   fields: FieldDefinition[];
   onAddField: (field: FieldDefinition) => void;
   onDeleteField: (fieldId: string) => void;
-  geocodioApiKey: string;
-  onGeocodioApiKeyChange: (key: string) => void;
-  rapidApiKey: string;
-  onRapidApiKeyChange: (key: string) => void;
-  airRoiApiKey: string;
-  onAirRoiApiKeyChange: (key: string) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
   fields,
   onAddField,
   onDeleteField,
-  geocodioApiKey,
-  onGeocodioApiKeyChange,
-  rapidApiKey,
-  onRapidApiKeyChange,
-  airRoiApiKey,
-  onAirRoiApiKeyChange,
 }) => {
   const [activeTab, setActiveTab] = useState<'fields' | 'integrations'>('fields');
   const [isAdding, setIsAdding] = useState(false);
@@ -45,7 +32,32 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  const customFields = fields.filter(f => !f.isSystem);
+  const integrations = [
+    {
+      name: 'Geocodio',
+      description: 'Address verification and standardization',
+      color: 'emerald',
+      configured: true,
+    },
+    {
+      name: 'RapidAPI (Zillow)',
+      description: 'Property valuations and market data',
+      color: 'blue',
+      configured: true,
+    },
+    {
+      name: 'AirROI',
+      description: 'Airbnb revenue estimates and analytics',
+      color: 'violet',
+      configured: true,
+    },
+    {
+      name: 'Lovable AI',
+      description: 'AI-powered marketing copy generation',
+      color: 'amber',
+      configured: true,
+    },
+  ];
 
   return (
     <div className="max-w-4xl animate-fade-in">
@@ -186,65 +198,42 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {activeTab === 'integrations' && (
         <div className="space-y-4">
-          {/* Geocodio */}
-          <div className="bg-card rounded-xl shadow-soft border border-border p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <Key className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">Geocodio</h3>
-                <p className="text-sm text-muted-foreground mb-3">Address verification and standardization</p>
-                <input
-                  type="password"
-                  value={geocodioApiKey}
-                  onChange={(e) => onGeocodioApiKeyChange(e.target.value)}
-                  className="w-full p-2.5 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
-                  placeholder="Enter your Geocodio API key"
-                />
-              </div>
-            </div>
+          <div className="bg-card rounded-xl shadow-soft border border-border p-6 mb-4">
+            <p className="text-sm text-muted-foreground">
+              API integrations are managed securely as backend secrets. Contact your administrator to update API keys.
+            </p>
           </div>
 
-          {/* RapidAPI (Zillow) */}
-          <div className="bg-card rounded-xl shadow-soft border border-border p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Key className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">RapidAPI (Zillow)</h3>
-                <p className="text-sm text-muted-foreground mb-3">Property valuations and market data</p>
-                <input
-                  type="password"
-                  value={rapidApiKey}
-                  onChange={(e) => onRapidApiKeyChange(e.target.value)}
-                  className="w-full p-2.5 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
-                  placeholder="Enter your RapidAPI key"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* AirROI */}
-          <div className="bg-card rounded-xl shadow-soft border border-border p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
-                <Key className="w-5 h-5 text-violet-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-foreground">AirROI</h3>
-                <p className="text-sm text-muted-foreground mb-3">Airbnb revenue estimates and analytics</p>
-                <input
-                  type="password"
-                  value={airRoiApiKey}
-                  onChange={(e) => onAirRoiApiKeyChange(e.target.value)}
-                  className="w-full p-2.5 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
-                  placeholder="Enter your AirROI API key"
-                />
+          {integrations.map((integration) => (
+            <div key={integration.name} className="bg-card rounded-xl shadow-soft border border-border p-6">
+              <div className="flex items-start gap-4">
+                <div className={cn(
+                  "w-10 h-10 rounded-lg flex items-center justify-center",
+                  integration.color === 'emerald' && "bg-emerald-100",
+                  integration.color === 'blue' && "bg-blue-100",
+                  integration.color === 'violet' && "bg-violet-100",
+                  integration.color === 'amber' && "bg-amber-100"
+                )}>
+                  <CheckCircle className={cn(
+                    "w-5 h-5",
+                    integration.color === 'emerald' && "text-emerald-600",
+                    integration.color === 'blue' && "text-blue-600",
+                    integration.color === 'violet' && "text-violet-600",
+                    integration.color === 'amber' && "text-amber-600"
+                  )} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-foreground">{integration.name}</h3>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      Configured
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{integration.description}</p>
+                </div>
               </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
     </div>

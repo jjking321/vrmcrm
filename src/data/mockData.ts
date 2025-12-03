@@ -22,6 +22,11 @@ export const SYSTEM_FIELDS: FieldDefinition[] = [
   { id: 'tags', label: 'Tags', type: 'text', isSystem: true },
   { id: 'ownerName', label: 'Owner', type: 'text', isSystem: true },
   { id: 'lastActivity', label: 'Last Activity', type: 'date', isSystem: true },
+  { id: 'ownershipLength', label: 'Ownership Length', type: 'number', isSystem: true },
+  { id: 'ownerType', label: 'Owner Type', type: 'text', isSystem: true },
+  { id: 'ownerOccupied', label: 'Owner Occupied', type: 'checkbox', isSystem: true },
+  { id: 'litigator', label: 'Litigator', type: 'checkbox', isSystem: true },
+  { id: 'hasDNC', label: 'Has DNC Phone', type: 'checkbox', isSystem: true },
 ];
 
 export const MOCK_PROPERTIES: Property[] = [
@@ -41,9 +46,24 @@ export const MOCK_PROPERTIES: Property[] = [
     tags: ['beachfront', 'luxury', 'pool'],
     owner: {
       name: 'Sarah Johnson',
+      owners: [
+        { firstName: 'Sarah', lastName: 'Johnson' },
+        { firstName: 'Michael', lastName: 'Johnson' }
+      ],
+      phones: [
+        { number: '850-555-0123', type: 'mobile', doNotCall: false },
+        { number: '850-555-0124', type: 'landline', doNotCall: true }
+      ],
       email: 'sarah.johnson@email.com',
       phone: '850-555-0123',
-      mailingAddress: '456 Inland Ave, Pensacola FL 32501',
+      mailingAddress: '456 Inland Ave',
+      mailingCity: 'Pensacola',
+      mailingState: 'FL',
+      mailingZip: '32501',
+      ownershipLengthMonths: 48,
+      ownerType: 'INDIVIDUAL',
+      ownerOccupied: false,
+      litigator: false,
       lastVerifiedDate: new Date().toISOString(),
     },
     activities: [
@@ -59,6 +79,7 @@ export const MOCK_PROPERTIES: Property[] = [
       monthlyRevenueDistribution: [5, 6, 8, 10, 14, 16, 15, 14, 8, 4, 3, 5]
     },
     airbnbUrl: 'https://airbnb.com/rooms/123',
+    propertyUrl: 'https://propwire.com/property/123',
     leadScore: 85
   },
   {
@@ -77,8 +98,16 @@ export const MOCK_PROPERTIES: Property[] = [
     tags: ['mountain', 'cabin', 'hot-tub'],
     owner: {
       name: 'Michael Chen',
+      owners: [{ firstName: 'Michael', lastName: 'Chen' }],
+      phones: [
+        { number: '865-555-0456', type: 'mobile', doNotCall: false }
+      ],
       email: 'mchen@business.net',
       phone: '865-555-0456',
+      ownershipLengthMonths: 120,
+      ownerType: 'TRUST',
+      ownerOccupied: false,
+      litigator: true, // Example litigator
       lastVerifiedDate: new Date(Date.now() - 86400000 * 15).toISOString(),
     },
     activities: [
@@ -111,9 +140,26 @@ export const MOCK_PROPERTIES: Property[] = [
     tags: ['condo', 'urban', 'ocean-view'],
     owner: {
       name: 'Robert Martinez',
+      owners: [
+        { firstName: 'Robert', lastName: 'Martinez' },
+        { firstName: 'Elena', lastName: 'Martinez' },
+        { firstName: 'Carlos', lastName: 'Martinez' }
+      ],
+      phones: [
+        { number: '305-555-0789', type: 'mobile', doNotCall: false },
+        { number: '305-555-0790', type: 'mobile', doNotCall: false },
+        { number: '305-555-0791', type: 'landline', doNotCall: true }
+      ],
       email: 'rmartinez@gmail.com',
       phone: '305-555-0789',
-      mailingAddress: '100 Biscayne Blvd #1502, Miami FL 33132',
+      mailingAddress: '100 Biscayne Blvd #1502',
+      mailingCity: 'Miami',
+      mailingState: 'FL',
+      mailingZip: '33132',
+      ownershipLengthMonths: 36,
+      ownerType: 'INDIVIDUAL,TRUST',
+      ownerOccupied: true,
+      litigator: false,
       lastVerifiedDate: new Date(Date.now() - 86400000 * 7).toISOString(),
     },
     activities: [
@@ -147,8 +193,16 @@ export const MOCK_PROPERTIES: Property[] = [
     tags: ['lakefront', 'ski-in', 'premium'],
     owner: {
       name: 'Jennifer Williams',
+      owners: [{ firstName: 'Jennifer', lastName: 'Williams' }],
+      phones: [
+        { number: '530-555-0234', type: 'mobile', doNotCall: false }
+      ],
       email: 'jwilliams@outlook.com',
       phone: '530-555-0234',
+      ownershipLengthMonths: 84,
+      ownerType: 'INDIVIDUAL',
+      ownerOccupied: false,
+      litigator: false,
       lastVerifiedDate: new Date(Date.now() - 86400000 * 3).toISOString(),
     },
     activities: [
@@ -181,9 +235,20 @@ export const MOCK_PROPERTIES: Property[] = [
     tags: ['condo', 'urban', 'downtown'],
     owner: {
       name: 'John Smith',
+      owners: [{ firstName: 'John', lastName: 'Smith' }],
+      phones: [
+        { number: '615-555-0123', type: 'landline', doNotCall: true } // All phones DNC
+      ],
       email: 'john.smith@example.com',
       phone: '615-555-0123',
-      mailingAddress: '450 Main St, Nashville TN 37201',
+      mailingAddress: '450 Main St',
+      mailingCity: 'Nashville',
+      mailingState: 'TN',
+      mailingZip: '37201',
+      ownershipLengthMonths: 24,
+      ownerType: 'INDIVIDUAL',
+      ownerOccupied: true,
+      litigator: false,
       lastVerifiedDate: new Date(Date.now() - 86400000 * 30).toISOString(),
     },
     activities: [],

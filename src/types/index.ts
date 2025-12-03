@@ -25,11 +25,52 @@ export interface AuthSession {
   company: Company;
 }
 
+// Individual phone with metadata
+export interface PhoneContact {
+  number: string;
+  type: 'mobile' | 'landline' | 'unknown';
+  doNotCall: boolean;
+}
+
+// Individual owner (supports up to 4)
+export interface OwnerContact {
+  firstName: string;
+  lastName: string;
+}
+
 export interface Owner {
+  // Legacy single name field for backward compatibility
   name: string;
+  
+  // Multiple owners (up to 4)
+  owners?: OwnerContact[];
+  
+  // Multiple phones with DNC flags and types
+  phones?: PhoneContact[];
+  
+  // Legacy single phone/email for backward compatibility
   email: string;
   phone: string;
+  
+  // Full mailing address (separate fields)
   mailingAddress?: string;
+  mailingCity?: string;
+  mailingState?: string;
+  mailingZip?: string;
+  
+  // Ownership metadata
+  ownershipLengthMonths?: number;
+  ownerType?: string; // "INDIVIDUAL", "TRUST", "INDIVIDUAL,TRUST"
+  ownerOccupied?: boolean;
+  
+  // Compliance flags
+  litigator?: boolean;
+  
+  // Contact info
+  contactName?: string; // Primary contact name
+  age?: number;
+  
+  // Existing
   notes?: string;
   lastVerifiedDate?: string;
 }
@@ -73,6 +114,7 @@ export interface Property {
   marketData: MarketData;
   airbnbUrl?: string;
   zillowUrl?: string;
+  propertyUrl?: string; // PropWire or other external link
   leadScore: number;
   customFields?: Record<string, any>;
 }
@@ -90,7 +132,9 @@ export type FilterOperator =
   | 'gt'
   | 'lt'
   | 'is_set' 
-  | 'is_not_set';
+  | 'is_not_set'
+  | 'is_true'
+  | 'is_false';
 
 export interface FilterRule {
   id: string;

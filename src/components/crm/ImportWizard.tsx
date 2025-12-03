@@ -1,13 +1,80 @@
-import React, { useState, useCallback } from 'react';
-import { FieldDefinition } from '@/types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { FieldDefinition, Property } from '@/types';
 import { Upload, X, FileSpreadsheet, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { transformImportToOwner } from '@/lib/ownerUtils';
 
 interface ImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => void;
   fields: FieldDefinition[];
+}
+
+// Auto-mapping rules: CSV header patterns -> target field
+const AUTO_MAP_PATTERNS: Record<string, string[]> = {
+  address: ['street', 'address', 'property address', 'street address'],
+  city: ['city'],
+  state: ['state', 'st'],
+  zip: ['zip', 'zipcode', 'zip code', 'postal'],
+  propertyUrl: ['url', 'property url', 'link', 'propwire'],
+  
+  owner1FirstName: ['owner 1 first name', 'owner1 first name', 'first name 1', 'owner first', 'name 1'],
+  owner1LastName: ['owner 1 last name', 'owner1 last name', 'last name 1', 'owner last'],
+  owner2FirstName: ['owner 2 first name', 'owner2 first name', 'first name 2', 'name 2'],
+  owner2LastName: ['owner 2 last name', 'owner2 last name', 'last name 2'],
+  owner3FirstName: ['owner 3 first name', 'owner3 first name', 'first name 3', 'name 3'],
+  owner3LastName: ['owner 3 last name', 'owner3 last name', 'last name 3'],
+  owner4FirstName: ['owner 4 first name', 'owner4 first name', 'first name 4', 'name 4'],
+  owner4LastName: ['owner 4 last name', 'owner4 last name', 'last name 4'],
+  
+  mailingAddress: ['mailing address', 'owner mailing address', 'mail address', 'owner address'],
+  mailingCity: ['mailing city', 'owner mailing city', 'owner city'],
+  mailingState: ['mailing state', 'owner mailing state', 'owner state'],
+  mailingZip: ['mailing zip', 'owner mailing zip', 'owner zip'],
+  
+  ownershipLength: ['ownership length', 'ownership months', 'length of ownership', 'los', 'months owned'],
+  ownerType: ['owner type', 'ownership type'],
+  ownerOccupied: ['owner occupied', 'owner occ', 'oo', 'occupied'],
+  
+  contactName: ['contact name', 'name 1', 'primary contact'],
+  email: ['email', 'owner email', 'e-mail'],
+  age: ['age', 'owner age'],
+  
+  phone1: ['phone 1', 'phone1', 'primary phone', 'phone', 'phone number 1'],
+  phone1Type: ['phone 1 type', 'phone1 type', 'phone type 1'],
+  phone1DNC: ['phone 1 dnc', 'phone1 dnc', 'dnc 1', 'phone 1 do not call'],
+  phone2: ['phone 2', 'phone2', 'phone number 2'],
+  phone2Type: ['phone 2 type', 'phone2 type', 'phone type 2'],
+  phone2DNC: ['phone 2 dnc', 'phone2 dnc', 'dnc 2', 'phone 2 do not call'],
+  phone3: ['phone 3', 'phone3', 'phone number 3'],
+  phone3Type: ['phone 3 type', 'phone3 type', 'phone type 3'],
+  phone3DNC: ['phone 3 dnc', 'phone3 dnc', 'dnc 3', 'phone 3 do not call'],
+  
+  litigator: ['litigator', 'litigator flag', 'litigation'],
+  
+  bedrooms: ['bedrooms', 'beds', 'br'],
+  bathrooms: ['bathrooms', 'baths', 'ba'],
+};
+
+function autoMapHeaders(headers: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  
+  headers.forEach((header, idx) => {
+    const normalizedHeader = header.toLowerCase().trim();
+    
+    for (const [fieldId, patterns] of Object.entries(AUTO_MAP_PATTERNS)) {
+      if (patterns.some(pattern => normalizedHeader === pattern || normalizedHeader.includes(pattern))) {
+        // Only map if not already mapped to another column
+        if (!Object.values(mapping).includes(fieldId)) {
+          mapping[idx.toString()] = fieldId;
+          break;
+        }
+      }
+    }
+  });
+  
+  return mapping;
 }
 
 export const ImportWizard: React.FC<ImportWizardProps> = ({ 
@@ -55,6 +122,11 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
 
     setCsvPreview(preview);
     setRecordCount(lines.length - 1);
+    
+    // Auto-map headers
+    const autoMapping = autoMapHeaders(headers);
+    setMapping(autoMapping);
+    
     setStep('map');
   };
 
@@ -151,28 +223,78 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
 
   const targetFields = [
     { id: '', label: '-- Skip --' },
-    { id: 'address', label: 'Street Address' },
-    { id: 'city', label: 'City' },
-    { id: 'state', label: 'State' },
-    { id: 'zip', label: 'ZIP Code' },
-    { id: 'ownerName', label: 'Owner Name' },
-    { id: 'ownerEmail', label: 'Owner Email' },
-    { id: 'ownerPhone', label: 'Owner Phone' },
-    { id: 'bedrooms', label: 'Bedrooms' },
-    { id: 'bathrooms', label: 'Bathrooms' },
-    ...fields.filter(f => !f.isSystem).map(f => ({ id: f.id, label: f.label })),
+    
+    // Property
+    { id: 'address', label: '📍 Street Address', group: 'Property' },
+    { id: 'city', label: '📍 City', group: 'Property' },
+    { id: 'state', label: '📍 State', group: 'Property' },
+    { id: 'zip', label: '📍 ZIP Code', group: 'Property' },
+    { id: 'propertyUrl', label: '🔗 Property URL', group: 'Property' },
+    { id: 'bedrooms', label: '🛏️ Bedrooms', group: 'Property' },
+    { id: 'bathrooms', label: '🚿 Bathrooms', group: 'Property' },
+    
+    // Multiple Owners
+    { id: 'owner1FirstName', label: '👤 Owner 1 First Name', group: 'Owners' },
+    { id: 'owner1LastName', label: '👤 Owner 1 Last Name', group: 'Owners' },
+    { id: 'owner2FirstName', label: '👤 Owner 2 First Name', group: 'Owners' },
+    { id: 'owner2LastName', label: '👤 Owner 2 Last Name', group: 'Owners' },
+    { id: 'owner3FirstName', label: '👤 Owner 3 First Name', group: 'Owners' },
+    { id: 'owner3LastName', label: '👤 Owner 3 Last Name', group: 'Owners' },
+    { id: 'owner4FirstName', label: '👤 Owner 4 First Name', group: 'Owners' },
+    { id: 'owner4LastName', label: '👤 Owner 4 Last Name', group: 'Owners' },
+    
+    // Mailing Address
+    { id: 'mailingAddress', label: '📬 Owner Mailing Address', group: 'Mailing' },
+    { id: 'mailingCity', label: '📬 Owner Mailing City', group: 'Mailing' },
+    { id: 'mailingState', label: '📬 Owner Mailing State', group: 'Mailing' },
+    { id: 'mailingZip', label: '📬 Owner Mailing ZIP', group: 'Mailing' },
+    
+    // Ownership Info
+    { id: 'ownershipLength', label: '📅 Ownership Length (Months)', group: 'Ownership' },
+    { id: 'ownerType', label: '🏷️ Owner Type', group: 'Ownership' },
+    { id: 'ownerOccupied', label: '🏠 Owner Occupied', group: 'Ownership' },
+    
+    // Contact
+    { id: 'contactName', label: '👤 Contact Name', group: 'Contact' },
+    { id: 'email', label: '✉️ Email', group: 'Contact' },
+    { id: 'age', label: '📊 Age', group: 'Contact' },
+    
+    // Multiple Phones
+    { id: 'phone1', label: '📞 Phone 1', group: 'Phones' },
+    { id: 'phone1Type', label: '📞 Phone 1 Type', group: 'Phones' },
+    { id: 'phone1DNC', label: '🚫 Phone 1 Do Not Call', group: 'Phones' },
+    { id: 'phone2', label: '📞 Phone 2', group: 'Phones' },
+    { id: 'phone2Type', label: '📞 Phone 2 Type', group: 'Phones' },
+    { id: 'phone2DNC', label: '🚫 Phone 2 Do Not Call', group: 'Phones' },
+    { id: 'phone3', label: '📞 Phone 3', group: 'Phones' },
+    { id: 'phone3Type', label: '📞 Phone 3 Type', group: 'Phones' },
+    { id: 'phone3DNC', label: '🚫 Phone 3 Do Not Call', group: 'Phones' },
+    
+    // Compliance
+    { id: 'litigator', label: '⚠️ Litigator Flag', group: 'Compliance' },
+    
+    // Legacy single owner (for simpler imports)
+    { id: 'ownerName', label: '👤 Owner Name (Single)', group: 'Legacy' },
+    { id: 'ownerEmail', label: '✉️ Owner Email (Legacy)', group: 'Legacy' },
+    { id: 'ownerPhone', label: '📞 Owner Phone (Legacy)', group: 'Legacy' },
+    
+    // Custom fields
+    ...fields.filter(f => !f.isSystem).map(f => ({ id: f.id, label: f.label, group: 'Custom' })),
   ];
+
+  // Count auto-mapped columns
+  const autoMappedCount = Object.values(mapping).filter(v => v).length;
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
+      <div className="bg-card rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
           <div>
             <h2 className="text-lg font-bold text-foreground">Import Properties</h2>
-            <p className="text-xs text-muted-foreground">Bulk upload via CSV</p>
+            <p className="text-xs text-muted-foreground">Bulk upload via CSV with smart field mapping</p>
           </div>
           <button
             onClick={handleClose}
@@ -221,7 +343,9 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
                 <FileSpreadsheet className="w-5 h-5 text-brand" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">{file?.name}</p>
-                  <p className="text-xs text-muted-foreground">{recordCount} records found</p>
+                  <p className="text-xs text-muted-foreground">
+                    {recordCount} records found • {autoMappedCount} columns auto-mapped
+                  </p>
                 </div>
                 <Check className="w-5 h-5 text-emerald-500" />
               </div>
@@ -229,24 +353,36 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
               {/* Column Mapping */}
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Map your columns</h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {csvHeaders.map((header, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <span className="w-1/3 text-sm text-muted-foreground truncate" title={header}>
-                        {header}
-                      </span>
-                      <span className="text-muted-foreground">→</span>
-                      <select
-                        value={mapping[idx] || ''}
-                        onChange={(e) => setMapping({ ...mapping, [idx]: e.target.value })}
-                        className="flex-1 p-2 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
-                      >
-                        {targetFields.map(f => (
-                          <option key={f.id} value={f.id}>{f.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  {csvHeaders.map((header, idx) => {
+                    const mappedField = mapping[idx];
+                    const isMapped = mappedField && mappedField !== '';
+                    
+                    return (
+                      <div key={idx} className={cn(
+                        "flex items-center gap-3 p-2 rounded-lg transition-colors",
+                        isMapped ? "bg-emerald-50/50" : "bg-transparent"
+                      )}>
+                        <span className="w-1/3 text-sm text-muted-foreground truncate font-medium" title={header}>
+                          {header}
+                        </span>
+                        <span className="text-muted-foreground">→</span>
+                        <select
+                          value={mapping[idx] || ''}
+                          onChange={(e) => setMapping({ ...mapping, [idx]: e.target.value })}
+                          className={cn(
+                            "flex-1 p-2 border rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none",
+                            isMapped ? "border-emerald-300" : "border-input"
+                          )}
+                        >
+                          {targetFields.map(f => (
+                            <option key={f.id} value={f.id}>{f.label}</option>
+                          ))}
+                        </select>
+                        {isMapped && <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -261,7 +397,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
                     value={globalTags}
                     onChange={(e) => setGlobalTags(e.target.value)}
                     className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
-                    placeholder="e.g. imported, q4-list"
+                    placeholder="e.g. imported, q4-list, condos"
                   />
                 </div>
 
@@ -287,7 +423,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
               </div>
 
               {/* Validation Warning */}
-              {!mapping[Object.keys(mapping).find(k => mapping[k] === 'address') || ''] && (
+              {!Object.values(mapping).includes('address') && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   Make sure to map the Street Address column for proper import.

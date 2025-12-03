@@ -1,0 +1,244 @@
+import React, { useState } from 'react';
+import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
+import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Check, Users, LayoutGrid, Table } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface FilterBarProps {
+  rules: FilterRule[];
+  onRulesChange: (rules: FilterRule[]) => void;
+  matchType: 'and' | 'or';
+  onMatchTypeChange: (type: 'and' | 'or') => void;
+  savedLists: SavedList[];
+  onSaveList: (name: string) => void;
+  onLoadList: (list: SavedList) => void;
+  onDeleteList: (id: string) => void;
+  stages: PipelineStage[];
+  fields: FieldDefinition[];
+  visibleColumns: string[];
+  onVisibleColumnsChange: (cols: string[]) => void;
+  searchTerm: string;
+  onSearchTermChange: (term: string) => void;
+  listViewMode: 'table' | 'kanban';
+  onListViewModeChange: (mode: 'table' | 'kanban') => void;
+  deduplicateByOwner: boolean;
+  onDeduplicateChange: (value: boolean) => void;
+  resultCount: number;
+}
+
+export const FilterBar: React.FC<FilterBarProps> = ({
+  rules,
+  onRulesChange,
+  matchType,
+  onMatchTypeChange,
+  savedLists,
+  onSaveList,
+  onLoadList,
+  onDeleteList,
+  stages,
+  fields,
+  visibleColumns,
+  onVisibleColumnsChange,
+  searchTerm,
+  onSearchTermChange,
+  listViewMode,
+  onListViewModeChange,
+  deduplicateByOwner,
+  onDeduplicateChange,
+  resultCount,
+}) => {
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [showSavedLists, setShowSavedLists] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newListName, setNewListName] = useState('');
+
+  const handleSaveList = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newListName.trim()) {
+      onSaveList(newListName.trim());
+      setNewListName('');
+      setIsSaving(false);
+    }
+  };
+
+  const toggleColumn = (colId: string) => {
+    if (visibleColumns.includes(colId)) {
+      onVisibleColumnsChange(visibleColumns.filter(c => c !== colId));
+    } else {
+      onVisibleColumnsChange([...visibleColumns, colId]);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Main Controls Row */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative flex-1 min-w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => onSearchTermChange(e.target.value)}
+            placeholder="Search addresses, owners, cities..."
+            className="w-full pl-10 pr-4 py-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none transition-all"
+          />
+        </div>
+
+        {/* Result Count */}
+        <div className="text-sm text-muted-foreground font-medium">
+          {resultCount} {resultCount === 1 ? 'property' : 'properties'}
+        </div>
+
+        {/* View Toggle */}
+        <div className="flex items-center bg-muted rounded-lg p-1">
+          <button
+            onClick={() => onListViewModeChange('table')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+              listViewMode === 'table' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Table className="w-4 h-4" />
+            Table
+          </button>
+          <button
+            onClick={() => onListViewModeChange('kanban')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+              listViewMode === 'kanban' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Pipeline
+          </button>
+        </div>
+
+        {/* Deduplicate Toggle */}
+        <button
+          onClick={() => onDeduplicateChange(!deduplicateByOwner)}
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all",
+            deduplicateByOwner 
+              ? 'bg-brand-50 border-brand-200 text-brand-700' 
+              : 'bg-card border-input text-muted-foreground hover:bg-muted/50'
+          )}
+        >
+          <Users className="w-4 h-4" />
+          One per Owner
+        </button>
+
+        {/* Column Selector */}
+        <div className="relative">
+          <button
+            onClick={() => setShowColumnPicker(!showColumnPicker)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-input bg-card text-muted-foreground hover:bg-muted/50 transition-all"
+          >
+            <Columns className="w-4 h-4" />
+            Columns
+          </button>
+
+          {showColumnPicker && (
+            <div className="absolute right-0 mt-2 w-56 bg-card rounded-lg shadow-medium border border-border z-50 p-2 animate-fade-in">
+              {fields.map(field => (
+                <label
+                  key={field.id}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-md cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.includes(field.id)}
+                    onChange={() => toggleColumn(field.id)}
+                    className="w-4 h-4 rounded border-border text-brand focus:ring-brand"
+                  />
+                  {field.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Saved Lists */}
+        <div className="relative">
+          <button
+            onClick={() => setShowSavedLists(!showSavedLists)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-input bg-card text-muted-foreground hover:bg-muted/50 transition-all"
+          >
+            <ListFilter className="w-4 h-4" />
+            Smart Lists
+          </button>
+
+          {showSavedLists && (
+            <div className="absolute right-0 mt-2 w-72 bg-card rounded-lg shadow-medium border border-border z-50 animate-fade-in">
+              <div className="p-3 border-b border-border">
+                <h4 className="text-sm font-semibold text-foreground">Saved Lists</h4>
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {savedLists.length === 0 ? (
+                  <p className="p-3 text-sm text-muted-foreground text-center">No saved lists yet</p>
+                ) : (
+                  savedLists.map(list => (
+                    <div
+                      key={list.id}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-muted/50"
+                    >
+                      <button
+                        onClick={() => { onLoadList(list); setShowSavedLists(false); }}
+                        className="text-sm text-foreground hover:text-brand flex-1 text-left"
+                      >
+                        {list.name}
+                      </button>
+                      <button
+                        onClick={() => onDeleteList(list.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Save Current Filters */}
+              <div className="p-3 border-t border-border">
+                {isSaving ? (
+                  <form onSubmit={handleSaveList} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newListName}
+                      onChange={(e) => setNewListName(e.target.value)}
+                      placeholder="List name..."
+                      className="flex-1 px-2 py-1.5 text-sm border border-input rounded-md bg-background focus:ring-1 focus:ring-brand focus:border-brand outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newListName.trim()}
+                      className="px-3 py-1.5 bg-brand text-brand-foreground rounded-md text-sm font-medium hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSaving(false)}
+                      className="p-1.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => setIsSaving(true)}
+                    className="flex items-center gap-2 text-sm text-brand hover:text-brand-600 font-medium"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save current filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

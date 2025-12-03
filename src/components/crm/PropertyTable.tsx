@@ -15,6 +15,7 @@ interface PropertyTableProps {
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
+  onSelectOwner?: (ownerName: string) => void;
 }
 
 export const PropertyTable: React.FC<PropertyTableProps> = ({
@@ -28,6 +29,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
   selectedIds,
   onToggleSelection,
   onSelectAll,
+  onSelectOwner,
 }) => {
   const getAlign = (colId: string): 'left' | 'right' => {
     if (['leadScore', 'estimatedRevenue', 'bedrooms', 'bathrooms'].includes(colId)) return 'right';
@@ -149,7 +151,15 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     if (colId === 'ownerName') {
       return (
         <td className={cellClass}>
-          <span className="text-foreground">{property.owner.name}</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectOwner?.(property.owner.name);
+            }}
+            className="text-foreground hover:text-brand hover:underline transition-colors"
+          >
+            {property.owner.name}
+          </button>
         </td>
       );
     }

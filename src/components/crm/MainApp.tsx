@@ -10,6 +10,8 @@ import { AddPropertyModal } from './AddPropertyModal';
 import { ImportWizard } from './ImportWizard';
 import { Settings } from './Settings';
 import { OwnerTable } from './OwnerTable';
+import { OwnerDetail } from './OwnerDetail';
+import { Dashboard } from './Dashboard';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
 
@@ -17,11 +19,11 @@ const MainApp: React.FC = () => {
   const { user } = useAuth();
 
   // State
-  const [view, setView] = useState<ViewMode>('properties');
+  const [view, setView] = useState<ViewMode>('dashboard');
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
   const [allProperties, setAllProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
-  const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
+  const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
   const [stages] = useState<PipelineStage[]>(DEFAULT_STAGES);
   const [fields, setFields] = useState<FieldDefinition[]>(SYSTEM_FIELDS);
 
@@ -71,6 +73,77 @@ const MainApp: React.FC = () => {
     }
   }, [allProperties, user?.companyId]);
 
+  // Apply filter rules to a property
+  const applyFilterRules = (property: Property, rules: FilterRule[], matchType: 'and' | 'or'): boolean => {
+    if (rules.length === 0) return true;
+
+    const evaluateRule = (rule: FilterRule): boolean => {
+      let value: any;
+
+      // Get the value based on field
+      switch (rule.field) {
+        case 'leadScore':
+          value = property.leadScore;
+          break;
+        case 'stageId':
+          value = property.stageId;
+          break;
+        case 'bedrooms':
+          value = property.bedrooms;
+          break;
+        case 'bathrooms':
+          value = property.bathrooms;
+          break;
+        case 'estimatedRevenue':
+          value = property.marketData.projectedRevenue || 0;
+          break;
+        case 'city':
+          value = property.city;
+          break;
+        case 'state':
+          value = property.state;
+          break;
+        case 'ownerName':
+          value = property.owner.name;
+          break;
+        case 'tags':
+          value = property.tags.join(' ');
+          break;
+        case 'address':
+          value = property.address;
+          break;
+        default:
+          value = property.customFields?.[rule.field] ?? '';
+      }
+
+      // Evaluate based on operator
+      switch (rule.operator) {
+        case 'equals':
+          return String(value).toLowerCase() === String(rule.value).toLowerCase();
+        case 'contains':
+          return String(value).toLowerCase().includes(String(rule.value).toLowerCase());
+        case 'starts_with':
+          return String(value).toLowerCase().startsWith(String(rule.value).toLowerCase());
+        case 'gt':
+          return Number(value) > Number(rule.value);
+        case 'lt':
+          return Number(value) < Number(rule.value);
+        case 'is_set':
+          return value !== undefined && value !== null && value !== '';
+        case 'is_not_set':
+          return value === undefined || value === null || value === '';
+        default:
+          return true;
+      }
+    };
+
+    if (matchType === 'and') {
+      return rules.every(evaluateRule);
+    } else {
+      return rules.some(evaluateRule);
+    }
+  };
+
   // Filtering & Sorting Logic
   const filteredProperties = useMemo(() => {
     let result = allProperties;
@@ -86,6 +159,9 @@ const MainApp: React.FC = () => {
       );
     }
 
+    // Apply filter rules
+    result = result.filter(p => applyFilterRules(p, filterRules, matchType));
+
     // Deduplicate by owner
     if (deduplicateByOwner) {
       const seen = new Set<string>();
@@ -97,7 +173,7 @@ const MainApp: React.FC = () => {
     }
 
     return result;
-  }, [allProperties, searchTerm, deduplicateByOwner]);
+  }, [allProperties, searchTerm, filterRules, matchType, deduplicateByOwner]);
 
   const sortedProperties = useMemo(() => {
     return [...filteredProperties].sort((a, b) => {
@@ -240,11 +316,22 @@ const MainApp: React.FC = () => {
     localStorage.setItem(`custom_fields_${user?.companyId}`, JSON.stringify(customFields));
   };
 
+  const handleSelectProperty = (id: string) => {
+    setSelectedPropertyId(id);
+    setSelectedOwnerName(null);
+  };
+
+  const handleSelectOwner = (ownerName: string) => {
+    setSelectedOwnerName(ownerName);
+    setSelectedPropertyId(null);
+  };
+
   // Render selected property detail
   const selectedProperty = selectedPropertyId ? allProperties.find(p => p.id === selectedPropertyId) : null;
 
   // Main content based on view
   const renderContent = () => {
+    // Property detail view
     if (selectedProperty) {
       return (
         <PropertyDetail
@@ -253,6 +340,31 @@ const MainApp: React.FC = () => {
           fields={fields}
           onBack={() => setSelectedPropertyId(null)}
           onUpdateProperty={handleUpdateProperty}
+        />
+      );
+    }
+
+    // Owner detail view
+    if (selectedOwnerName) {
+      return (
+        <OwnerDetail
+          ownerName={selectedOwnerName}
+          properties={allProperties}
+          stages={stages}
+          onBack={() => setSelectedOwnerName(null)}
+          onSelectProperty={handleSelectProperty}
+        />
+      );
+    }
+
+    // Dashboard view
+    if (view === 'dashboard') {
+      return (
+        <Dashboard
+          properties={allProperties}
+          stages={stages}
+          onSelectProperty={handleSelectProperty}
+          onViewChange={setView}
         />
       );
     }
@@ -279,12 +391,7 @@ const MainApp: React.FC = () => {
           <h1 className="text-2xl font-bold text-foreground mb-6">Owners</h1>
           <OwnerTable
             properties={allProperties}
-            onSelectOwner={(name) => {
-              setSelectedOwner(name);
-              // For now, just show properties filtered by owner
-              setSearchTerm(name);
-              setView('properties');
-            }}
+            onSelectOwner={handleSelectOwner}
           />
         </div>
       );
@@ -299,7 +406,7 @@ const MainApp: React.FC = () => {
               properties={filteredProperties}
               stages={stages}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
-              onSelectProperty={(id) => setSelectedPropertyId(id)}
+              onSelectProperty={handleSelectProperty}
             />
           </div>
         </div>
@@ -337,7 +444,7 @@ const MainApp: React.FC = () => {
           {listViewMode === 'table' ? (
             <PropertyTable
               properties={sortedProperties}
-              onSelectProperty={(id) => setSelectedPropertyId(id)}
+              onSelectProperty={handleSelectProperty}
               sortConfig={sortConfig}
               onSort={handleSort}
               visibleColumns={visibleColumns}
@@ -351,6 +458,7 @@ const MainApp: React.FC = () => {
                 setSelectedIds(newSelection);
               }}
               onSelectAll={(ids) => setSelectedIds(new Set(ids))}
+              onSelectOwner={handleSelectOwner}
             />
           ) : (
             <div className="h-[calc(100vh-280px)]">
@@ -358,7 +466,7 @@ const MainApp: React.FC = () => {
                 properties={sortedProperties}
                 stages={stages}
                 onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
-                onSelectProperty={(id) => setSelectedPropertyId(id)}
+                onSelectProperty={handleSelectProperty}
               />
             </div>
           )}
@@ -375,6 +483,9 @@ const MainApp: React.FC = () => {
         onImportClick={() => setIsImportOpen(true)}
         onAddPropertyClick={() => setIsAddPropertyOpen(true)}
         propertyCount={allProperties.length}
+        savedLists={savedLists}
+        onLoadList={handleLoadList}
+        onDeleteList={handleDeleteList}
       />
 
       <main className="flex-1 p-6 overflow-auto">

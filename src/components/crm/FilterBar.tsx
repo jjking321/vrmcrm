@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
-import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Check, Users, LayoutGrid, Table } from 'lucide-react';
+import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, LayoutGrid, Table, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FilterRuleRow } from './FilterRuleRow';
 
 interface FilterBarProps {
   rules: FilterRule[];
@@ -50,6 +51,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [showSavedLists, setShowSavedLists] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [showFilters, setShowFilters] = useState(rules.length > 0);
 
   const handleSaveList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +68,36 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     } else {
       onVisibleColumnsChange([...visibleColumns, colId]);
     }
+  };
+
+  const addFilterRule = () => {
+    const newRule: FilterRule = {
+      id: Date.now().toString(),
+      field: 'leadScore',
+      operator: 'gt',
+      value: 50,
+    };
+    onRulesChange([...rules, newRule]);
+    setShowFilters(true);
+  };
+
+  const updateRule = (index: number, updatedRule: FilterRule) => {
+    const newRules = [...rules];
+    newRules[index] = updatedRule;
+    onRulesChange(newRules);
+  };
+
+  const removeRule = (index: number) => {
+    const newRules = rules.filter((_, i) => i !== index);
+    onRulesChange(newRules);
+    if (newRules.length === 0) {
+      setShowFilters(false);
+    }
+  };
+
+  const clearAllFilters = () => {
+    onRulesChange([]);
+    setShowFilters(false);
   };
 
   return (
@@ -112,6 +144,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             Pipeline
           </button>
         </div>
+
+        {/* Add Filter Button */}
+        <button
+          onClick={addFilterRule}
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all",
+            rules.length > 0 
+              ? 'bg-brand-50 border-brand-200 text-brand-700' 
+              : 'bg-card border-input text-muted-foreground hover:bg-muted/50'
+          )}
+        >
+          <Filter className="w-4 h-4" />
+          Filter
+          {rules.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-brand text-brand-foreground rounded-full text-xs">
+              {rules.length}
+            </span>
+          )}
+        </button>
 
         {/* Deduplicate Toggle */}
         <button
@@ -239,6 +290,64 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           )}
         </div>
       </div>
+
+      {/* Filter Rules Section */}
+      {showFilters && rules.length > 0 && (
+        <div className="bg-muted/30 rounded-lg border border-border p-4 animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-foreground">Filters</span>
+              <div className="flex items-center bg-card rounded-md border border-input">
+                <button
+                  onClick={() => onMatchTypeChange('and')}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-l-md transition-colors",
+                    matchType === 'and' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  AND
+                </button>
+                <button
+                  onClick={() => onMatchTypeChange('or')}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-r-md transition-colors",
+                    matchType === 'or' ? 'bg-brand text-brand-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  OR
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-destructive font-medium"
+            >
+              Clear all
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {rules.map((rule, index) => (
+              <FilterRuleRow
+                key={rule.id}
+                rule={rule}
+                fields={fields}
+                stages={stages}
+                onChange={(updated) => updateRule(index, updated)}
+                onRemove={() => removeRule(index)}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={addFilterRule}
+            className="mt-3 flex items-center gap-1.5 text-sm text-brand hover:text-brand-600 font-medium"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add condition
+          </button>
+        </div>
+      )}
     </div>
   );
 };

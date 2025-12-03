@@ -1,9 +1,9 @@
-import React from 'react';
-import { ViewMode } from '@/types';
+import React, { useState } from 'react';
+import { ViewMode, SavedList } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Building, Users, LayoutGrid, Settings, LogOut, 
-  Upload, Plus, ChevronRight
+  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,9 @@ interface SidebarProps {
   onImportClick: () => void;
   onAddPropertyClick: () => void;
   propertyCount: number;
+  savedLists: SavedList[];
+  onLoadList: (list: SavedList) => void;
+  onDeleteList: (id: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -21,10 +24,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onImportClick,
   onAddPropertyClick,
   propertyCount,
+  savedLists,
+  onLoadList,
+  onDeleteList,
 }) => {
   const { user, company, logout } = useAuth();
+  const [smartListsOpen, setSmartListsOpen] = useState(true);
 
   const navItems = [
+    { id: 'dashboard' as ViewMode, label: 'Dashboard', icon: BarChart3 },
     { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: propertyCount },
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
@@ -65,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2">
+      <nav className="flex-1 px-3 py-2 overflow-y-auto">
         <p className="px-3 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
           Menu
         </p>
@@ -99,6 +107,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })}
+
+        {/* Smart Lists Section */}
+        <div className="mt-4">
+          <button
+            onClick={() => setSmartListsOpen(!smartListsOpen)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider hover:text-sidebar-foreground/70 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <ListFilter className="w-3.5 h-3.5" />
+              Smart Lists
+            </div>
+            {smartListsOpen ? (
+              <ChevronDown className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5" />
+            )}
+          </button>
+
+          {smartListsOpen && (
+            <div className="mt-1 space-y-0.5">
+              {savedLists.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-sidebar-foreground/40 italic">
+                  No saved lists yet
+                </p>
+              ) : (
+                savedLists.map(list => (
+                  <div
+                    key={list.id}
+                    className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-sidebar-accent/50 transition-colors"
+                  >
+                    <button
+                      onClick={() => {
+                        onLoadList(list);
+                        onViewChange('properties');
+                      }}
+                      className="flex-1 text-left text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground truncate"
+                    >
+                      {list.name}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteList(list.id);
+                      }}
+                      className="p-1 text-sidebar-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* User Section */}

@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
 import ActivityLog from './ActivityLog';
+import MarketingGenerator from './MarketingGenerator';
 import { Badge, TagBadge } from './Badge';
+import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
 import { 
   MapPin, BedDouble, Bath, DollarSign, User, Mail, Phone, 
   ArrowLeft, Save, X, Tag, Plus, ExternalLink, Star, 
-  TrendingUp, Home, Pencil, Ruler, Users, Calendar
+  TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface PropertyDetailProps {
   property: Property;
@@ -28,6 +31,44 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const [editedOwner, setEditedOwner] = useState(property.owner);
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
+  const [isLoadingZillow, setIsLoadingZillow] = useState(false);
+  const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
+
+  const handleFetchZillow = async () => {
+    setIsLoadingZillow(true);
+    try {
+      const result = await fetchZillowData(property);
+      if (result.success && result.data) {
+        const updates = applyZillowData(property, result.data);
+        onUpdateProperty(property.id, updates);
+        toast.success('Property data enriched from Zillow');
+      } else {
+        toast.error(result.error || 'Failed to fetch Zillow data');
+      }
+    } catch (err) {
+      toast.error('Failed to fetch Zillow data');
+    } finally {
+      setIsLoadingZillow(false);
+    }
+  };
+
+  const handleFetchAirROI = async () => {
+    setIsLoadingAirROI(true);
+    try {
+      const result = await fetchAirbnbEstimate(property);
+      if (result.success && result.data) {
+        const updates = applyAirROIData(property, result.data);
+        onUpdateProperty(property.id, updates);
+        toast.success('Revenue data enriched from AirROI');
+      } else {
+        toast.error(result.error || 'Failed to fetch revenue data');
+      }
+    } catch (err) {
+      toast.error('Failed to fetch revenue data');
+    } finally {
+      setIsLoadingAirROI(false);
+    }
+  };
 
   const handleSaveOwner = () => {
     onUpdateProperty(property.id, { owner: editedOwner });
@@ -254,10 +295,32 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
 
           {/* Market Intelligence */}
           <div className="bg-card rounded-xl shadow-soft border border-border p-5">
-            <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
-              <TrendingUp className="w-4 h-4 text-brand" />
-              Market Intelligence
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-brand" />
+                Market Intelligence
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleFetchZillow}
+                  disabled={isLoadingZillow}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                  title="Fetch from Zillow"
+                >
+                  {isLoadingZillow ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Zillow
+                </button>
+                <button
+                  onClick={handleFetchAirROI}
+                  disabled={isLoadingAirROI}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                  title="Fetch from AirROI"
+                >
+                  {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  AirROI
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-4">
               {/* Key Metrics */}
@@ -375,6 +438,9 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Marketing Generator */}
+          <MarketingGenerator property={property} />
         </div>
       </div>
     </div>

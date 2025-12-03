@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType } from '@/types';
-import { Plus, Trash2, Key, Database, Zap } from 'lucide-react';
+import { Plus, Trash2, Key, Database, Zap, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface SettingsProps {
   fields: FieldDefinition[];

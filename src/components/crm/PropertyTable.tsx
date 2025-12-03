@@ -1,8 +1,9 @@
 import React from 'react';
 import { Property, PipelineStage, FieldDefinition, SortConfig } from '@/types';
 import { Badge, TagBadge } from './Badge';
-import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPrimaryOwnerName, getOwnerCount, getPrimaryPhone, hasDoNotCall, isLitigator } from '@/lib/ownerUtils';
 
 interface PropertyTableProps {
   properties: Property[];
@@ -85,6 +86,9 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     const cellClass = cn("px-4 py-3 text-sm", align === 'right' ? 'text-right' : 'text-left');
 
     if (colId === 'address') {
+      const ownerIsLitigator = isLitigator(property.owner);
+      const ownerHasDNC = hasDoNotCall(property.owner);
+      
       return (
         <td className={cellClass}>
           <div className="flex items-center gap-3">
@@ -95,6 +99,8 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
               <div className="font-medium text-foreground flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-brand" />
                 {property.address}
+                {ownerIsLitigator && <span title="Litigator"><AlertTriangle className="w-3.5 h-3.5 text-red-500" /></span>}
+                {ownerHasDNC && <span title="Do Not Call"><PhoneOff className="w-3.5 h-3.5 text-amber-500" /></span>}
               </div>
               <div className="text-xs text-muted-foreground">{property.bedrooms}BR / {property.bathrooms}BA</div>
             </div>
@@ -149,17 +155,36 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     }
 
     if (colId === 'ownerName') {
+      const primaryName = getPrimaryOwnerName(property.owner);
+      const ownerCount = getOwnerCount(property.owner);
+      const primaryPhone = getPrimaryPhone(property.owner);
+      const ownerHasDNC = hasDoNotCall(property.owner);
+      
       return (
         <td className={cellClass}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectOwner?.(property.owner.name);
-            }}
-            className="text-foreground hover:text-brand hover:underline transition-colors"
-          >
-            {property.owner.name}
-          </button>
+          <div className="space-y-0.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectOwner?.(primaryName);
+              }}
+              className="text-foreground hover:text-brand hover:underline transition-colors flex items-center gap-1"
+            >
+              {primaryName}
+              {ownerCount > 1 && (
+                <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                  <Users className="w-3 h-3" />
+                  +{ownerCount - 1}
+                </span>
+              )}
+            </button>
+            {primaryPhone && (
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                {ownerHasDNC && <PhoneOff className="w-3 h-3 text-amber-500" />}
+                {primaryPhone.number}
+              </div>
+            )}
+          </div>
         </td>
       );
     }

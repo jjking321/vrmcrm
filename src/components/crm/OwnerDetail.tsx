@@ -2,10 +2,16 @@ import React from 'react';
 import { Property, PipelineStage, Activity } from '@/types';
 import { 
   ArrowLeft, Phone, Mail, MapPin, Building, DollarSign, 
-  Target, Calendar, FileText, Edit2, MessageSquare
+  Target, Calendar, FileText, MessageSquare, AlertTriangle,
+  PhoneOff, Clock, Home, Users
 } from 'lucide-react';
 import { Badge } from './Badge';
 import { cn } from '@/lib/utils';
+import {
+  getPrimaryOwnerName, getAllOwnerNames, getOwnerCount, getPrimaryPhone,
+  hasDoNotCall, isLitigator, formatMailingAddress, formatOwnershipLength,
+  getPhoneTypeBadgeClass, getOwnerTypeBadgeClass
+} from '@/lib/ownerUtils';
 
 interface OwnerDetailProps {
   ownerName: string;
@@ -22,7 +28,19 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   onBack,
   onSelectProperty,
 }) => {
-  const ownerProperties = properties.filter(p => p.owner.name === ownerName);
+  // Find properties where any owner matches the name
+  const ownerProperties = properties.filter(p => {
+    const primaryName = getPrimaryOwnerName(p.owner);
+    if (primaryName === ownerName) return true;
+    
+    // Also check additional owners
+    if (p.owner.owners) {
+      return p.owner.owners.some(o => `${o.firstName} ${o.lastName}`.trim() === ownerName);
+    }
+    
+    return p.owner.name === ownerName;
+  });
+  
   const owner = ownerProperties[0]?.owner;
 
   if (!owner || ownerProperties.length === 0) {
@@ -41,6 +59,10 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   const avgLeadScore = Math.round(
     ownerProperties.reduce((sum, p) => sum + p.leadScore, 0) / ownerProperties.length
   );
+
+  // Check compliance flags across all properties
+  const anyLitigator = ownerProperties.some(p => isLitigator(p.owner));
+  const anyDNC = ownerProperties.some(p => hasDoNotCall(p.owner));
 
   // Combine all activities
   const allActivities: (Activity & { propertyAddress: string; propertyId: string })[] = [];
@@ -65,6 +87,11 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
     }
   };
 
+  // Get aggregated owner info
+  const ownerCount = getOwnerCount(owner);
+  const mailingAddr = formatMailingAddress(owner);
+  const ownershipLength = formatOwnershipLength(owner.ownershipLengthMonths);
+
   return (
     <div className="animate-slide-in-right">
       {/* Header */}
@@ -80,17 +107,61 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
             {ownerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{ownerName}</h1>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              {ownerName}
+              {ownerCount > 1 && (
+                <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
+                  <Users className="w-4 h-4" />
+                  +{ownerCount - 1} owner{ownerCount > 2 ? 's' : ''}
+                </span>
+              )}
+            </h1>
             <p className="text-muted-foreground">
               {ownerProperties.length} {ownerProperties.length === 1 ? 'property' : 'properties'}
             </p>
           </div>
+        </div>
+        {/* Compliance badges */}
+        <div className="flex gap-2">
+          {anyLitigator && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 border border-red-200 rounded-full text-sm font-medium">
+              <AlertTriangle className="w-4 h-4" />
+              Litigator
+            </div>
+          )}
+          {anyDNC && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-700 border border-amber-200 rounded-full text-sm font-medium">
+              <PhoneOff className="w-4 h-4" />
+              DNC
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Contact Info & Stats */}
         <div className="space-y-6">
+          {/* Compliance Warnings */}
+          {(anyLitigator || anyDNC) && (
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Compliance Warnings
+              </h2>
+              {anyLitigator && (
+                <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-medium">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span>LITIGATOR - Exercise caution when contacting</span>
+                </div>
+              )}
+              {anyDNC && (
+                <div className="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs font-medium">
+                  <PhoneOff className="w-4 h-4 flex-shrink-0" />
+                  <span>Some phone numbers are on Do Not Call list</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Contact Card */}
           <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
@@ -105,7 +176,33 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                   </a>
                 </div>
               )}
-              {owner.phone && (
+              
+              {/* Multiple phones */}
+              {owner.phones && owner.phones.length > 0 ? (
+                owner.phones.map((phone, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    {phone.doNotCall ? (
+                      <>
+                        <PhoneOff className="w-4 h-4 text-red-500" />
+                        <span className="text-sm text-red-600 line-through">{phone.number}</span>
+                        <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                      </>
+                    ) : (
+                      <>
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <a href={`tel:${phone.number}`} className="text-sm text-brand hover:underline">
+                          {phone.number}
+                        </a>
+                        {phone.type !== 'unknown' && (
+                          <span className={cn("px-1.5 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(phone.type))}>
+                            {phone.type}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))
+              ) : owner.phone && (
                 <div className="flex items-center gap-3">
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <a href={`tel:${owner.phone}`} className="text-sm text-brand hover:underline">
@@ -113,12 +210,15 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                   </a>
                 </div>
               )}
-              {owner.mailingAddress && (
+              
+              {/* Mailing Address */}
+              {mailingAddr && (
                 <div className="flex items-start gap-3">
-                  <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <span className="text-sm text-foreground">{owner.mailingAddress}</span>
+                  <Home className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <span className="text-sm text-foreground">{mailingAddr}</span>
                 </div>
               )}
+              
               {owner.lastVerifiedDate && (
                 <p className="text-xs text-muted-foreground pt-2 border-t border-border">
                   Last verified: {new Date(owner.lastVerifiedDate).toLocaleDateString()}
@@ -126,6 +226,45 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
               )}
             </div>
           </div>
+
+          {/* Ownership Info */}
+          {(owner.ownerType || owner.ownershipLengthMonths || owner.ownerOccupied !== undefined) && (
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                Ownership Details
+              </h2>
+              <div className="space-y-3">
+                {owner.ownerType && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Type</span>
+                    <span className={cn("px-2 py-0.5 text-xs font-medium rounded-full border", getOwnerTypeBadgeClass(owner.ownerType))}>
+                      {owner.ownerType}
+                    </span>
+                  </div>
+                )}
+                {owner.ownershipLengthMonths && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Length</span>
+                    <span className="text-sm font-medium text-foreground flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {ownershipLength}
+                    </span>
+                  </div>
+                )}
+                {owner.ownerOccupied !== undefined && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Owner Occupied</span>
+                    <span className={cn(
+                      "px-2 py-0.5 text-xs font-medium rounded-full border",
+                      owner.ownerOccupied ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200"
+                    )}>
+                      {owner.ownerOccupied ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Stats Card */}
           <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
@@ -185,6 +324,9 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
             <div className="divide-y divide-border">
               {ownerProperties.map(property => {
                 const stage = getStage(property.stageId);
+                const propLitigator = isLitigator(property.owner);
+                const propDNC = hasDoNotCall(property.owner);
+                
                 return (
                   <div
                     key={property.id}
@@ -199,6 +341,8 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                         <div className="flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-brand flex-shrink-0" />
                           <p className="font-medium text-foreground truncate">{property.address}</p>
+                          {propLitigator && <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                          {propDNC && <PhoneOff className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {property.city}, {property.state} {property.zip}

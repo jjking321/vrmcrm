@@ -130,8 +130,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
-      <div className="bg-card border border-border rounded-xl shadow-xl px-4 py-3 flex items-center gap-3">
+    <div className="bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 flex items-center gap-3 mb-4">
         {/* Selection count */}
         <div className="flex items-center gap-2 pr-3 border-r border-border">
           <CheckSquare className="w-4 h-4 text-brand" />
@@ -276,9 +275,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors border-l border-border pl-3"
         >
           <Trash2 className="w-4 h-4" />
-          Delete
         </button>
-      </div>
     </div>
   );
 };

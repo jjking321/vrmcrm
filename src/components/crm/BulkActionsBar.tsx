@@ -1,0 +1,284 @@
+import React, { useState } from 'react';
+import { Property, PipelineStage } from '@/types';
+import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
+import { toast } from 'sonner';
+
+interface BulkActionsBarProps {
+  selectedIds: Set<string>;
+  properties: Property[];
+  stages: PipelineStage[];
+  onClearSelection: () => void;
+  onUpdateProperty: (id: string, updates: Partial<Property>) => void;
+  onDeleteProperties: (ids: string[]) => void;
+}
+
+export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
+  selectedIds,
+  properties,
+  stages,
+  onClearSelection,
+  onUpdateProperty,
+  onDeleteProperties,
+}) => {
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState('');
+  const [isMovingStage, setIsMovingStage] = useState(false);
+  const [isLoadingZillow, setIsLoadingZillow] = useState(false);
+  const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState(0);
+
+  const selectedCount = selectedIds.size;
+  const selectedProperties = properties.filter(p => selectedIds.has(p.id));
+
+  const handleAddTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTag.trim()) return;
+
+    const tag = newTag.trim().toLowerCase();
+    selectedProperties.forEach(property => {
+      if (!property.tags.includes(tag)) {
+        onUpdateProperty(property.id, { tags: [...property.tags, tag] });
+      }
+    });
+
+    toast.success(`Added tag "${tag}" to ${selectedCount} properties`);
+    setNewTag('');
+    setIsAddingTag(false);
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    selectedProperties.forEach(property => {
+      onUpdateProperty(property.id, { tags: property.tags.filter(t => t !== tagToRemove) });
+    });
+    toast.success(`Removed tag "${tagToRemove}" from ${selectedCount} properties`);
+  };
+
+  const handleMoveToStage = (stageId: string) => {
+    selectedProperties.forEach(property => {
+      onUpdateProperty(property.id, { stageId });
+    });
+    const stage = stages.find(s => s.id === stageId);
+    toast.success(`Moved ${selectedCount} properties to "${stage?.name}"`);
+    setIsMovingStage(false);
+  };
+
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to delete ${selectedCount} properties? This cannot be undone.`)) {
+      onDeleteProperties(Array.from(selectedIds));
+      toast.success(`Deleted ${selectedCount} properties`);
+      onClearSelection();
+    }
+  };
+
+  const handleBulkZillow = async () => {
+    setIsLoadingZillow(true);
+    setEnrichProgress(0);
+    let successCount = 0;
+
+    for (let i = 0; i < selectedProperties.length; i++) {
+      const property = selectedProperties[i];
+      try {
+        const result = await fetchZillowData(property);
+        if (result.success && result.data) {
+          const updates = applyZillowData(property, result.data);
+          onUpdateProperty(property.id, updates);
+          successCount++;
+        }
+      } catch (err) {
+        console.error(`Failed to enrich ${property.address}:`, err);
+      }
+      setEnrichProgress(((i + 1) / selectedProperties.length) * 100);
+    }
+
+    setIsLoadingZillow(false);
+    toast.success(`Enriched ${successCount} of ${selectedCount} properties with Zillow data`);
+  };
+
+  const handleBulkAirROI = async () => {
+    setIsLoadingAirROI(true);
+    setEnrichProgress(0);
+    let successCount = 0;
+
+    for (let i = 0; i < selectedProperties.length; i++) {
+      const property = selectedProperties[i];
+      try {
+        const result = await fetchAirbnbEstimate(property);
+        if (result.success && result.data) {
+          const updates = applyAirROIData(property, result.data);
+          onUpdateProperty(property.id, updates);
+          successCount++;
+        }
+      } catch (err) {
+        console.error(`Failed to enrich ${property.address}:`, err);
+      }
+      setEnrichProgress(((i + 1) / selectedProperties.length) * 100);
+    }
+
+    setIsLoadingAirROI(false);
+    toast.success(`Enriched ${successCount} of ${selectedCount} properties with AirROI data`);
+  };
+
+  // Get common tags across selected properties
+  const commonTags = selectedProperties.length > 0
+    ? selectedProperties[0].tags.filter(tag => 
+        selectedProperties.every(p => p.tags.includes(tag))
+      )
+    : [];
+
+  if (selectedCount === 0) return null;
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+      <div className="bg-card border border-border rounded-xl shadow-xl px-4 py-3 flex items-center gap-3">
+        {/* Selection count */}
+        <div className="flex items-center gap-2 pr-3 border-r border-border">
+          <CheckSquare className="w-4 h-4 text-brand" />
+          <span className="text-sm font-medium text-foreground">
+            {selectedCount} selected
+          </span>
+          <button
+            onClick={onClearSelection}
+            className="p-1 hover:bg-muted rounded transition-colors"
+            title="Clear selection"
+          >
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Tag actions */}
+        <div className="relative">
+          {isAddingTag ? (
+            <form onSubmit={handleAddTag} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                className="w-32 px-2 py-1.5 text-sm border border-input rounded-lg bg-background focus:border-brand outline-none"
+                placeholder="Tag name..."
+                autoFocus
+              />
+              <button type="submit" className="p-1.5 bg-brand text-brand-foreground rounded-lg text-xs">
+                Add
+              </button>
+              <button type="button" onClick={() => setIsAddingTag(false)} className="p-1.5 text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </form>
+          ) : (
+            <button
+              onClick={() => setIsAddingTag(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+            >
+              <Tag className="w-4 h-4" />
+              Add Tag
+            </button>
+          )}
+        </div>
+
+        {/* Common tags to remove */}
+        {commonTags.length > 0 && (
+          <div className="flex items-center gap-1 px-2 border-l border-border">
+            <span className="text-xs text-muted-foreground mr-1">Remove:</span>
+            {commonTags.slice(0, 3).map(tag => (
+              <button
+                key={tag}
+                onClick={() => handleRemoveTag(tag)}
+                className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
+                {tag} ×
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Move to stage */}
+        <div className="relative border-l border-border pl-3">
+          {isMovingStage ? (
+            <div className="flex items-center gap-2">
+              <select
+                onChange={(e) => handleMoveToStage(e.target.value)}
+                className="px-2 py-1.5 text-sm border border-input rounded-lg bg-background focus:border-brand outline-none"
+                defaultValue=""
+              >
+                <option value="" disabled>Select stage...</option>
+                {stages.map(stage => (
+                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                ))}
+              </select>
+              <button onClick={() => setIsMovingStage(false)} className="p-1 text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsMovingStage(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Move Stage
+            </button>
+          )}
+        </div>
+
+        {/* Enrich actions */}
+        <div className="flex items-center gap-2 border-l border-border pl-3">
+          <button
+            onClick={handleBulkZillow}
+            disabled={isLoadingZillow || isLoadingAirROI}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+              isLoadingZillow 
+                ? "bg-blue-100 text-blue-700" 
+                : "text-foreground hover:bg-muted"
+            )}
+          >
+            {isLoadingZillow ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {Math.round(enrichProgress)}%
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Zillow
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleBulkAirROI}
+            disabled={isLoadingZillow || isLoadingAirROI}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+              isLoadingAirROI 
+                ? "bg-emerald-100 text-emerald-700" 
+                : "text-foreground hover:bg-muted"
+            )}
+          >
+            {isLoadingAirROI ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {Math.round(enrichProgress)}%
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                AirROI
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Delete */}
+        <button
+          onClick={handleDelete}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors border-l border-border pl-3"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+};

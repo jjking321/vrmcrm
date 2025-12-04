@@ -165,62 +165,149 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
             </div>
           )}
 
-          {/* Contact Card */}
+          {/* Owners & Contact Card - Combined */}
           <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-              Contact Information
+              {owner.owners && owner.owners.length > 1 ? `Owners (${owner.owners.length})` : 'Owner'}
             </h2>
-            <div className="space-y-3">
-              {owner.email && (
-                <div className="flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-muted-foreground" />
-                  <a href={`mailto:${owner.email}`} className="text-sm text-brand hover:underline">
-                    {owner.email}
-                  </a>
+            <div className="space-y-4">
+              {owner.owners && owner.owners.length > 0 ? (
+                owner.owners.map((ownerContact, idx) => {
+                  const fullName = `${ownerContact.firstName} ${ownerContact.lastName}`.trim();
+                  const associatedPhone = owner.phones?.[idx];
+                  const isCurrentOwner = fullName === ownerName;
+                  // For first owner, show email (usually shared across owners)
+                  const showEmail = idx === 0 && owner.email;
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className={cn(
+                        "p-3 rounded-lg",
+                        isCurrentOwner ? "bg-brand/5 border border-brand/20" : "bg-muted/30"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0",
+                          isCurrentOwner ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"
+                        )}>
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          {/* Name */}
+                          {isCurrentOwner ? (
+                            <p className="font-medium text-sm text-brand">
+                              {fullName || 'Unknown'}
+                              <span className="text-xs ml-1.5 text-muted-foreground">(viewing)</span>
+                            </p>
+                          ) : (
+                            <button
+                              onClick={() => onSelectOwner?.(fullName)}
+                              className="font-medium text-sm text-foreground hover:text-brand hover:underline transition-colors text-left"
+                            >
+                              {fullName || 'Unknown'}
+                            </button>
+                          )}
+                          
+                          {/* Phone for this owner */}
+                          {associatedPhone && (
+                            <div className="flex items-center gap-2">
+                              {associatedPhone.doNotCall ? (
+                                <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand">
+                                  <PhoneOff className="w-4 h-4 text-amber-500" />
+                                  {associatedPhone.number}
+                                  <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
+                                </a>
+                              ) : (
+                                <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1.5 text-sm text-brand hover:underline">
+                                  <Phone className="w-4 h-4 text-muted-foreground" />
+                                  {associatedPhone.number}
+                                  {associatedPhone.type !== 'unknown' && (
+                                    <span className={cn("px-1.5 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(associatedPhone.type))}>
+                                      {associatedPhone.type}
+                                    </span>
+                                  )}
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Email for primary owner */}
+                          {showEmail && (
+                            <div className="flex items-center gap-2">
+                              <a href={`mailto:${owner.email}`} className="flex items-center gap-1.5 text-sm text-brand hover:underline">
+                                <Mail className="w-4 h-4 text-muted-foreground" />
+                                {owner.email}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                // Fallback for legacy single owner
+                <div className="space-y-3">
+                  <p className="font-medium text-foreground">{owner.name || ownerName}</p>
+                  {owner.phone && (
+                    <div className="flex items-center gap-3">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <a href={`tel:${owner.phone}`} className="text-sm text-brand hover:underline">
+                        {owner.phone}
+                      </a>
+                    </div>
+                  )}
+                  {owner.email && (
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      <a href={`mailto:${owner.email}`} className="text-sm text-brand hover:underline">
+                        {owner.email}
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
               
-              {/* Multiple phones */}
-              {owner.phones && owner.phones.length > 0 ? (
-                owner.phones.map((phone, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    {phone.doNotCall ? (
-                      <>
-                        <PhoneOff className="w-4 h-4 text-amber-500" />
-                        <a href={`tel:${phone.number}`} className="text-sm text-muted-foreground hover:text-brand">
+              {/* Additional phones without owners */}
+              {owner.phones && owner.owners && owner.phones.length > owner.owners.length && (
+                <div className="pt-3 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Additional phones:</p>
+                  {owner.phones.slice(owner.owners.length).map((phone, idx) => (
+                    <div key={idx} className="flex items-center gap-2 py-1">
+                      {phone.doNotCall ? (
+                        <a href={`tel:${phone.number}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand">
+                          <PhoneOff className="w-4 h-4 text-amber-500" />
                           {phone.number}
+                          <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                         </a>
-                        <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
-                      </>
-                    ) : (
-                      <>
-                        <Phone className="w-4 h-4 text-muted-foreground" />
-                        <a href={`tel:${phone.number}`} className="text-sm text-brand hover:underline">
+                      ) : (
+                        <a href={`tel:${phone.number}`} className="flex items-center gap-1.5 text-sm text-brand hover:underline">
+                          <Phone className="w-4 h-4 text-muted-foreground" />
                           {phone.number}
+                          {phone.type !== 'unknown' && (
+                            <span className={cn("px-1.5 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(phone.type))}>
+                              {phone.type}
+                            </span>
+                          )}
                         </a>
-                        {phone.type !== 'unknown' && (
-                          <span className={cn("px-1.5 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(phone.type))}>
-                            {phone.type}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))
-              ) : owner.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="w-4 h-4 text-muted-foreground" />
-                  <a href={`tel:${owner.phone}`} className="text-sm text-brand hover:underline">
-                    {owner.phone}
-                  </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
               
               {/* Mailing Address */}
               {mailingAddr && (
-                <div className="flex items-start gap-3">
-                  <Home className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <span className="text-sm text-foreground">{mailingAddr}</span>
+                <div className="pt-3 border-t border-border">
+                  <div className="flex items-start gap-3">
+                    <Home className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Mailing Address</p>
+                      <span className="text-sm text-foreground">{mailingAddr}</span>
+                    </div>
+                  </div>
                 </div>
               )}
               
@@ -230,76 +317,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                 </p>
               )}
             </div>
-            </div>
-
-          {/* All Owners Card */}
-          {owner.owners && owner.owners.length > 1 && (
-            <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-                All Owners ({owner.owners.length})
-              </h2>
-              <div className="space-y-3">
-                {owner.owners.map((ownerContact, idx) => {
-                  const fullName = `${ownerContact.firstName} ${ownerContact.lastName}`.trim();
-                  const associatedPhone = owner.phones?.[idx];
-                  const isCurrentOwner = fullName === ownerName;
-                  
-                  return (
-                    <div 
-                      key={idx} 
-                      className={cn(
-                        "flex items-start gap-3 p-2.5 rounded-lg",
-                        isCurrentOwner ? "bg-brand/5 border border-brand/20" : "bg-muted/30"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0",
-                        isCurrentOwner ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"
-                      )}>
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {isCurrentOwner ? (
-                          <p className="font-medium text-sm text-brand">
-                            {fullName || 'Unknown'}
-                            <span className="text-xs ml-1.5">(viewing)</span>
-                          </p>
-                        ) : (
-                          <button
-                            onClick={() => onSelectOwner?.(fullName)}
-                            className="font-medium text-sm text-foreground hover:text-brand hover:underline transition-colors text-left"
-                          >
-                            {fullName || 'Unknown'}
-                          </button>
-                        )}
-                        {associatedPhone && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            {associatedPhone.doNotCall ? (
-                              <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
-                                <PhoneOff className="w-3 h-3 text-amber-500" />
-                                {associatedPhone.number}
-                                <span className="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
-                              </a>
-                            ) : (
-                              <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
-                                <Phone className="w-3 h-3" />
-                                {associatedPhone.number}
-                                {associatedPhone.type !== 'unknown' && (
-                                  <span className={cn("px-1 py-0.5 rounded border text-xs", getPhoneTypeBadgeClass(associatedPhone.type))}>
-                                    {associatedPhone.type}
-                                  </span>
-                                )}
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          </div>
           {(owner.ownerType || owner.ownershipLengthMonths || owner.ownerOccupied !== undefined) && (
             <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">

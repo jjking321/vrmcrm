@@ -31,8 +31,8 @@ serve(async (req) => {
     const fullAddress = `${address}, ${city}, ${state} ${zip}`;
     console.log("Fetching Zillow data for:", fullAddress);
 
-    // Search for property
-    const searchUrl = `https://zillow-com1.p.rapidapi.com/propertyExtendedSearch?location=${encodeURIComponent(fullAddress)}&home_type=Houses`;
+    // Search for property - don't filter by home_type to include all property types
+    const searchUrl = `https://zillow-com1.p.rapidapi.com/propertyExtendedSearch?location=${encodeURIComponent(fullAddress)}`;
     
     const searchResponse = await fetch(searchUrl, {
       method: "GET",

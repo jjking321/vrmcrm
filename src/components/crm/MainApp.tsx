@@ -353,6 +353,7 @@ const MainApp: React.FC = () => {
           stages={stages}
           onBack={() => setSelectedOwnerName(null)}
           onSelectProperty={handleSelectProperty}
+          onSelectOwner={handleSelectOwner}
         />
       );
     }

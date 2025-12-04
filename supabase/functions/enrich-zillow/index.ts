@@ -57,8 +57,9 @@ serve(async (req) => {
     const data = await response.json();
     console.log("Zillow API response:", JSON.stringify(data).substring(0, 500));
 
-    // Check if we got valid data
-    if (!data || data.error || (!data.zpid && !data.zestimate && !data.price)) {
+    // Check if we got valid data - new API returns data in propertyDetails
+    const isSuccess = data.message === "200: Success" || data.propertyDetails;
+    if (!data || data.error || !isSuccess) {
       console.log("Property not found on Zillow for:", fullAddress);
       return new Response(
         JSON.stringify({ found: false, error: data?.error || "Property not found on Zillow" }),
@@ -66,22 +67,23 @@ serve(async (req) => {
       );
     }
 
+    const pd = data.propertyDetails || {};
     const result = {
-      zpid: data.zpid,
-      zestimate: data.zestimate,
-      rentZestimate: data.rentZestimate,
-      price: data.price,
-      bedrooms: data.bedrooms,
-      bathrooms: data.bathrooms,
-      livingArea: data.livingAreaSF || data.livingArea,
-      yearBuilt: data.yearBuilt,
-      lotSize: data.lotSizeSF || data.lotSize,
-      propertyType: data.homeType || data.propertyType,
-      image: data.imgSrc || data.image,
-      zillowUrl: data.url || (data.zpid ? `https://www.zillow.com/homedetails/${data.zpid}_zpid/` : null),
-      lastSoldPrice: data.lastSoldPrice,
-      lastSoldDate: data.dateSold || data.lastSoldDate,
-      taxAssessedValue: data.taxAssessedValue,
+      zpid: pd.zpid,
+      zestimate: pd.zestimate,
+      rentZestimate: pd.rentZestimate,
+      price: pd.price,
+      bedrooms: pd.bedrooms,
+      bathrooms: pd.bathrooms,
+      livingArea: pd.livingAreaSF || pd.livingArea,
+      yearBuilt: pd.yearBuilt,
+      lotSize: pd.lotSizeSF || pd.lotSize,
+      propertyType: pd.homeType || pd.propertyType,
+      image: pd.hiResImageLink || pd.imgSrc,
+      zillowUrl: data.zillowURL || (pd.zpid ? `https://www.zillow.com/homedetails/${pd.zpid}_zpid/` : null),
+      lastSoldPrice: pd.lastSoldPrice,
+      lastSoldDate: pd.dateSold || pd.datePosted,
+      taxAssessedValue: pd.taxAssessedValue,
     };
 
     console.log("Successfully fetched Zillow data for:", address);

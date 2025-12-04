@@ -4,7 +4,7 @@ import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPrimaryOwnerName, getOwnerCount, hasDoNotCall, isLitigator } from '@/lib/ownerUtils';
+import { getPrimaryOwnerName, getOwnerCount, hasDoNotCall, isLitigator, formatMailingAddress } from '@/lib/ownerUtils';
 
 interface PropertyTableProps {
   properties: Property[];
@@ -223,6 +223,17 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
               </span>
             )}
           </div>
+        </td>
+      );
+    }
+
+    if (colId === 'mailingAddress') {
+      const mailingAddr = formatMailingAddress(property.owner);
+      return (
+        <td className={cellClass}>
+          <span className="text-muted-foreground text-sm">
+            {mailingAddr || '-'}
+          </span>
         </td>
       );
     }

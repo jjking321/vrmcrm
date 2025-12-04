@@ -305,6 +305,32 @@ const MainApp: React.FC = () => {
 
     setAllProperties(prev => [...newProperties, ...prev]);
     
+    // Create smart list if name provided - filter by the tag applied to these imports
+    if (options.listName && options.listName.trim()) {
+      const importTag = options.globalTags?.[0] || `import-${Date.now()}`;
+      // If no global tags were applied, add a unique import tag to track this batch
+      if (!options.globalTags?.length) {
+        newProperties.forEach(p => {
+          p.tags = [importTag];
+        });
+      }
+      
+      const newList: SavedList = {
+        id: Date.now().toString(),
+        name: options.listName.trim(),
+        rules: [{
+          id: Date.now().toString(),
+          field: 'tags',
+          operator: 'contains',
+          value: importTag,
+        }],
+        matchType: 'and',
+      };
+      const updatedLists = [...savedLists, newList];
+      setSavedLists(updatedLists);
+      localStorage.setItem(`saved_lists_${user?.companyId}`, JSON.stringify(updatedLists));
+    }
+    
     if (options.standardize && standardizedCount > 0) {
       toast.success(`Imported ${newProperties.length} properties (${standardizedCount} addresses standardized)`, { id: toastId });
     } else {
@@ -547,6 +573,7 @@ const MainApp: React.FC = () => {
         onClearSelection={() => setSelectedIds(new Set())}
         onUpdateProperty={handleUpdateProperty}
         onDeleteProperties={handleDeleteProperties}
+        onSaveList={handleSaveList}
       />
     </div>
   );

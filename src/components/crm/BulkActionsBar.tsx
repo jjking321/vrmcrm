@@ -130,7 +130,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 flex items-center gap-3 mb-4">
+    <div className="w-full bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 mb-4">
         {/* Selection count */}
         <div className="flex items-center gap-2 pr-3 border-r border-border">
           <CheckSquare className="w-4 h-4 text-brand" />

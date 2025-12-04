@@ -68,24 +68,32 @@ serve(async (req) => {
     }
 
     const pd = data.propertyDetails || {};
+    
+    // Log available keys to debug field names
+    console.log("PropertyDetails keys:", Object.keys(pd).join(", "));
+    console.log("Bedrooms field check - bedrooms:", pd.bedrooms, "beds:", pd.beds, "resoFacts?.bedrooms:", pd.resoFacts?.bedrooms);
+    console.log("Bathrooms field check - bathrooms:", pd.bathrooms, "baths:", pd.baths, "resoFacts?.bathrooms:", pd.resoFacts?.bathrooms);
+    console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "streetViewTileImageUrlMediumAddress:", pd.streetViewTileImageUrlMediumAddress);
+    
     const result = {
       zpid: pd.zpid,
       zestimate: pd.zestimate,
       rentZestimate: pd.rentZestimate,
       price: pd.price,
-      bedrooms: pd.bedrooms,
-      bathrooms: pd.bathrooms,
-      livingArea: pd.livingAreaSF || pd.livingArea,
-      yearBuilt: pd.yearBuilt,
-      lotSize: pd.lotSizeSF || pd.lotSize,
-      propertyType: pd.homeType || pd.propertyType,
-      image: pd.hiResImageLink || pd.imgSrc,
+      bedrooms: pd.bedrooms || pd.beds || pd.resoFacts?.bedrooms,
+      bathrooms: pd.bathrooms || pd.baths || pd.resoFacts?.bathrooms,
+      livingArea: pd.livingAreaSF || pd.livingArea || pd.resoFacts?.livingArea,
+      yearBuilt: pd.yearBuilt || pd.resoFacts?.yearBuilt,
+      lotSize: pd.lotSizeSF || pd.lotSize || pd.resoFacts?.lotSize,
+      propertyType: pd.homeType || pd.propertyType || pd.homeStatus,
+      image: pd.hiResImageLink || pd.imgSrc || pd.streetViewTileImageUrlMediumAddress,
       zillowUrl: data.zillowURL || (pd.zpid ? `https://www.zillow.com/homedetails/${pd.zpid}_zpid/` : null),
       lastSoldPrice: pd.lastSoldPrice,
       lastSoldDate: pd.dateSold || pd.datePosted,
       taxAssessedValue: pd.taxAssessedValue,
     };
 
+    console.log("Extracted result:", JSON.stringify(result));
     console.log("Successfully fetched Zillow data for:", address);
 
     return new Response(

@@ -321,15 +321,87 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Owner Names */}
-                <div>
-                  <p className="font-medium text-foreground">{primaryName}</p>
-                  {property.owner.owners && property.owner.owners.length > 1 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Also: {property.owner.owners.slice(1).map(o => `${o.firstName} ${o.lastName}`).join(', ')}
-                    </p>
-                  )}
-                </div>
+                {/* Owners with their phones grouped */}
+                {property.owner.owners && property.owner.owners.length > 0 ? (
+                  <div className="space-y-3">
+                    {property.owner.owners.map((owner, idx) => {
+                      const ownerFullName = `${owner.firstName} ${owner.lastName}`.trim();
+                      const associatedPhone = property.owner.phones?.[idx];
+                      
+                      return (
+                        <div key={idx} className="flex items-start justify-between p-2 rounded-lg bg-muted/30">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand text-xs font-medium">
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground text-sm">{ownerFullName || 'Unknown'}</p>
+                              {associatedPhone && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {associatedPhone.doNotCall ? (
+                                    <span className="flex items-center gap-1 text-xs text-red-600">
+                                      <PhoneOff className="w-3 h-3" />
+                                      <span className="line-through">{associatedPhone.number}</span>
+                                      <span className="px-1 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                                    </span>
+                                  ) : (
+                                    <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
+                                      <Phone className="w-3 h-3" />
+                                      {associatedPhone.number}
+                                      {associatedPhone.type !== 'unknown' && (
+                                        <span className={cn("px-1 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(associatedPhone.type))}>
+                                          {associatedPhone.type}
+                                        </span>
+                                      )}
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Additional phones without associated owners */}
+                    {property.owner.phones && property.owner.phones.length > property.owner.owners.length && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-2">Additional phones:</p>
+                        {property.owner.phones.slice(property.owner.owners.length).map((phone, idx) => (
+                          <div key={idx} className="flex items-center gap-2 ml-10">
+                            {phone.doNotCall ? (
+                              <span className="flex items-center gap-1 text-xs text-red-600">
+                                <PhoneOff className="w-3 h-3" />
+                                <span className="line-through">{phone.number}</span>
+                                <span className="px-1 py-0.5 bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                              </span>
+                            ) : (
+                              <a href={`tel:${phone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
+                                <Phone className="w-3 h-3" />
+                                {phone.number}
+                                {phone.type !== 'unknown' && (
+                                  <span className={cn("px-1 py-0.5 rounded border", getPhoneTypeBadgeClass(phone.type))}>
+                                    {phone.type}
+                                  </span>
+                                )}
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="font-medium text-foreground">{primaryName}</p>
+                    {property.owner.phone && (
+                      <a href={`tel:${property.owner.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand mt-1">
+                        <Phone className="w-4 h-4" />
+                        {property.owner.phone}
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {/* Owner Type & Metadata */}
                 <div className="flex flex-wrap gap-2">
@@ -358,38 +430,6 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                     {property.owner.email}
                   </a>
                 )}
-
-                {/* Phones */}
-                <div className="space-y-2">
-                  {property.owner.phones && property.owner.phones.length > 0 ? (
-                    property.owner.phones.map((phone, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        {phone.doNotCall ? (
-                          <div className="flex items-center gap-2 text-sm text-red-600">
-                            <PhoneOff className="w-4 h-4" />
-                            <span className="line-through">{phone.number}</span>
-                            <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">DNC</span>
-                          </div>
-                        ) : (
-                          <a href={`tel:${phone.number}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand transition-colors">
-                            <Phone className="w-4 h-4" />
-                            {phone.number}
-                            {phone.type !== 'unknown' && (
-                              <span className={cn("px-1.5 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(phone.type))}>
-                                {phone.type}
-                              </span>
-                            )}
-                          </a>
-                        )}
-                      </div>
-                    ))
-                  ) : property.owner.phone ? (
-                    <a href={`tel:${property.owner.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand transition-colors">
-                      <Phone className="w-4 h-4" />
-                      {property.owner.phone}
-                    </a>
-                  ) : null}
-                </div>
 
                 {/* Mailing Address */}
                 {mailingAddr && (

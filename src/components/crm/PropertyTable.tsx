@@ -4,7 +4,7 @@ import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPrimaryOwnerName, getOwnerCount, getPrimaryPhone, hasDoNotCall, isLitigator } from '@/lib/ownerUtils';
+import { getPrimaryOwnerName, getOwnerCount, hasDoNotCall, isLitigator } from '@/lib/ownerUtils';
 
 interface PropertyTableProps {
   properties: Property[];
@@ -158,32 +158,69 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     if (colId === 'ownerName') {
       const primaryName = getPrimaryOwnerName(property.owner);
       const ownerCount = getOwnerCount(property.owner);
-      const primaryPhone = getPrimaryPhone(property.owner);
       const ownerHasDNC = hasDoNotCall(property.owner);
+      const owners = property.owner.owners || [];
+      const phones = property.owner.phones || [];
+      
+      // Get secondary owner name
+      const secondaryOwner = owners.length > 1 ? owners[1] : null;
+      const secondaryName = secondaryOwner ? `${secondaryOwner.firstName} ${secondaryOwner.lastName}`.trim() : null;
+      
+      // Get first two phones
+      const phone1 = phones[0];
+      const phone2 = phones[1];
       
       return (
         <td className={cellClass}>
-          <div className="space-y-0.5">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectOwner?.(primaryName);
-              }}
-              className="text-foreground hover:text-brand hover:underline transition-colors flex items-center gap-1"
-            >
-              {primaryName}
-              {ownerCount > 1 && (
-                <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                  <Users className="w-3 h-3" />
-                  +{ownerCount - 1}
+          <div className="space-y-1.5">
+            {/* Primary Owner + Phone 1 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectOwner?.(primaryName);
+                }}
+                className="text-foreground hover:text-brand hover:underline transition-colors font-medium text-sm"
+              >
+                {primaryName}
+              </button>
+              {phone1 && (
+                <span className={cn(
+                  "text-xs px-1.5 py-0.5 rounded",
+                  phone1.doNotCall ? "bg-red-50 text-red-600 line-through" : "bg-muted text-muted-foreground"
+                )}>
+                  {phone1.number}
+                  {phone1.doNotCall && <PhoneOff className="w-2.5 h-2.5 inline ml-1" />}
                 </span>
               )}
-            </button>
-            {primaryPhone && (
-              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                {ownerHasDNC && <PhoneOff className="w-3 h-3 text-amber-500" />}
-                {primaryPhone.number}
+            </div>
+            
+            {/* Secondary Owner + Phone 2 (if exists) */}
+            {(secondaryName || phone2) && (
+              <div className="flex items-center gap-2">
+                {secondaryName && (
+                  <span className="text-xs text-muted-foreground">
+                    {secondaryName}
+                  </span>
+                )}
+                {phone2 && (
+                  <span className={cn(
+                    "text-xs px-1.5 py-0.5 rounded",
+                    phone2.doNotCall ? "bg-red-50 text-red-600 line-through" : "bg-muted text-muted-foreground"
+                  )}>
+                    {phone2.number}
+                    {phone2.doNotCall && <PhoneOff className="w-2.5 h-2.5 inline ml-1" />}
+                  </span>
+                )}
               </div>
+            )}
+            
+            {/* Additional owners indicator */}
+            {ownerCount > 2 && (
+              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                <Users className="w-3 h-3" />
+                +{ownerCount - 2} more
+              </span>
             )}
           </div>
         </td>

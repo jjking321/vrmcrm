@@ -437,15 +437,6 @@ const MainApp: React.FC = () => {
         />
 
         <div className="mt-4">
-          <BulkActionsBar
-            selectedIds={selectedIds}
-            properties={allProperties}
-            stages={stages}
-            onClearSelection={() => setSelectedIds(new Set())}
-            onUpdateProperty={handleUpdateProperty}
-            onDeleteProperties={handleDeleteProperties}
-          />
-          
           {listViewMode === 'table' ? (
             <PropertyTable
               properties={sortedProperties}
@@ -508,6 +499,15 @@ const MainApp: React.FC = () => {
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportData}
         fields={fields}
+      />
+
+      <BulkActionsBar
+        selectedIds={selectedIds}
+        properties={allProperties}
+        stages={stages}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onUpdateProperty={handleUpdateProperty}
+        onDeleteProperties={handleDeleteProperties}
       />
     </div>
   );

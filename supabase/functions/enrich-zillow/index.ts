@@ -54,9 +54,10 @@ serve(async (req) => {
     const searchData = await searchResponse.json();
     
     if (!searchData.props || searchData.props.length === 0) {
+      console.log("Property not found on Zillow for:", fullAddress);
       return new Response(
-        JSON.stringify({ error: "Property not found on Zillow" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ found: false, error: "Property not found on Zillow" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

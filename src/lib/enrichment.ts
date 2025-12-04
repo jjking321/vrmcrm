@@ -140,6 +140,15 @@ export function applyZillowData(property: Property, zillowData: ZillowData): Par
   if (zillowData.livingArea) {
     updates.squareFeet = zillowData.livingArea;
   }
+  if (zillowData.yearBuilt) {
+    updates.yearBuilt = zillowData.yearBuilt;
+  }
+  if (zillowData.lotSize) {
+    updates.lotSize = zillowData.lotSize;
+  }
+  if (zillowData.propertyType) {
+    updates.propertyType = zillowData.propertyType;
+  }
   if (zillowData.image) {
     updates.image = zillowData.image;
   }

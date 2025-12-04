@@ -160,7 +160,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <div className="relative h-64">
               <PropertyImage src={property.image} alt={property.address} className="w-full h-full object-cover" />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                <div className="flex items-center gap-4 text-white">
+                <div className="flex flex-wrap items-center gap-3 text-white text-sm">
                   <div className="flex items-center gap-1">
                     <BedDouble className="w-4 h-4" />
                     <span className="font-medium">{property.bedrooms} Beds</span>
@@ -179,6 +179,18 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                     <div className="flex items-center gap-1">
                       <Ruler className="w-4 h-4" />
                       <span className="font-medium">{property.squareFeet.toLocaleString()} sqft</span>
+                    </div>
+                  )}
+                  {property.yearBuilt && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span className="font-medium">Built {property.yearBuilt}</span>
+                    </div>
+                  )}
+                  {property.propertyType && (
+                    <div className="flex items-center gap-1">
+                      <Home className="w-4 h-4" />
+                      <span className="font-medium">{property.propertyType}</span>
                     </div>
                   )}
                 </div>

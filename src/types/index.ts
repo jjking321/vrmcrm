@@ -104,6 +104,9 @@ export interface Property {
   bathrooms: number;
   guests?: number;
   squareFeet?: number;
+  yearBuilt?: number;
+  lotSize?: number;
+  propertyType?: string;
   latitude?: number;
   longitude?: number;
   image: string;

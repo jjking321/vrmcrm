@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FieldDefinition, Property } from '@/types';
-import { Upload, X, FileSpreadsheet, Check, AlertCircle } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 
@@ -92,6 +92,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [globalTags, setGlobalTags] = useState('');
   const [createList, setCreateList] = useState(false);
   const [listName, setListName] = useState('');
+  const [standardizeAddresses, setStandardizeAddresses] = useState(true);
   const [recordCount, setRecordCount] = useState(0);
 
   const parseCSV = (text: string) => {
@@ -198,7 +199,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
         });
 
         onImport(parsedData, {
-          standardize: true,
+          standardize: standardizeAddresses,
           globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
           listName: createList && listName ? listName : undefined,
         });
@@ -218,6 +219,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     setGlobalTags('');
     setCreateList(false);
     setListName('');
+    setStandardizeAddresses(true);
     onClose();
   };
 
@@ -388,6 +390,27 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
 
               {/* Options */}
               <div className="space-y-4 pt-4 border-t border-border">
+                {/* Geocodio Standardization */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={standardizeAddresses}
+                      onChange={(e) => setStandardizeAddresses(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded border-border text-brand focus:ring-brand"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-blue-600" />
+                        Standardize addresses with Geocodio
+                      </span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Verify and format addresses using USPS standards. Adds lat/long coordinates.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-muted-foreground mb-1.5">
                     Apply tags to all imports (comma-separated)

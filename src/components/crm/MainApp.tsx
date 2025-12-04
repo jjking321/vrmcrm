@@ -16,6 +16,7 @@ import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
 import { transformImportToOwner } from '@/lib/ownerUtils';
+import { verifyAddress } from '@/lib/enrichment';
 
 const MainApp: React.FC = () => {
   const { user } = useAuth();
@@ -242,34 +243,73 @@ const MainApp: React.FC = () => {
     toast.success(`Added ${data.address} to your leads`);
   };
 
-  const handleImportData = (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => {
-    const newProperties: Property[] = data.map(row => ({
-      id: Math.random().toString(36).substr(2, 9),
-      companyId: user?.companyId || 'unknown',
-      address: row.address || '',
-      city: row.city || '',
-      state: row.state || '',
-      zip: row.zip || '',
-      bedrooms: parseInt(row.bedrooms) || 0,
-      bathrooms: parseFloat(row.bathrooms) || 0,
-      image: '',
-      stageId: 'lead-list',
-      tags: options.globalTags || [],
-      owner: transformImportToOwner(row),
-      activities: [],
-      marketData: {
-        adr: 0,
-        occupancyRate: 0,
-        projectedRevenue: 0,
-        propertyValue: 0,
-      },
-      leadScore: 50,
-      propertyUrl: row.propertyUrl || '',
-      customFields: {},
-    }));
+  const handleImportData = async (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => {
+    const toastId = toast.loading(`Importing ${data.length} properties...`);
+    
+    const newProperties: Property[] = [];
+    let standardizedCount = 0;
+    
+    for (const row of data) {
+      let address = row.address || '';
+      let city = row.city || '';
+      let state = row.state || '';
+      let zip = row.zip || '';
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+      
+      // Standardize address with Geocodio if enabled
+      if (options.standardize && address && city && state) {
+        try {
+          const result = await verifyAddress(address, city, state, zip);
+          if (result.success && result.data?.standardized) {
+            address = result.data.standardized.street;
+            city = result.data.standardized.city;
+            state = result.data.standardized.state;
+            zip = result.data.standardized.zip;
+            latitude = result.data.latitude;
+            longitude = result.data.longitude;
+            standardizedCount++;
+          }
+        } catch (err) {
+          console.error('Failed to standardize address:', address, err);
+        }
+      }
+      
+      newProperties.push({
+        id: Math.random().toString(36).substr(2, 9),
+        companyId: user?.companyId || 'unknown',
+        address,
+        city,
+        state,
+        zip,
+        latitude,
+        longitude,
+        bedrooms: parseInt(row.bedrooms) || 0,
+        bathrooms: parseFloat(row.bathrooms) || 0,
+        image: '',
+        stageId: 'lead-list',
+        tags: options.globalTags || [],
+        owner: transformImportToOwner(row),
+        activities: [],
+        marketData: {
+          adr: 0,
+          occupancyRate: 0,
+          projectedRevenue: 0,
+          propertyValue: 0,
+        },
+        leadScore: 50,
+        propertyUrl: row.propertyUrl || '',
+        customFields: {},
+      });
+    }
 
     setAllProperties(prev => [...newProperties, ...prev]);
-    toast.success(`Imported ${newProperties.length} properties`);
+    
+    if (options.standardize && standardizedCount > 0) {
+      toast.success(`Imported ${newProperties.length} properties (${standardizedCount} addresses standardized)`, { id: toastId });
+    } else {
+      toast.success(`Imported ${newProperties.length} properties`, { id: toastId });
+    }
   };
 
   const handleSaveList = (name: string) => {

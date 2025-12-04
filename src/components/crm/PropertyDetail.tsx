@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
@@ -13,7 +13,7 @@ import {
   MapPin, BedDouble, Bath, User, Mail, Phone, 
   ArrowLeft, Save, X, Plus, ExternalLink, Star, 
   TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2,
-  AlertTriangle, PhoneOff, Clock, Link
+  AlertTriangle, PhoneOff, Clock, Link, DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -36,11 +36,60 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   onSelectOwner,
 }) => {
   const [isEditingOwner, setIsEditingOwner] = useState(false);
+  const [isEditingProperty, setIsEditingProperty] = useState(false);
+  const [isEditingMarket, setIsEditingMarket] = useState(false);
   const [editedOwner, setEditedOwner] = useState(property.owner);
+  const [editedProperty, setEditedProperty] = useState({
+    address: property.address,
+    city: property.city,
+    state: property.state,
+    zip: property.zip,
+    bedrooms: property.bedrooms,
+    bathrooms: property.bathrooms,
+    guests: property.guests || 0,
+    squareFeet: property.squareFeet || 0,
+    yearBuilt: property.yearBuilt || 0,
+    propertyType: property.propertyType || '',
+    airbnbUrl: property.airbnbUrl || '',
+    zillowUrl: property.zillowUrl || '',
+    propertyUrl: property.propertyUrl || '',
+  });
+  const [editedMarket, setEditedMarket] = useState({
+    projectedRevenue: property.marketData.projectedRevenue,
+    propertyValue: property.marketData.propertyValue,
+    adr: property.marketData.adr,
+    occupancyRate: property.marketData.occupancyRate,
+  });
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [isLoadingZillow, setIsLoadingZillow] = useState(false);
   const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
+
+  // Reset edited values when property changes
+  useEffect(() => {
+    setEditedProperty({
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      zip: property.zip,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      guests: property.guests || 0,
+      squareFeet: property.squareFeet || 0,
+      yearBuilt: property.yearBuilt || 0,
+      propertyType: property.propertyType || '',
+      airbnbUrl: property.airbnbUrl || '',
+      zillowUrl: property.zillowUrl || '',
+      propertyUrl: property.propertyUrl || '',
+    });
+    setEditedMarket({
+      projectedRevenue: property.marketData.projectedRevenue,
+      propertyValue: property.marketData.propertyValue,
+      adr: property.marketData.adr,
+      occupancyRate: property.marketData.occupancyRate,
+    });
+    setEditedOwner(property.owner);
+  }, [property]);
 
   const handleFetchZillow = async () => {
     setIsLoadingZillow(true);
@@ -81,6 +130,41 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const handleSaveOwner = () => {
     onUpdateProperty(property.id, { owner: editedOwner });
     setIsEditingOwner(false);
+    toast.success('Owner details updated');
+  };
+
+  const handleSaveProperty = () => {
+    onUpdateProperty(property.id, {
+      address: editedProperty.address,
+      city: editedProperty.city,
+      state: editedProperty.state,
+      zip: editedProperty.zip,
+      bedrooms: editedProperty.bedrooms,
+      bathrooms: editedProperty.bathrooms,
+      guests: editedProperty.guests || undefined,
+      squareFeet: editedProperty.squareFeet || undefined,
+      yearBuilt: editedProperty.yearBuilt || undefined,
+      propertyType: editedProperty.propertyType || undefined,
+      airbnbUrl: editedProperty.airbnbUrl || undefined,
+      zillowUrl: editedProperty.zillowUrl || undefined,
+      propertyUrl: editedProperty.propertyUrl || undefined,
+    });
+    setIsEditingProperty(false);
+    toast.success('Property details updated');
+  };
+
+  const handleSaveMarket = () => {
+    onUpdateProperty(property.id, {
+      marketData: {
+        ...property.marketData,
+        projectedRevenue: editedMarket.projectedRevenue,
+        propertyValue: editedMarket.propertyValue,
+        adr: editedMarket.adr,
+        occupancyRate: editedMarket.occupancyRate,
+      },
+    });
+    setIsEditingMarket(false);
+    toast.success('Market data updated');
   };
 
   const handleAddTag = (e: React.FormEvent) => {
@@ -121,6 +205,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const mailingAddr = formatMailingAddress(property.owner);
   const ownershipLength = formatOwnershipLength(property.owner.ownershipLengthMonths);
 
+  const inputClass = "w-full px-3 py-2 text-sm border border-input rounded-lg bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none";
+
   return (
     <div className="animate-slide-in-right">
       {/* Header */}
@@ -132,12 +218,91 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <MapPin className="w-6 h-6 text-brand" />
-            {property.address}
-          </h1>
-          <p className="text-muted-foreground">{property.city}, {property.state} {property.zip}</p>
+          {isEditingProperty ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={editedProperty.address}
+                onChange={(e) => setEditedProperty({ ...editedProperty, address: e.target.value })}
+                className={cn(inputClass, "text-xl font-bold")}
+                placeholder="Street Address"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editedProperty.city}
+                  onChange={(e) => setEditedProperty({ ...editedProperty, city: e.target.value })}
+                  className={cn(inputClass, "flex-1")}
+                  placeholder="City"
+                />
+                <input
+                  type="text"
+                  value={editedProperty.state}
+                  onChange={(e) => setEditedProperty({ ...editedProperty, state: e.target.value })}
+                  className={cn(inputClass, "w-20")}
+                  placeholder="State"
+                />
+                <input
+                  type="text"
+                  value={editedProperty.zip}
+                  onChange={(e) => setEditedProperty({ ...editedProperty, zip: e.target.value })}
+                  className={cn(inputClass, "w-24")}
+                  placeholder="ZIP"
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <MapPin className="w-6 h-6 text-brand" />
+                {property.address}
+              </h1>
+              <p className="text-muted-foreground">{property.city}, {property.state} {property.zip}</p>
+            </>
+          )}
         </div>
+        {!isEditingProperty && (
+          <button
+            onClick={() => setIsEditingProperty(true)}
+            className="p-2 text-muted-foreground hover:text-brand rounded-lg hover:bg-muted transition-colors"
+            title="Edit property details"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
+        {isEditingProperty && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveProperty}
+              className="px-3 py-1.5 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setIsEditingProperty(false);
+                setEditedProperty({
+                  address: property.address,
+                  city: property.city,
+                  state: property.state,
+                  zip: property.zip,
+                  bedrooms: property.bedrooms,
+                  bathrooms: property.bathrooms,
+                  guests: property.guests || 0,
+                  squareFeet: property.squareFeet || 0,
+                  yearBuilt: property.yearBuilt || 0,
+                  propertyType: property.propertyType || '',
+                  airbnbUrl: property.airbnbUrl || '',
+                  zillowUrl: property.zillowUrl || '',
+                  propertyUrl: property.propertyUrl || '',
+                });
+              }}
+              className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         {ownerIsLitigator && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 border border-red-200 rounded-full text-sm font-medium">
             <AlertTriangle className="w-4 h-4" />
@@ -154,43 +319,145 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
           <div className="relative h-64">
               <PropertyImage src={property.image} alt={property.address} className="w-full h-full object-cover" />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                <div className="flex flex-wrap items-center gap-3 text-white text-sm">
-                  <div className="flex items-center gap-1">
-                    <BedDouble className="w-4 h-4" />
-                    <span className="font-medium">{property.bedrooms} Beds</span>
+              {isEditingProperty ? (
+                <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Beds</label>
+                      <input
+                        type="number"
+                        value={editedProperty.bedrooms}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, bedrooms: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Baths</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={editedProperty.bathrooms}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, bathrooms: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Guests</label>
+                      <input
+                        type="number"
+                        value={editedProperty.guests}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, guests: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Sq Ft</label>
+                      <input
+                        type="number"
+                        value={editedProperty.squareFeet}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, squareFeet: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Year</label>
+                      <input
+                        type="number"
+                        value={editedProperty.yearBuilt}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, yearBuilt: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">Type</label>
+                      <input
+                        type="text"
+                        value={editedProperty.propertyType}
+                        onChange={(e) => setEditedProperty({ ...editedProperty, propertyType: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white placeholder:text-white/50"
+                        placeholder="CONDO"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Bath className="w-4 h-4" />
-                    <span className="font-medium">{property.bathrooms} Baths</span>
+                </div>
+              ) : (
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                  <div className="flex flex-wrap items-center gap-3 text-white text-sm">
+                    <div className="flex items-center gap-1">
+                      <BedDouble className="w-4 h-4" />
+                      <span className="font-medium">{property.bedrooms} Beds</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Bath className="w-4 h-4" />
+                      <span className="font-medium">{property.bathrooms} Baths</span>
+                    </div>
+                    {property.guests && (
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        <span className="font-medium">{property.guests} Guests</span>
+                      </div>
+                    )}
+                    {property.squareFeet && (
+                      <div className="flex items-center gap-1">
+                        <Ruler className="w-4 h-4" />
+                        <span className="font-medium">{property.squareFeet.toLocaleString()} sqft</span>
+                      </div>
+                    )}
+                    {property.yearBuilt && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        <span className="font-medium">Built {property.yearBuilt}</span>
+                      </div>
+                    )}
+                    {property.propertyType && (
+                      <div className="flex items-center gap-1">
+                        <Home className="w-4 h-4" />
+                        <span className="font-medium">{property.propertyType}</span>
+                      </div>
+                    )}
                   </div>
-                  {property.guests && (
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      <span className="font-medium">{property.guests} Guests</span>
-                    </div>
-                  )}
-                  {property.squareFeet && (
-                    <div className="flex items-center gap-1">
-                      <Ruler className="w-4 h-4" />
-                      <span className="font-medium">{property.squareFeet.toLocaleString()} sqft</span>
-                    </div>
-                  )}
-                  {property.yearBuilt && (
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span className="font-medium">Built {property.yearBuilt}</span>
-                    </div>
-                  )}
-                  {property.propertyType && (
-                    <div className="flex items-center gap-1">
-                      <Home className="w-4 h-4" />
-                      <span className="font-medium">{property.propertyType}</span>
-                    </div>
-                  )}
+                </div>
+              )}
+            </div>
+
+            {/* URLs (when editing) */}
+            {isEditingProperty && (
+              <div className="p-4 border-t border-border space-y-3">
+                <h4 className="text-sm font-medium text-muted-foreground">External Links</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Airbnb URL</label>
+                    <input
+                      type="url"
+                      value={editedProperty.airbnbUrl}
+                      onChange={(e) => setEditedProperty({ ...editedProperty, airbnbUrl: e.target.value })}
+                      className={inputClass}
+                      placeholder="https://airbnb.com/..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Zillow URL</label>
+                    <input
+                      type="url"
+                      value={editedProperty.zillowUrl}
+                      onChange={(e) => setEditedProperty({ ...editedProperty, zillowUrl: e.target.value })}
+                      className={inputClass}
+                      placeholder="https://zillow.com/..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Property Record URL</label>
+                    <input
+                      type="url"
+                      value={editedProperty.propertyUrl}
+                      onChange={(e) => setEditedProperty({ ...editedProperty, propertyUrl: e.target.value })}
+                      className={inputClass}
+                      placeholder="https://..."
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Stage Selector & Tags */}
             <div className="p-4 border-t border-border">
@@ -252,47 +519,131 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 Market Intelligence
               </h3>
               <div className="flex gap-2">
-                <button
-                  onClick={handleFetchZillow}
-                  disabled={isLoadingZillow}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                  title="Fetch from Zillow"
-                >
-                  {isLoadingZillow ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                  Zillow
-                </button>
-                <button
-                  onClick={handleFetchAirROI}
-                  disabled={isLoadingAirROI}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                  title="Fetch from AirROI"
-                >
-                  {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                  AirROI
-                </button>
+                {isEditingMarket ? (
+                  <>
+                    <button
+                      onClick={handleSaveMarket}
+                      className="px-2.5 py-1.5 bg-brand text-brand-foreground rounded-lg text-xs font-medium hover:bg-brand-600 transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingMarket(false);
+                        setEditedMarket({
+                          projectedRevenue: property.marketData.projectedRevenue,
+                          propertyValue: property.marketData.propertyValue,
+                          adr: property.marketData.adr,
+                          occupancyRate: property.marketData.occupancyRate,
+                        });
+                      }}
+                      className="px-2.5 py-1.5 text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setIsEditingMarket(true)}
+                      className="p-1.5 text-muted-foreground hover:text-brand rounded transition-colors"
+                      title="Edit market data"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={handleFetchZillow}
+                      disabled={isLoadingZillow}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                      title="Fetch from Zillow"
+                    >
+                      {isLoadingZillow ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      Zillow
+                    </button>
+                    <button
+                      onClick={handleFetchAirROI}
+                      disabled={isLoadingAirROI}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                      title="Fetch from AirROI"
+                    >
+                      {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      AirROI
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="space-y-4">
               {/* Key Metrics */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                  <p className="text-xs text-emerald-600 font-medium mb-1">Est. Annual Revenue</p>
-                  <p className="text-lg font-bold text-emerald-700">${property.marketData.projectedRevenue.toLocaleString()}</p>
+              {isEditingMarket ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                    <label className="text-xs text-emerald-600 font-medium mb-1 block">Est. Annual Revenue</label>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      <input
+                        type="number"
+                        value={editedMarket.projectedRevenue}
+                        onChange={(e) => setEditedMarket({ ...editedMarket, projectedRevenue: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 text-lg font-bold text-emerald-700 bg-white border border-emerald-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <label className="text-xs text-blue-600 font-medium mb-1 block">Property Value</label>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4 text-blue-600" />
+                      <input
+                        type="number"
+                        value={editedMarket.propertyValue}
+                        onChange={(e) => setEditedMarket({ ...editedMarket, propertyValue: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 text-lg font-bold text-blue-700 bg-white border border-blue-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                    <label className="text-xs text-amber-600 font-medium mb-1 block">ADR</label>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-4 h-4 text-amber-600" />
+                      <input
+                        type="number"
+                        value={editedMarket.adr}
+                        onChange={(e) => setEditedMarket({ ...editedMarket, adr: parseInt(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 text-lg font-bold text-amber-700 bg-white border border-amber-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                    <label className="text-xs text-violet-600 font-medium mb-1 block">Occupancy %</label>
+                    <input
+                      type="number"
+                      value={editedMarket.occupancyRate}
+                      onChange={(e) => setEditedMarket({ ...editedMarket, occupancyRate: parseInt(e.target.value) || 0 })}
+                      className="w-full px-2 py-1 text-lg font-bold text-violet-700 bg-white border border-violet-200 rounded"
+                    />
+                  </div>
                 </div>
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Property Value</p>
-                  <p className="text-lg font-bold text-blue-700">${property.marketData.propertyValue.toLocaleString()}</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                    <p className="text-xs text-emerald-600 font-medium mb-1">Est. Annual Revenue</p>
+                    <p className="text-lg font-bold text-emerald-700">${property.marketData.projectedRevenue.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium mb-1">Property Value</p>
+                    <p className="text-lg font-bold text-blue-700">${property.marketData.propertyValue.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                    <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
+                    <p className="text-lg font-bold text-amber-700">${property.marketData.adr}</p>
+                  </div>
+                  <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                    <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
+                    <p className="text-lg font-bold text-violet-700">{property.marketData.occupancyRate}%</p>
+                  </div>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                  <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
-                  <p className="text-lg font-bold text-amber-700">${property.marketData.adr}</p>
-                </div>
-                <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
-                  <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
-                  <p className="text-lg font-bold text-violet-700">{property.marketData.occupancyRate}%</p>
-                </div>
-              </div>
+              )}
 
               {/* Rating */}
               {property.marketData.airbnbRating && (

@@ -159,7 +159,12 @@ const MainApp: React.FC = () => {
     }
 
     // Apply filter rules
+    console.log('Applying filter rules:', filterRules.length, 'rules, matchType:', matchType);
+    if (filterRules.length > 0) {
+      console.log('Filter rules detail:', JSON.stringify(filterRules, null, 2));
+    }
     result = result.filter(p => applyFilterRules(p, filterRules, matchType));
+    console.log('After filter:', result.length, 'properties');
 
     // Deduplicate by owner
     if (deduplicateByOwner) {
@@ -352,6 +357,10 @@ const MainApp: React.FC = () => {
   };
 
   const handleLoadList = (list: SavedList) => {
+    console.log('Loading list:', list.name);
+    console.log('List rules:', JSON.stringify(list.rules, null, 2));
+    console.log('List matchType:', list.matchType);
+    console.log('Sample property tags:', allProperties.slice(0, 3).map(p => ({ address: p.address, tags: p.tags })));
     setFilterRules(list.rules);
     setMatchType(list.matchType);
     toast.info(`Loaded list "${list.name}"`);

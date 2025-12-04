@@ -5,6 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to search Zillow
+async function searchZillow(location: string, apiKey: string) {
+  const searchUrl = `https://zillow-com1.p.rapidapi.com/propertyExtendedSearch?location=${encodeURIComponent(location)}`;
+  console.log("Zillow search URL:", searchUrl);
+  
+  const response = await fetch(searchUrl, {
+    method: "GET",
+    headers: {
+      "X-RapidAPI-Key": apiKey,
+      "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Zillow search error:", response.status, errorText);
+    return { props: [] };
+  }
+
+  return await response.json();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -31,30 +53,21 @@ serve(async (req) => {
     const fullAddress = `${address}, ${city}, ${state} ${zip}`;
     console.log("Fetching Zillow data for:", fullAddress);
 
-    // Search for property - don't filter by home_type to include all property types
-    const searchUrl = `https://zillow-com1.p.rapidapi.com/propertyExtendedSearch?location=${encodeURIComponent(fullAddress)}`;
+    // Try searching with the full address first
+    let searchData = await searchZillow(fullAddress, RAPIDAPI_KEY);
     
-    const searchResponse = await fetch(searchUrl, {
-      method: "GET",
-      headers: {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "zillow-com1.p.rapidapi.com",
-      },
-    });
-
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      console.error("Zillow search error:", searchResponse.status, errorText);
-      return new Response(
-        JSON.stringify({ error: "Failed to search Zillow. Check your RapidAPI key." }),
-        { status: searchResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // If not found and address contains APT/UNIT/etc., try without it
+    if ((!searchData.props || searchData.props.length === 0) && /\s+(APT|UNIT|STE|#)\s*\d*/i.test(address)) {
+      const baseAddress = address.replace(/\s+(APT|UNIT|STE|#)\s*\d*/i, '').trim();
+      const simpleAddress = `${baseAddress}, ${city}, ${state} ${zip}`;
+      console.log("Trying simplified address:", simpleAddress);
+      searchData = await searchZillow(simpleAddress, RAPIDAPI_KEY);
     }
-
-    const searchData = await searchResponse.json();
     
+    // If still not found, try just city/state search
     if (!searchData.props || searchData.props.length === 0) {
       console.log("Property not found on Zillow for:", fullAddress);
+      console.log("API response:", JSON.stringify(searchData));
       return new Response(
         JSON.stringify({ found: false, error: "Property not found on Zillow" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

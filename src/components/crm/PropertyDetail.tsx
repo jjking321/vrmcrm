@@ -478,7 +478,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-2 block">Tags</label>
                 <div className="flex flex-wrap gap-2">
-                  {property.tags.map(tag => (
+                  {property.tags.filter(tag => !tag.startsWith('list-')).map(tag => (
                     <TagBadge key={tag} tag={tag} onRemove={() => handleRemoveTag(tag)} />
                   ))}
                   {isAddingTag ? (

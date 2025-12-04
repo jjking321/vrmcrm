@@ -141,14 +141,15 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     }
 
     if (colId === 'tags') {
+      const visibleTags = property.tags.filter(tag => !tag.startsWith('list-'));
       return (
         <td className={cellClass}>
           <div className="flex flex-wrap gap-1">
-            {property.tags.slice(0, 3).map(tag => (
+            {visibleTags.slice(0, 3).map(tag => (
               <TagBadge key={tag} tag={tag} />
             ))}
-            {property.tags.length > 3 && (
-              <span className="text-xs text-muted-foreground">+{property.tags.length - 3}</span>
+            {visibleTags.length > 3 && (
+              <span className="text-xs text-muted-foreground">+{visibleTags.length - 3}</span>
             )}
           </div>
         </td>

@@ -19,7 +19,8 @@ import { transformImportToOwner } from '@/lib/ownerUtils';
 import { verifyAddress } from '@/lib/enrichment';
 
 const MainApp: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile, company } = useAuth();
+  const companyId = company?.id;
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -47,30 +48,30 @@ const MainApp: React.FC = () => {
 
   // Load data on mount
   useEffect(() => {
-    const stored = localStorage.getItem(`properties_${user?.companyId}`);
+    const stored = localStorage.getItem(`properties_${companyId}`);
     if (stored) {
       setAllProperties(JSON.parse(stored));
     } else {
       setAllProperties(MOCK_PROPERTIES);
     }
 
-    const storedLists = localStorage.getItem(`saved_lists_${user?.companyId}`);
+    const storedLists = localStorage.getItem(`saved_lists_${companyId}`);
     if (storedLists) {
       setSavedLists(JSON.parse(storedLists));
     }
 
-    const storedFields = localStorage.getItem(`custom_fields_${user?.companyId}`);
+    const storedFields = localStorage.getItem(`custom_fields_${companyId}`);
     if (storedFields) {
       setFields([...SYSTEM_FIELDS, ...JSON.parse(storedFields)]);
     }
-  }, [user?.companyId]);
+  }, [companyId]);
 
   // Persist data
   useEffect(() => {
-    if (user?.companyId && allProperties.length > 0) {
-      localStorage.setItem(`properties_${user.companyId}`, JSON.stringify(allProperties));
+    if (companyId && allProperties.length > 0) {
+      localStorage.setItem(`properties_${companyId}`, JSON.stringify(allProperties));
     }
-  }, [allProperties, user?.companyId]);
+  }, [allProperties, companyId]);
 
   // Apply filter rules to a property
   const applyFilterRules = (property: Property, rules: FilterRule[], matchType: 'and' | 'or'): boolean => {
@@ -213,7 +214,7 @@ const MainApp: React.FC = () => {
   const handleAddProperty = (data: { address: string; city: string; state: string; zip: string; ownerName: string; ownerEmail: string; ownerPhone: string }) => {
     const newProperty: Property = {
       id: Math.random().toString(36).substr(2, 9),
-      companyId: user?.companyId || 'unknown',
+      companyId: companyId || 'unknown',
       address: data.address,
       city: data.city,
       state: data.state,
@@ -277,7 +278,7 @@ const MainApp: React.FC = () => {
       
       newProperties.push({
         id: Math.random().toString(36).substr(2, 9),
-        companyId: user?.companyId || 'unknown',
+        companyId: companyId || 'unknown',
         address,
         city,
         state,
@@ -328,7 +329,7 @@ const MainApp: React.FC = () => {
       };
       const updatedLists = [...savedLists, newList];
       setSavedLists(updatedLists);
-      localStorage.setItem(`saved_lists_${user?.companyId}`, JSON.stringify(updatedLists));
+      localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updatedLists));
     }
     
     if (options.standardize && standardizedCount > 0) {
@@ -347,7 +348,7 @@ const MainApp: React.FC = () => {
     };
     const updated = [...savedLists, newList];
     setSavedLists(updated);
-    localStorage.setItem(`saved_lists_${user?.companyId}`, JSON.stringify(updated));
+    localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updated));
     toast.success(`Saved list "${name}"`);
   };
 
@@ -360,20 +361,20 @@ const MainApp: React.FC = () => {
   const handleDeleteList = (id: string) => {
     const updated = savedLists.filter(l => l.id !== id);
     setSavedLists(updated);
-    localStorage.setItem(`saved_lists_${user?.companyId}`, JSON.stringify(updated));
+    localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updated));
   };
 
   const handleAddField = (field: FieldDefinition) => {
     setFields(prev => [...prev, field]);
     const customFields = [...fields.filter(f => !f.isSystem), field];
-    localStorage.setItem(`custom_fields_${user?.companyId}`, JSON.stringify(customFields));
+    localStorage.setItem(`custom_fields_${companyId}`, JSON.stringify(customFields));
     toast.success(`Added field "${field.label}"`);
   };
 
   const handleDeleteField = (fieldId: string) => {
     setFields(prev => prev.filter(f => f.id !== fieldId));
     const customFields = fields.filter(f => !f.isSystem && f.id !== fieldId);
-    localStorage.setItem(`custom_fields_${user?.companyId}`, JSON.stringify(customFields));
+    localStorage.setItem(`custom_fields_${companyId}`, JSON.stringify(customFields));
   };
 
   const handleDeleteProperties = (ids: string[]) => {

@@ -1,40 +1,70 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ArrowRight, Loader2 } from 'lucide-react';
+import { Home, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, signup } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const validateForm = (): string | null => {
+    if (!email.trim()) return 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address';
+    if (!password) return 'Password is required';
+    if (password.length < 6) return 'Password must be at least 6 characters';
+    
+    if (!isLogin) {
+      if (!name.trim()) return 'Name is required';
+      if (!companyName.trim()) return 'Company name is required';
+      if (password !== confirmPassword) return 'Passwords do not match';
+    }
+    
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       if (isLogin) {
-        const success = await login(email);
-        if (!success) {
-          setError('Account not found. Please sign up first.');
+        const { error: loginError } = await login(email, password);
+        if (loginError) {
+          setError(loginError);
         }
       } else {
-        if (!name.trim() || !companyName.trim()) {
-          setError('Please fill in all fields');
-          setIsLoading(false);
-          return;
+        const { error: signupError } = await signup(name, email, companyName, password);
+        if (signupError) {
+          setError(signupError);
         }
-        await signup(name, email, companyName);
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleToggleMode = () => {
+    setIsLogin(!isLogin);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   return (
@@ -97,6 +127,38 @@ export const Login: React.FC = () => {
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3 pr-10 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Confirm Password</label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full p-3 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
             <button
               type="submit"
               disabled={isLoading}
@@ -116,19 +178,13 @@ export const Login: React.FC = () => {
 
         <div className="bg-muted/50 p-4 text-center border-t border-border">
           <button
-            onClick={() => { setIsLogin(!isLogin); setError(''); }}
+            onClick={handleToggleMode}
             className="text-sm font-medium text-muted-foreground hover:text-brand transition-colors"
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </div>
       </div>
-
-      {isLogin && (
-        <p className="mt-6 text-sm text-muted-foreground max-w-sm text-center">
-          <strong>Demo:</strong> Sign up with any email to create a test account, then sign in with that email.
-        </p>
-      )}
     </div>
   );
 };

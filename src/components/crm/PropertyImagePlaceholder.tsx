@@ -27,8 +27,6 @@ export const PropertyImage: React.FC<PropertyImageProps> = ({ src, alt = "", cla
     setIsLoading(true);
   }, [src]);
 
-  console.log("PropertyImage rendering - src:", src, "hasError:", hasError, "isLoading:", isLoading);
-
   if (!src || hasError) {
     return <PropertyImagePlaceholder className={className} />;
   }
@@ -40,14 +38,8 @@ export const PropertyImage: React.FC<PropertyImageProps> = ({ src, alt = "", cla
         src={src}
         alt={alt}
         className={cn(className, isLoading && "hidden")}
-        onError={(e) => {
-          console.error("Image failed to load:", src, e);
-          setHasError(true);
-        }}
-        onLoad={() => {
-          console.log("Image loaded successfully:", src);
-          setIsLoading(false);
-        }}
+        onError={() => setHasError(true)}
+        onLoad={() => setIsLoading(false)}
       />
     </>
   );

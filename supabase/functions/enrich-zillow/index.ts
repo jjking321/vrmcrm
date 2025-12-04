@@ -75,6 +75,10 @@ serve(async (req) => {
     console.log("Bathrooms field check - bathrooms:", pd.bathrooms, "baths:", pd.baths, "resoFacts?.bathrooms:", pd.resoFacts?.bathrooms);
     console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "streetViewTileImageUrlMediumAddress:", pd.streetViewTileImageUrlMediumAddress);
     
+    // Skip Google Maps URLs as they have restricted signatures that won't work outside Zillow
+    const rawImage = pd.hiResImageLink || pd.imgSrc || pd.streetViewTileImageUrlMediumAddress;
+    const validImage = rawImage && !rawImage.includes('maps.googleapis.com') ? rawImage : null;
+    
     const result = {
       zpid: pd.zpid,
       zestimate: pd.zestimate,
@@ -86,7 +90,7 @@ serve(async (req) => {
       yearBuilt: pd.yearBuilt || pd.resoFacts?.yearBuilt,
       lotSize: pd.lotSizeSF || pd.lotSize || pd.resoFacts?.lotSize,
       propertyType: pd.homeType || pd.propertyType || pd.homeStatus,
-      image: pd.hiResImageLink || pd.imgSrc || pd.streetViewTileImageUrlMediumAddress,
+      image: validImage,
       zillowUrl: data.zillowURL || (pd.zpid ? `https://www.zillow.com/homedetails/${pd.zpid}_zpid/` : null),
       lastSoldPrice: pd.lastSoldPrice,
       lastSoldDate: pd.dateSold || pd.datePosted,

@@ -226,9 +226,70 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                 </p>
               )}
             </div>
-          </div>
+            </div>
 
-          {/* Ownership Info */}
+          {/* All Owners Card */}
+          {owner.owners && owner.owners.length > 1 && (
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                All Owners ({owner.owners.length})
+              </h2>
+              <div className="space-y-3">
+                {owner.owners.map((ownerContact, idx) => {
+                  const fullName = `${ownerContact.firstName} ${ownerContact.lastName}`.trim();
+                  const associatedPhone = owner.phones?.[idx];
+                  const isCurrentOwner = fullName === ownerName;
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className={cn(
+                        "flex items-start gap-3 p-2.5 rounded-lg",
+                        isCurrentOwner ? "bg-brand/5 border border-brand/20" : "bg-muted/30"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0",
+                        isCurrentOwner ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"
+                      )}>
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "font-medium text-sm",
+                          isCurrentOwner ? "text-brand" : "text-foreground"
+                        )}>
+                          {fullName || 'Unknown'}
+                          {isCurrentOwner && <span className="text-xs ml-1.5">(viewing)</span>}
+                        </p>
+                        {associatedPhone && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {associatedPhone.doNotCall ? (
+                              <span className="flex items-center gap-1 text-xs text-red-600">
+                                <PhoneOff className="w-3 h-3" />
+                                <span className="line-through">{associatedPhone.number}</span>
+                                <span className="px-1 py-0.5 bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                              </span>
+                            ) : (
+                              <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
+                                <Phone className="w-3 h-3" />
+                                {associatedPhone.number}
+                                {associatedPhone.type !== 'unknown' && (
+                                  <span className={cn("px-1 py-0.5 rounded border text-xs", getPhoneTypeBadgeClass(associatedPhone.type))}>
+                                    {associatedPhone.type}
+                                  </span>
+                                )}
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {(owner.ownerType || owner.ownershipLengthMonths || owner.ownerOccupied !== undefined) && (
             <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">

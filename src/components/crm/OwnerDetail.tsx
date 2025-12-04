@@ -187,7 +187,9 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                     {phone.doNotCall ? (
                       <>
                         <PhoneOff className="w-4 h-4 text-amber-500" />
-                        <span className="text-sm text-muted-foreground">{phone.number}</span>
+                        <a href={`tel:${phone.number}`} className="text-sm text-muted-foreground hover:text-brand">
+                          {phone.number}
+                        </a>
                         <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                       </>
                     ) : (
@@ -273,11 +275,11 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                         {associatedPhone && (
                           <div className="flex items-center gap-1.5 mt-1">
                             {associatedPhone.doNotCall ? (
-                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
                                 <PhoneOff className="w-3 h-3 text-amber-500" />
                                 {associatedPhone.number}
                                 <span className="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
-                              </span>
+                              </a>
                             ) : (
                               <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
                                 <Phone className="w-3 h-3" />

@@ -3,6 +3,7 @@ import { Property, PipelineStage, FieldDefinition, Activity, Owner, PhoneContact
 import ActivityLog from './ActivityLog';
 import MarketingGenerator from './MarketingGenerator';
 import { Badge, TagBadge } from './Badge';
+import { PropertyImage } from './PropertyImagePlaceholder';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
 import { 
   getPrimaryOwnerName, getAllOwnerNames, getOwnerCount, getPrimaryPhone, 
@@ -154,8 +155,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
         <div className="lg:col-span-2 space-y-6">
           {/* Property Image & Quick Stats */}
           <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
-            <div className="relative h-64">
-              <img src={property.image} alt={property.address} className="w-full h-full object-cover" />
+          <div className="relative h-64">
+              <PropertyImage src={property.image} alt={property.address} className="w-full h-full object-cover" />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                 <div className="flex items-center gap-4 text-white">
                   <div className="flex items-center gap-1">

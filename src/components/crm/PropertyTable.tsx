@@ -1,6 +1,7 @@
 import React from 'react';
 import { Property, PipelineStage, FieldDefinition, SortConfig } from '@/types';
 import { Badge, TagBadge } from './Badge';
+import { PropertyImage } from './PropertyImagePlaceholder';
 import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName, getOwnerCount, getPrimaryPhone, hasDoNotCall, isLitigator } from '@/lib/ownerUtils';
@@ -93,7 +94,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
         <td className={cellClass}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-              <img src={property.image} alt="" className="w-full h-full object-cover" />
+              <PropertyImage src={property.image} className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="font-medium text-foreground flex items-center gap-1.5">

@@ -15,6 +15,7 @@ import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
+import { transformImportToOwner } from '@/lib/ownerUtils';
 
 const MainApp: React.FC = () => {
   const { user } = useAuth();
@@ -251,15 +252,10 @@ const MainApp: React.FC = () => {
       zip: row.zip || '',
       bedrooms: parseInt(row.bedrooms) || 0,
       bathrooms: parseFloat(row.bathrooms) || 0,
-      image: `https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop`,
+      image: '',
       stageId: 'lead-list',
       tags: options.globalTags || [],
-      owner: {
-        name: row.ownerName || 'Unknown',
-        email: row.ownerEmail || '',
-        phone: row.ownerPhone || '',
-        lastVerifiedDate: new Date().toISOString(),
-      },
+      owner: transformImportToOwner(row),
       activities: [],
       marketData: {
         adr: 0,
@@ -268,6 +264,7 @@ const MainApp: React.FC = () => {
         propertyValue: 0,
       },
       leadScore: 50,
+      propertyUrl: row.propertyUrl || '',
       customFields: {},
     }));
 

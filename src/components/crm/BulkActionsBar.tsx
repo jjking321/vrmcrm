@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Property, PipelineStage } from '@/types';
+import { Property, PipelineStage, FilterRule } from '@/types';
 import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
@@ -12,7 +12,7 @@ interface BulkActionsBarProps {
   onClearSelection: () => void;
   onUpdateProperty: (id: string, updates: Partial<Property>) => void;
   onDeleteProperties: (ids: string[]) => void;
-  onSaveList: (name: string) => void;
+  onSaveList: (name: string, rules?: FilterRule[]) => void;
 }
 
 export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
@@ -145,8 +145,14 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
       }
     });
     
-    // Save the list with a filter for this tag
-    onSaveList(newListName.trim());
+    // Save the list with the tag-based filter rule
+    const tagRule: FilterRule = {
+      id: Date.now().toString(),
+      field: 'tags',
+      operator: 'contains',
+      value: listTag,
+    };
+    onSaveList(newListName.trim(), [tagRule]);
     
     toast.success(`Created smart list "${newListName}" with ${selectedCount} properties`);
     setNewListName('');

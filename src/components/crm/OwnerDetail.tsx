@@ -6,6 +6,7 @@ import {
   PhoneOff, Clock, Home, Users
 } from 'lucide-react';
 import { Badge } from './Badge';
+import { PropertyImage } from './PropertyImagePlaceholder';
 import { cn } from '@/lib/utils';
 import {
   getPrimaryOwnerName, getAllOwnerNames, getOwnerCount, getPrimaryPhone,
@@ -335,7 +336,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                   >
                     <div className="flex items-center gap-4">
                       <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-                        <img src={property.image} alt="" className="w-full h-full object-cover" />
+                        <PropertyImage src={property.image} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

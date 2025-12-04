@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
 import { MapPin, DollarSign, User } from 'lucide-react';
+import { PropertyImage } from './PropertyImagePlaceholder';
 import { cn } from '@/lib/utils';
+import { getPrimaryOwnerName } from '@/lib/ownerUtils';
 
 interface KanbanBoardProps {
   properties: Property[];
@@ -111,7 +113,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 >
                   {/* Property Image */}
                   <div className="relative w-full h-24 rounded-md overflow-hidden mb-2">
-                    <img 
+                    <PropertyImage 
                       src={property.image} 
                       alt={property.address}
                       className="w-full h-full object-cover"
@@ -141,7 +143,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
                         <User className="w-3 h-3" />
-                        <span className="truncate">{property.owner.name.split(' ')[0]}</span>
+                        <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
                         <DollarSign className="w-3 h-3" />

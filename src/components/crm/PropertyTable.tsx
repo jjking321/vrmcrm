@@ -185,9 +185,9 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
                 {primaryName}
               </button>
               {phone1 && (
-                <span className={cn(
+              <span className={cn(
                   "text-xs px-1.5 py-0.5 rounded",
-                  phone1.doNotCall ? "bg-red-50 text-red-600 line-through" : "bg-muted text-muted-foreground"
+                  phone1.doNotCall ? "bg-amber-50 text-muted-foreground border border-amber-200" : "bg-muted text-muted-foreground"
                 )}>
                   {phone1.number}
                   {phone1.doNotCall && <PhoneOff className="w-2.5 h-2.5 inline ml-1" />}
@@ -206,7 +206,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
                 {phone2 && (
                   <span className={cn(
                     "text-xs px-1.5 py-0.5 rounded",
-                    phone2.doNotCall ? "bg-red-50 text-red-600 line-through" : "bg-muted text-muted-foreground"
+                    phone2.doNotCall ? "bg-amber-50 text-muted-foreground border border-amber-200" : "bg-muted text-muted-foreground"
                   )}>
                     {phone2.number}
                     {phone2.doNotCall && <PhoneOff className="w-2.5 h-2.5 inline ml-1" />}

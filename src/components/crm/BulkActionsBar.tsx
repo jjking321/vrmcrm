@@ -210,10 +210,10 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         </div>
 
         {/* Common tags to remove */}
-        {commonTags.length > 0 && (
+        {commonTags.filter(tag => !tag.startsWith('list-')).length > 0 && (
           <div className="flex items-center gap-1 px-2 border-l border-border">
             <span className="text-xs text-muted-foreground mr-1">Remove:</span>
-            {commonTags.slice(0, 3).map(tag => (
+            {commonTags.filter(tag => !tag.startsWith('list-')).slice(0, 3).map(tag => (
               <button
                 key={tag}
                 onClick={() => handleRemoveTag(tag)}

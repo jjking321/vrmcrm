@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
-import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare } from 'lucide-react';
+import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ interface BulkActionsBarProps {
   onClearSelection: () => void;
   onUpdateProperty: (id: string, updates: Partial<Property>) => void;
   onDeleteProperties: (ids: string[]) => void;
+  onSaveList: (name: string) => void;
 }
 
 export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
@@ -21,6 +22,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onClearSelection,
   onUpdateProperty,
   onDeleteProperties,
+  onSaveList,
 }) => {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -28,6 +30,8 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const [isLoadingZillow, setIsLoadingZillow] = useState(false);
   const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState(0);
+  const [isCreatingList, setIsCreatingList] = useState(false);
+  const [newListName, setNewListName] = useState('');
 
   const selectedCount = selectedIds.size;
   const selectedProperties = properties.filter(p => selectedIds.has(p.id));
@@ -126,6 +130,28 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         selectedProperties.every(p => p.tags.includes(tag))
       )
     : [];
+
+  const handleCreateSmartList = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newListName.trim()) return;
+    
+    // Create a unique tag for this selection
+    const listTag = `list-${Date.now()}`;
+    
+    // Add the tag to all selected properties
+    selectedProperties.forEach(property => {
+      if (!property.tags.includes(listTag)) {
+        onUpdateProperty(property.id, { tags: [...property.tags, listTag] });
+      }
+    });
+    
+    // Save the list with a filter for this tag
+    onSaveList(newListName.trim());
+    
+    toast.success(`Created smart list "${newListName}" with ${selectedCount} properties`);
+    setNewListName('');
+    setIsCreatingList(false);
+  };
 
   if (selectedCount === 0) return null;
 
@@ -268,6 +294,36 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
               </>
             )}
           </button>
+        </div>
+
+        {/* Create Smart List */}
+        <div className="relative border-l border-border pl-3">
+          {isCreatingList ? (
+            <form onSubmit={handleCreateSmartList} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newListName}
+                onChange={(e) => setNewListName(e.target.value)}
+                className="w-32 px-2 py-1.5 text-sm border border-input rounded-lg bg-background focus:border-brand outline-none"
+                placeholder="List name..."
+                autoFocus
+              />
+              <button type="submit" className="p-1.5 bg-brand text-brand-foreground rounded-lg text-xs">
+                Save
+              </button>
+              <button type="button" onClick={() => setIsCreatingList(false)} className="p-1.5 text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </form>
+          ) : (
+            <button
+              onClick={() => setIsCreatingList(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+            >
+              <ListFilter className="w-4 h-4" />
+              Smart List
+            </button>
+          )}
         </div>
 
         {/* Delete */}

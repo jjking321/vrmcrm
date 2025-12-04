@@ -12,6 +12,7 @@ import { Settings } from './Settings';
 import { OwnerTable } from './OwnerTable';
 import { OwnerDetail } from './OwnerDetail';
 import { Dashboard } from './Dashboard';
+import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
 
@@ -312,6 +313,11 @@ const MainApp: React.FC = () => {
     localStorage.setItem(`custom_fields_${user?.companyId}`, JSON.stringify(customFields));
   };
 
+  const handleDeleteProperties = (ids: string[]) => {
+    setAllProperties(prev => prev.filter(p => !ids.includes(p.id)));
+    setSelectedIds(new Set());
+  };
+
   const handleSelectProperty = (id: string) => {
     setSelectedPropertyId(id);
     setSelectedOwnerName(null);
@@ -493,6 +499,15 @@ const MainApp: React.FC = () => {
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportData}
         fields={fields}
+      />
+
+      <BulkActionsBar
+        selectedIds={selectedIds}
+        properties={allProperties}
+        stages={stages}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onUpdateProperty={handleUpdateProperty}
+        onDeleteProperties={handleDeleteProperties}
       />
     </div>
   );

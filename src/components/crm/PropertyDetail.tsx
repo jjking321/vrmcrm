@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Property, PipelineStage, FieldDefinition, Activity, Owner, PhoneContact, OwnerContact } from '@/types';
+import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
 import ActivityLog from './ActivityLog';
-import MarketingGenerator from './MarketingGenerator';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
@@ -11,10 +10,10 @@ import {
   formatOwnershipLength, getPhoneTypeBadgeClass, getOwnerTypeBadgeClass
 } from '@/lib/ownerUtils';
 import { 
-  MapPin, BedDouble, Bath, DollarSign, User, Mail, Phone, 
-  ArrowLeft, Save, X, Tag, Plus, ExternalLink, Star, 
+  MapPin, BedDouble, Bath, User, Mail, Phone, 
+  ArrowLeft, Save, X, Plus, ExternalLink, Star, 
   TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2,
-  AlertTriangle, PhoneOff, Clock, Building, Link
+  AlertTriangle, PhoneOff, Clock, Link
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -110,10 +109,6 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   };
 
   const currentStage = stages.find(s => s.id === property.stageId);
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const safeDist = property.marketData.monthlyRevenueDistribution || Array(12).fill(8.33);
-  const maxRevenueShare = Math.max(...safeDist, 1);
 
   // Owner helper values
   const ownerCount = getOwnerCount(property.owner);
@@ -246,6 +241,98 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Market Intelligence - Moved here */}
+          <div className="bg-card rounded-xl shadow-soft border border-border p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-brand" />
+                Market Intelligence
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleFetchZillow}
+                  disabled={isLoadingZillow}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                  title="Fetch from Zillow"
+                >
+                  {isLoadingZillow ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  Zillow
+                </button>
+                <button
+                  onClick={handleFetchAirROI}
+                  disabled={isLoadingAirROI}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                  title="Fetch from AirROI"
+                >
+                  {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                  AirROI
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Key Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                  <p className="text-xs text-emerald-600 font-medium mb-1">Est. Annual Revenue</p>
+                  <p className="text-lg font-bold text-emerald-700">${property.marketData.projectedRevenue.toLocaleString()}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Property Value</p>
+                  <p className="text-lg font-bold text-blue-700">${property.marketData.propertyValue.toLocaleString()}</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                  <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
+                  <p className="text-lg font-bold text-amber-700">${property.marketData.adr}</p>
+                </div>
+                <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                  <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
+                  <p className="text-lg font-bold text-violet-700">{property.marketData.occupancyRate}%</p>
+                </div>
+              </div>
+
+              {/* Rating */}
+              {property.marketData.airbnbRating && (
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Airbnb Rating</span>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <span className="font-semibold text-foreground">{property.marketData.airbnbRating}</span>
+                    <span className="text-xs text-muted-foreground">({property.marketData.reviewCount} reviews)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* External Links */}
+              {(property.airbnbUrl || property.zillowUrl) && (
+                <div className="flex gap-2 pt-2">
+                  {property.airbnbUrl && (
+                    <a
+                      href={property.airbnbUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Airbnb
+                    </a>
+                  )}
+                  {property.zillowUrl && (
+                    <a
+                      href={property.zillowUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Zillow
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -479,154 +566,6 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             )}
           </div>
 
-          {/* Market Intelligence */}
-          <div className="bg-card rounded-xl shadow-soft border border-border p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-brand" />
-                Market Intelligence
-              </h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleFetchZillow}
-                  disabled={isLoadingZillow}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                  title="Fetch from Zillow"
-                >
-                  {isLoadingZillow ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                  Zillow
-                </button>
-                <button
-                  onClick={handleFetchAirROI}
-                  disabled={isLoadingAirROI}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                  title="Fetch from AirROI"
-                >
-                  {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                  AirROI
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {/* Key Metrics */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                  <p className="text-xs text-emerald-600 font-medium mb-1">Est. Annual Revenue</p>
-                  <p className="text-lg font-bold text-emerald-700">${property.marketData.projectedRevenue.toLocaleString()}</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Property Value</p>
-                  <p className="text-lg font-bold text-blue-700">${property.marketData.propertyValue.toLocaleString()}</p>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                  <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
-                  <p className="text-lg font-bold text-amber-700">${property.marketData.adr}</p>
-                </div>
-                <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
-                  <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
-                  <p className="text-lg font-bold text-violet-700">{property.marketData.occupancyRate}%</p>
-                </div>
-              </div>
-
-              {/* Rating */}
-              {property.marketData.airbnbRating && (
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <span className="text-sm text-muted-foreground">Airbnb Rating</span>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                    <span className="font-semibold text-foreground">{property.marketData.airbnbRating}</span>
-                    <span className="text-xs text-muted-foreground">({property.marketData.reviewCount} reviews)</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Seasonality Chart */}
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Seasonality
-                </h4>
-                <div className="flex items-end h-24 gap-1">
-                  {safeDist.map((value, idx) => {
-                    const heightPercentage = Math.max((value / maxRevenueShare) * 100, 5);
-                    return (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                        <div
-                          className="w-full bg-brand/70 rounded-t hover:bg-brand transition-colors"
-                          style={{ height: `${heightPercentage}%` }}
-                          title={`${months[idx]}: ${value.toFixed(1)}%`}
-                        />
-                        <span className="text-[9px] text-muted-foreground">{months[idx].charAt(0)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* External Links */}
-              {(property.airbnbUrl || property.zillowUrl) && (
-                <div className="flex gap-2 pt-2">
-                  {property.airbnbUrl && (
-                    <a
-                      href={property.airbnbUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Airbnb
-                    </a>
-                  )}
-                  {property.zillowUrl && (
-                    <a
-                      href={property.zillowUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-input rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Zillow
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Lead Score */}
-          <div className="bg-card rounded-xl shadow-soft border border-border p-5">
-            <h3 className="font-semibold text-foreground mb-3">Lead Score</h3>
-            <div className="flex items-center gap-4">
-              <div className={cn(
-                "text-3xl font-bold",
-                property.leadScore >= 80 ? "text-emerald-600" :
-                property.leadScore >= 50 ? "text-amber-600" : "text-muted-foreground"
-              )}>
-                {property.leadScore}
-              </div>
-              <div className="flex-1">
-                <div className="h-3 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      property.leadScore >= 80 ? "bg-emerald-500" :
-                      property.leadScore >= 50 ? "bg-amber-500" : "bg-slate-400"
-                    )}
-                    style={{ width: `${property.leadScore}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {property.leadScore >= 80 ? "Hot lead - prioritize outreach" :
-                   property.leadScore >= 50 ? "Warm lead - follow up soon" :
-                   "Cold lead - needs nurturing"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Marketing Generator */}
-          <MarketingGenerator property={property} />
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
 import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, LayoutGrid, Table, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -52,6 +52,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [showFilters, setShowFilters] = useState(rules.length > 0);
+
+  // Sync showFilters state when rules change (e.g., when loading a smart list)
+  useEffect(() => {
+    if (rules.length > 0) {
+      setShowFilters(true);
+    }
+  }, [rules]);
 
   const handleSaveList = (e: React.FormEvent) => {
     e.preventDefault();

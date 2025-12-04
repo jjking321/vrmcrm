@@ -346,10 +346,10 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                               {associatedPhone && (
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   {associatedPhone.doNotCall ? (
-                                    <span className="flex items-center gap-1 text-xs text-red-600">
-                                      <PhoneOff className="w-3 h-3" />
-                                      <span className="line-through">{associatedPhone.number}</span>
-                                      <span className="px-1 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <PhoneOff className="w-3 h-3 text-amber-500" />
+                                      {associatedPhone.number}
+                                      <span className="px-1 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                                     </span>
                                   ) : (
                                     <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
@@ -377,10 +377,10 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                         {property.owner.phones.slice(property.owner.owners.length).map((phone, idx) => (
                           <div key={idx} className="flex items-center gap-2 ml-10">
                             {phone.doNotCall ? (
-                              <span className="flex items-center gap-1 text-xs text-red-600">
-                                <PhoneOff className="w-3 h-3" />
-                                <span className="line-through">{phone.number}</span>
-                                <span className="px-1 py-0.5 bg-red-100 text-red-700 rounded font-medium">DNC</span>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <PhoneOff className="w-3 h-3 text-amber-500" />
+                                {phone.number}
+                                <span className="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                               </span>
                             ) : (
                               <a href={`tel:${phone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">

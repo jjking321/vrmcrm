@@ -20,6 +20,7 @@ interface OwnerDetailProps {
   stages: PipelineStage[];
   onBack: () => void;
   onSelectProperty: (id: string) => void;
+  onSelectOwner?: (ownerName: string) => void;
 }
 
 export const OwnerDetail: React.FC<OwnerDetailProps> = ({
@@ -28,6 +29,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   stages,
   onBack,
   onSelectProperty,
+  onSelectOwner,
 }) => {
   // Find properties where any owner matches the name
   const ownerProperties = properties.filter(p => {
@@ -255,13 +257,19 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                         {idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "font-medium text-sm",
-                          isCurrentOwner ? "text-brand" : "text-foreground"
-                        )}>
-                          {fullName || 'Unknown'}
-                          {isCurrentOwner && <span className="text-xs ml-1.5">(viewing)</span>}
-                        </p>
+                        {isCurrentOwner ? (
+                          <p className="font-medium text-sm text-brand">
+                            {fullName || 'Unknown'}
+                            <span className="text-xs ml-1.5">(viewing)</span>
+                          </p>
+                        ) : (
+                          <button
+                            onClick={() => onSelectOwner?.(fullName)}
+                            className="font-medium text-sm text-foreground hover:text-brand hover:underline transition-colors text-left"
+                          >
+                            {fullName || 'Unknown'}
+                          </button>
+                        )}
                         {associatedPhone && (
                           <div className="flex items-center gap-1.5 mt-1">
                             {associatedPhone.doNotCall ? (

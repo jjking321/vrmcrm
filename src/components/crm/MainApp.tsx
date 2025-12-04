@@ -339,6 +339,7 @@ const MainApp: React.FC = () => {
           fields={fields}
           onBack={() => setSelectedPropertyId(null)}
           onUpdateProperty={handleUpdateProperty}
+          onSelectOwner={handleSelectOwner}
         />
       );
     }

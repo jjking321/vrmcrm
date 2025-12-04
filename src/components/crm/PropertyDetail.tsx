@@ -25,6 +25,7 @@ interface PropertyDetailProps {
   fields: FieldDefinition[];
   onBack: () => void;
   onUpdateProperty: (id: string, updates: Partial<Property>) => void;
+  onSelectOwner?: (ownerName: string) => void;
 }
 
 const PropertyDetail: React.FC<PropertyDetailProps> = ({
@@ -33,6 +34,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   fields,
   onBack,
   onUpdateProperty,
+  onSelectOwner,
 }) => {
   const [isEditingOwner, setIsEditingOwner] = useState(false);
   const [editedOwner, setEditedOwner] = useState(property.owner);
@@ -335,7 +337,12 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                               {idx + 1}
                             </div>
                             <div>
-                              <p className="font-medium text-foreground text-sm">{ownerFullName || 'Unknown'}</p>
+                              <button
+                                onClick={() => onSelectOwner?.(ownerFullName || primaryName)}
+                                className="font-medium text-foreground text-sm hover:text-brand hover:underline transition-colors text-left"
+                              >
+                                {ownerFullName || 'Unknown'}
+                              </button>
                               {associatedPhone && (
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   {associatedPhone.doNotCall ? (
@@ -393,7 +400,12 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                   </div>
                 ) : (
                   <div>
-                    <p className="font-medium text-foreground">{primaryName}</p>
+                    <button
+                      onClick={() => onSelectOwner?.(primaryName)}
+                      className="font-medium text-foreground hover:text-brand hover:underline transition-colors"
+                    >
+                      {primaryName}
+                    </button>
                     {property.owner.phone && (
                       <a href={`tel:${property.owner.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand mt-1">
                         <Phone className="w-4 h-4" />

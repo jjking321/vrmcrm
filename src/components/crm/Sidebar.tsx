@@ -28,7 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadList,
   onDeleteList,
 }) => {
-  const { user, company, logout } = useAuth();
+  const { user, profile, company, logout } = useAuth();
   const [smartListsOpen, setSmartListsOpen] = useState(true);
 
   const navItems = [
@@ -167,10 +167,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-sidebar-accent-foreground font-medium text-sm">
-            {user?.name?.charAt(0).toUpperCase() || 'U'}
+            {profile?.name?.charAt(0).toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name}</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">{profile?.name || user?.email}</p>
             <p className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
           </div>
           <button

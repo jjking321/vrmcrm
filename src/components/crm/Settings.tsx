@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SettingsProps {
-  fields: FieldDefinition[];
+  fields: (FieldDefinition & { isHidden?: boolean })[];
   onAddField: (field: FieldDefinition) => void;
   onDeleteField: (fieldId: string) => void;
+  onToggleFieldVisibility: (fieldId: string, isHidden: boolean) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
   fields,
   onAddField,
   onDeleteField,
+  onToggleFieldVisibility,
 }) => {
   const [activeTab, setActiveTab] = useState<'fields' | 'integrations'>('fields');
   const [isAdding, setIsAdding] = useState(false);
@@ -162,12 +164,13 @@ export const Settings: React.FC<SettingsProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Field Name</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Source</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Visible</th>
                   <th className="px-4 py-3 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {fields.map((field) => (
-                  <tr key={field.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={field.id} className={cn("hover:bg-muted/20 transition-colors", field.isHidden && "opacity-50")}>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{field.label}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{field.type}</td>
                     <td className="px-4 py-3">
@@ -177,6 +180,15 @@ export const Settings: React.FC<SettingsProps> = ({
                       )}>
                         {field.isSystem ? 'System' : 'Custom'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => onToggleFieldVisibility(field.id, !field.isHidden)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                        title={field.isHidden ? 'Show field' : 'Hide field'}
+                      >
+                        {field.isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       {!field.isSystem && (

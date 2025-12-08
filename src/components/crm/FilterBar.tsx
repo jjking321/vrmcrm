@@ -80,9 +80,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const addFilterRule = () => {
     const newRule: FilterRule = {
       id: Date.now().toString(),
-      field: 'leadScore',
-      operator: 'gt',
-      value: 50,
+      field: 'stageId',
+      operator: 'equals',
+      value: '',
     };
     onRulesChange([...rules, newRule]);
     setShowFilters(true);

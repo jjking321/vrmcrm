@@ -118,16 +118,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       alt={property.address}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-1 right-1">
-                      <span className={cn(
-                        "text-xs font-bold px-1.5 py-0.5 rounded",
-                        property.leadScore >= 80 ? "bg-emerald-500 text-white" :
-                        property.leadScore >= 50 ? "bg-amber-500 text-white" :
-                        "bg-slate-500 text-white"
-                      )}>
-                        {property.leadScore}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Property Info */}

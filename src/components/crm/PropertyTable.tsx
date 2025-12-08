@@ -34,7 +34,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
   onSelectOwner,
 }) => {
   const getAlign = (colId: string): 'left' | 'right' => {
-    if (['leadScore', 'estimatedRevenue', 'bedrooms', 'bathrooms'].includes(colId)) return 'right';
+    if (['estimatedRevenue', 'bedrooms', 'bathrooms'].includes(colId)) return 'right';
     return 'left';
   };
 
@@ -74,11 +74,6 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     );
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    if (score >= 50) return 'text-amber-700 bg-amber-50 border-amber-200';
-    return 'text-muted-foreground bg-muted border-border';
-  };
 
   const getStage = (id: string) => stages.find(s => s.id === id);
 
@@ -119,15 +114,6 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
       );
     }
 
-    if (colId === 'leadScore') {
-      return (
-        <td className={cellClass}>
-          <span className={cn("inline-flex items-center px-2 py-0.5 text-xs font-bold rounded-full border", getScoreColor(property.leadScore))}>
-            {property.leadScore}
-          </span>
-        </td>
-      );
-    }
 
     if (colId === 'estimatedRevenue') {
       return (

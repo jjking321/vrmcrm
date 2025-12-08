@@ -2,7 +2,7 @@ import React from 'react';
 import { Property, PipelineStage, Activity } from '@/types';
 import { 
   ArrowLeft, Phone, Mail, MapPin, Building, DollarSign, 
-  Target, Calendar, FileText, MessageSquare, AlertTriangle,
+  Calendar, FileText, MessageSquare, AlertTriangle,
   PhoneOff, Clock, Home, Users
 } from 'lucide-react';
 import { Badge } from './Badge';
@@ -59,9 +59,6 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
 
   // Aggregate stats
   const totalRevenue = ownerProperties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
-  const avgLeadScore = Math.round(
-    ownerProperties.reduce((sum, p) => sum + p.leadScore, 0) / ownerProperties.length
-  );
 
   // Check compliance flags across all properties
   const anyLitigator = ownerProperties.some(p => isLitigator(p.owner));
@@ -375,20 +372,6 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                   <span className="text-sm">Total Revenue</span>
                 </div>
                 <span className="font-semibold text-emerald-600">${totalRevenue.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Target className="w-4 h-4" />
-                  <span className="text-sm">Avg Lead Score</span>
-                </div>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-bold border",
-                  avgLeadScore >= 80 ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
-                  avgLeadScore >= 50 ? "text-amber-700 bg-amber-50 border-amber-200" :
-                  "text-muted-foreground bg-muted border-border"
-                )}>
-                  {avgLeadScore}
-                </span>
               </div>
             </div>
           </div>

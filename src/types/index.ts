@@ -118,7 +118,7 @@ export interface Property {
   airbnbUrl?: string;
   zillowUrl?: string;
   propertyUrl?: string; // PropWire or other external link
-  leadScore: number;
+  
   customFields?: Record<string, any>;
   // Scraped Airbnb data fields
   listingTitle?: string;

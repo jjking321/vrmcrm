@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          company_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          outcome: string | null
+          property_id: string
+          type: string
+        }
+        Insert: {
+          company_id: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          outcome?: string | null
+          property_id: string
+          type: string
+        }
+        Update: {
+          company_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          outcome?: string | null
+          property_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           created_at: string | null
@@ -34,6 +85,131 @@ export type Database = {
           subscription_status?: string | null
         }
         Relationships: []
+      }
+      owners: {
+        Row: {
+          age: number | null
+          company_id: string
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          last_verified_date: string | null
+          litigator: boolean | null
+          mailing_address: string | null
+          mailing_city: string | null
+          mailing_state: string | null
+          mailing_zip: string | null
+          name: string
+          notes: string | null
+          owner_occupied: boolean | null
+          owner_type: string | null
+          owners: Json | null
+          ownership_length_months: number | null
+          phone: string | null
+          phones: Json | null
+          property_id: string
+          updated_at: string
+        }
+        Insert: {
+          age?: number | null
+          company_id: string
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_verified_date?: string | null
+          litigator?: boolean | null
+          mailing_address?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_zip?: string | null
+          name?: string
+          notes?: string | null
+          owner_occupied?: boolean | null
+          owner_type?: string | null
+          owners?: Json | null
+          ownership_length_months?: number | null
+          phone?: string | null
+          phones?: Json | null
+          property_id: string
+          updated_at?: string
+        }
+        Update: {
+          age?: number | null
+          company_id?: string
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_verified_date?: string | null
+          litigator?: boolean | null
+          mailing_address?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_zip?: string | null
+          name?: string
+          notes?: string | null
+          owner_occupied?: boolean | null
+          owner_type?: string | null
+          owners?: Json | null
+          ownership_length_months?: number | null
+          phone?: string | null
+          phones?: Json | null
+          property_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owners_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owners_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_stages: {
+        Row: {
+          color: string
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          color?: string
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          color?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -64,6 +240,158 @@ export type Database = {
           },
         ]
       }
+      properties: {
+        Row: {
+          address: string
+          airbnb_url: string | null
+          bathrooms: number
+          bedrooms: number
+          city: string
+          company_id: string
+          created_at: string
+          custom_fields: Json | null
+          guests: number | null
+          host: string | null
+          id: string
+          image: string | null
+          latitude: number | null
+          listing_title: string | null
+          longitude: number | null
+          lot_size: number | null
+          market_data: Json | null
+          property_manager: string | null
+          property_type: string | null
+          property_url: string | null
+          room_type: string | null
+          square_feet: number | null
+          stage_id: string | null
+          state: string
+          tags: string[] | null
+          updated_at: string
+          year_built: number | null
+          zillow_url: string | null
+          zip: string
+        }
+        Insert: {
+          address: string
+          airbnb_url?: string | null
+          bathrooms?: number
+          bedrooms?: number
+          city?: string
+          company_id: string
+          created_at?: string
+          custom_fields?: Json | null
+          guests?: number | null
+          host?: string | null
+          id?: string
+          image?: string | null
+          latitude?: number | null
+          listing_title?: string | null
+          longitude?: number | null
+          lot_size?: number | null
+          market_data?: Json | null
+          property_manager?: string | null
+          property_type?: string | null
+          property_url?: string | null
+          room_type?: string | null
+          square_feet?: number | null
+          stage_id?: string | null
+          state?: string
+          tags?: string[] | null
+          updated_at?: string
+          year_built?: number | null
+          zillow_url?: string | null
+          zip?: string
+        }
+        Update: {
+          address?: string
+          airbnb_url?: string | null
+          bathrooms?: number
+          bedrooms?: number
+          city?: string
+          company_id?: string
+          created_at?: string
+          custom_fields?: Json | null
+          guests?: number | null
+          host?: string | null
+          id?: string
+          image?: string | null
+          latitude?: number | null
+          listing_title?: string | null
+          longitude?: number | null
+          lot_size?: number | null
+          market_data?: Json | null
+          property_manager?: string | null
+          property_type?: string | null
+          property_url?: string | null
+          room_type?: string | null
+          square_feet?: number | null
+          stage_id?: string | null
+          state?: string
+          tags?: string[] | null
+          updated_at?: string
+          year_built?: number | null
+          zillow_url?: string | null
+          zip?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "properties_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "properties_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_lists: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          match_type: string
+          name: string
+          rules: Json
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          match_type?: string
+          name: string
+          rules?: Json
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          match_type?: string
+          name?: string
+          rules?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_lists_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -87,6 +415,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_company_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

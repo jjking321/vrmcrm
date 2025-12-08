@@ -95,24 +95,31 @@ export const useImportProperties = () => {
         if (addressesToVerify.length > 0) {
           const batchResults = await verifyAddressBatch(addressesToVerify);
           
-          // Apply standardized results to data
-          standardizedData = data.map((row, idx) => {
-            const result = batchResults.get(idx);
-            if (result?.success && result.standardized) {
-              standardizedCount++;
-              return {
-                ...row,
-                _originalIndex: idx,
-                address: result.standardized.street,
-                city: result.standardized.city,
-                state: result.standardized.state,
-                zip: result.standardized.zip,
-                _latitude: result.latitude,
-                _longitude: result.longitude,
-              };
-            }
-            return { ...row, _originalIndex: idx };
-          });
+          // Check if standardization failed due to quota or other errors
+          const firstResult = batchResults.values().next().value;
+          if (firstResult && !firstResult.success && firstResult.error?.includes('quota exceeded')) {
+            toast.warning('Address standardization skipped: ' + firstResult.error, { id: toastId, duration: 8000 });
+            // Continue with import without standardization
+          } else {
+            // Apply standardized results to data
+            standardizedData = data.map((row, idx) => {
+              const result = batchResults.get(idx);
+              if (result?.success && result.standardized) {
+                standardizedCount++;
+                return {
+                  ...row,
+                  _originalIndex: idx,
+                  address: result.standardized.street,
+                  city: result.standardized.city,
+                  state: result.standardized.state,
+                  zip: result.standardized.zip,
+                  _latitude: result.latitude,
+                  _longitude: result.longitude,
+                };
+              }
+              return { ...row, _originalIndex: idx };
+            });
+          }
         }
       }
 

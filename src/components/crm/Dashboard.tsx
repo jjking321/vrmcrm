@@ -1,8 +1,8 @@
 import React from 'react';
 import { Property, PipelineStage, Activity } from '@/types';
 import { 
-  DollarSign, TrendingUp, Users, Building, Target, 
-  BarChart3, Phone, Mail, FileText, Calendar, Star
+  DollarSign, TrendingUp, Users, Building, 
+  BarChart3, Phone, Mail, FileText, Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +21,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   // Aggregate stats
   const totalRevenue = properties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
-  const avgLeadScore = properties.length > 0 
-    ? Math.round(properties.reduce((sum, p) => sum + p.leadScore, 0) / properties.length)
-    : 0;
   const uniqueOwners = new Set(properties.map(p => p.owner.name)).size;
 
   // Pipeline breakdown
@@ -33,11 +30,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     revenue: properties.filter(p => p.stageId === stage.id)
       .reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0),
   }));
-
-  // Top leads
-  const topLeads = [...properties]
-    .sort((a, b) => b.leadScore - a.leadScore)
-    .slice(0, 5);
 
   // High value properties
   const highValueProperties = [...properties]
@@ -94,18 +86,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <p className="text-sm text-muted-foreground">Revenue Potential</p>
               <p className="text-2xl font-bold text-foreground">${totalRevenue.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-              <Target className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Avg Lead Score</p>
-              <p className="text-2xl font-bold text-foreground">{avgLeadScore}</p>
             </div>
           </div>
         </div>
@@ -170,50 +150,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Leads */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Star className="w-5 h-5 text-amber-500" />
-              Top Leads
-            </h2>
-            <button
-              onClick={() => onViewChange('properties')}
-              className="text-sm text-brand hover:text-brand-600 font-medium"
-            >
-              View All →
-            </button>
-          </div>
-          <div className="space-y-3">
-            {topLeads.map((property) => (
-              <div
-                key={property.id}
-                onClick={() => onSelectProperty(property.id)}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-              >
-                <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-                  <img src={property.image} alt="" className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{property.address}</p>
-                  <p className="text-xs text-muted-foreground">{property.owner.name}</p>
-                </div>
-                <div className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-bold border",
-                  property.leadScore >= 80 ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
-                  property.leadScore >= 50 ? "text-amber-700 bg-amber-50 border-amber-200" :
-                  "text-muted-foreground bg-muted border-border"
-                )}>
-                  {property.leadScore}
-                </div>
-              </div>
-            ))}
-            {topLeads.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No properties yet</p>
-            )}
-          </div>
-        </div>
-
         {/* High Value Properties */}
         <div className="bg-card rounded-xl border border-border p-5 shadow-soft">
           <div className="flex items-center justify-between mb-4">
@@ -221,6 +157,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <TrendingUp className="w-5 h-5 text-emerald-500" />
               High Value Properties
             </h2>
+            <button
+              onClick={() => onViewChange('properties')}
+              className="text-sm text-brand hover:text-brand-600 font-medium"
+            >
+              View All →
+            </button>
           </div>
           <div className="space-y-3">
             {highValueProperties.map((property) => (

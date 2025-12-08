@@ -35,7 +35,7 @@ const MainApp: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
   const [matchType, setMatchType] = useState<'and' | 'or'>('and');
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'leadScore', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'address', direction: 'asc' });
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
   const [savedLists, setSavedLists] = useState<SavedList[]>([]);
   const [deduplicateByOwner, setDeduplicateByOwner] = useState(false);
@@ -82,9 +82,6 @@ const MainApp: React.FC = () => {
 
       // Get the value based on field
       switch (rule.field) {
-        case 'leadScore':
-          value = property.leadScore;
-          break;
         case 'stageId':
           value = property.stageId;
           break;
@@ -237,7 +234,6 @@ const MainApp: React.FC = () => {
         projectedRevenue: 0,
         propertyValue: 0,
       },
-      leadScore: 50,
       customFields: {},
     };
     setAllProperties(prev => [newProperty, ...prev]);
@@ -388,7 +384,6 @@ const MainApp: React.FC = () => {
             projectedRevenue: 0,
             propertyValue: 0,
           },
-          leadScore: 50,
           propertyUrl: row.propertyUrl || '',
           airbnbUrl: row.airbnbUrl || '',
           listingTitle: row.listingTitle || undefined,

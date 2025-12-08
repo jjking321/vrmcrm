@@ -69,7 +69,7 @@ export const FilterRuleRow: React.FC<FilterRuleRowProps> = ({
     }
 
     // Number input
-    if (fieldType === 'number' || ['leadScore', 'bedrooms', 'bathrooms', 'estimatedRevenue'].includes(rule.field)) {
+    if (fieldType === 'number' || ['bedrooms', 'bathrooms', 'estimatedRevenue'].includes(rule.field)) {
       return (
         <input
           type="number"

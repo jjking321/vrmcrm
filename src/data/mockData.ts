@@ -17,7 +17,6 @@ export const SYSTEM_FIELDS: FieldDefinition[] = [
   { id: 'bedrooms', label: 'Beds', type: 'number', isSystem: true },
   { id: 'bathrooms', label: 'Baths', type: 'number', isSystem: true },
   { id: 'stageId', label: 'Stage', type: 'select', isSystem: true },
-  { id: 'leadScore', label: 'Lead Score', type: 'number', isSystem: true },
   { id: 'estimatedRevenue', label: 'Est. Revenue', type: 'number', isSystem: true },
   { id: 'tags', label: 'Tags', type: 'text', isSystem: true },
   { id: 'ownerName', label: 'Owner', type: 'text', isSystem: true },
@@ -81,7 +80,6 @@ export const MOCK_PROPERTIES: Property[] = [
     },
     airbnbUrl: 'https://airbnb.com/rooms/123',
     propertyUrl: 'https://propwire.com/property/123',
-    leadScore: 85
   },
   {
     id: '2',
@@ -123,8 +121,7 @@ export const MOCK_PROPERTIES: Property[] = [
       reviewCount: 89,
       propertyValue: 850000,
       monthlyRevenueDistribution: [8, 7, 9, 8, 7, 10, 12, 11, 9, 10, 11, 8]
-    },
-    leadScore: 72
+    }
   },
   {
     id: '3',
@@ -176,7 +173,6 @@ export const MOCK_PROPERTIES: Property[] = [
       monthlyRevenueDistribution: [10, 10, 12, 9, 7, 6, 7, 7, 6, 8, 9, 9]
     },
     airbnbUrl: 'https://airbnb.com/rooms/456',
-    leadScore: 90
   },
   {
     id: '4',
@@ -219,7 +215,6 @@ export const MOCK_PROPERTIES: Property[] = [
       propertyValue: 1450000,
       monthlyRevenueDistribution: [12, 10, 8, 5, 4, 6, 8, 7, 5, 6, 14, 15]
     },
-    leadScore: 78
   },
   {
     id: '5',
@@ -262,8 +257,7 @@ export const MOCK_PROPERTIES: Property[] = [
       propertyValue: 450000
     },
     airbnbUrl: 'https://airbnb.com/rooms/789',
-    leadScore: 60
   }
 ];
 
-export const DEFAULT_COLUMNS = ['address', 'city', 'state', 'stageId', 'leadScore', 'estimatedRevenue', 'tags', 'ownerName'];
+export const DEFAULT_COLUMNS = ['address', 'city', 'state', 'stageId', 'estimatedRevenue', 'tags', 'ownerName'];

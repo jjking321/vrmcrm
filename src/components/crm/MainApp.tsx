@@ -244,10 +244,24 @@ const MainApp: React.FC = () => {
     toast.success(`Added ${data.address} to your leads`);
   };
 
-  const handleImportData = async (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => {
+  const handleImportData = async (data: any[], options: { 
+    standardize: boolean; 
+    globalTags?: string[]; 
+    listName?: string;
+    duplicateStrategy?: 'skip' | 'update' | 'merge' | 'review';
+    duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+  }) => {
     const toastId = toast.loading(`Importing ${data.length} properties...`);
     
+    // Build address index for duplicate handling
+    const existingAddressMap = new Map<string, Property>();
+    allProperties.forEach(prop => {
+      const normalized = normalizeAddressForDupes(prop.address, prop.city, prop.state);
+      existingAddressMap.set(normalized, prop);
+    });
+    
     const newProperties: Property[] = [];
+    const updatedProperties: { id: string; updates: Partial<Property> }[] = [];
     let standardizedCount = 0;
     
     for (const row of data) {
@@ -257,6 +271,15 @@ const MainApp: React.FC = () => {
       let zip = row.zip || '';
       let latitude: number | undefined;
       let longitude: number | undefined;
+      
+      // Handle GIS coordinates if provided
+      if (row.gisCoordinates) {
+        const coords = row.gisCoordinates.split(',').map((c: string) => parseFloat(c.trim()));
+        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+          latitude = coords[0];
+          longitude = coords[1];
+        }
+      }
       
       // Standardize address with Geocodio if enabled
       if (options.standardize && address && city && state) {
@@ -276,35 +299,121 @@ const MainApp: React.FC = () => {
         }
       }
       
-      newProperties.push({
-        id: Math.random().toString(36).substr(2, 9),
-        companyId: companyId || 'unknown',
-        address,
-        city,
-        state,
-        zip,
-        latitude,
-        longitude,
-        bedrooms: parseInt(row.bedrooms) || 0,
-        bathrooms: parseFloat(row.bathrooms) || 0,
-        image: '',
-        stageId: 'lead-list',
-        tags: options.globalTags || [],
-        owner: transformImportToOwner(row),
-        activities: [],
-        marketData: {
-          adr: 0,
-          occupancyRate: 0,
-          projectedRevenue: 0,
-          propertyValue: 0,
-        },
-        leadScore: 50,
-        propertyUrl: row.propertyUrl || '',
-        customFields: {},
-      });
+      // Check for duplicate
+      const normalizedAddr = normalizeAddressForDupes(address, city, state);
+      const existingProp = existingAddressMap.get(normalizedAddr);
+      
+      if (existingProp) {
+        // Handle duplicate based on strategy
+        const strategy = options.duplicateStrategy || 'skip';
+        let decision: 'keep_existing' | 'use_import' | 'merge' = 'keep_existing';
+        
+        if (strategy === 'review' && options.duplicateDecisions) {
+          decision = options.duplicateDecisions.get(normalizedAddr) || 'keep_existing';
+        } else if (strategy === 'update') {
+          decision = 'use_import';
+        } else if (strategy === 'merge') {
+          decision = 'merge';
+        }
+        
+        if (decision === 'keep_existing') {
+          continue; // Skip this import row
+        } else if (decision === 'use_import') {
+          // Replace existing with import data
+          updatedProperties.push({
+            id: existingProp.id,
+            updates: {
+              address,
+              city,
+              state,
+              zip,
+              latitude,
+              longitude,
+              bedrooms: parseInt(row.bedrooms) || existingProp.bedrooms,
+              bathrooms: parseFloat(row.bathrooms) || existingProp.bathrooms,
+              owner: transformImportToOwner(row),
+              tags: [...new Set([...(existingProp.tags || []), ...(options.globalTags || [])])],
+              propertyUrl: row.propertyUrl || existingProp.propertyUrl,
+              airbnbUrl: row.airbnbUrl || existingProp.airbnbUrl,
+              listingTitle: row.listingTitle || existingProp.listingTitle,
+              roomType: row.roomType || existingProp.roomType,
+              propertyManager: row.propertyManager || existingProp.propertyManager,
+              host: row.host || existingProp.host,
+            },
+          });
+        } else if (decision === 'merge') {
+          // Only fill empty fields
+          const mergeUpdates: Partial<Property> = {};
+          if (!existingProp.latitude && latitude) mergeUpdates.latitude = latitude;
+          if (!existingProp.longitude && longitude) mergeUpdates.longitude = longitude;
+          if (!existingProp.bedrooms && row.bedrooms) mergeUpdates.bedrooms = parseInt(row.bedrooms);
+          if (!existingProp.bathrooms && row.bathrooms) mergeUpdates.bathrooms = parseFloat(row.bathrooms);
+          if (!existingProp.propertyUrl && row.propertyUrl) mergeUpdates.propertyUrl = row.propertyUrl;
+          if (!existingProp.airbnbUrl && row.airbnbUrl) mergeUpdates.airbnbUrl = row.airbnbUrl;
+          if (!existingProp.listingTitle && row.listingTitle) mergeUpdates.listingTitle = row.listingTitle;
+          if (!existingProp.roomType && row.roomType) mergeUpdates.roomType = row.roomType;
+          if (!existingProp.propertyManager && row.propertyManager) mergeUpdates.propertyManager = row.propertyManager;
+          if (!existingProp.host && row.host) mergeUpdates.host = row.host;
+          
+          // Merge tags
+          if (options.globalTags?.length) {
+            mergeUpdates.tags = [...new Set([...(existingProp.tags || []), ...options.globalTags])];
+          }
+          
+          if (Object.keys(mergeUpdates).length > 0) {
+            updatedProperties.push({ id: existingProp.id, updates: mergeUpdates });
+          }
+        }
+      } else {
+        // New property
+        newProperties.push({
+          id: Math.random().toString(36).substr(2, 9),
+          companyId: companyId || 'unknown',
+          address,
+          city,
+          state,
+          zip,
+          latitude,
+          longitude,
+          bedrooms: parseInt(row.bedrooms) || 0,
+          bathrooms: parseFloat(row.bathrooms) || 0,
+          image: '',
+          stageId: 'lead-list',
+          tags: options.globalTags || [],
+          owner: transformImportToOwner(row),
+          activities: [],
+          marketData: {
+            adr: 0,
+            occupancyRate: 0,
+            projectedRevenue: 0,
+            propertyValue: 0,
+          },
+          leadScore: 50,
+          propertyUrl: row.propertyUrl || '',
+          airbnbUrl: row.airbnbUrl || '',
+          listingTitle: row.listingTitle || undefined,
+          roomType: row.roomType || undefined,
+          propertyManager: row.propertyManager || undefined,
+          host: row.host || undefined,
+          customFields: {},
+        });
+      }
     }
 
-    setAllProperties(prev => [...newProperties, ...prev]);
+    // Apply updates and add new properties
+    setAllProperties(prev => {
+      let result = [...prev];
+      
+      // Apply updates
+      updatedProperties.forEach(({ id, updates }) => {
+        result = result.map(p => p.id === id ? { ...p, ...updates } : p);
+      });
+      
+      // Add new properties
+      result = [...newProperties, ...result];
+      
+      return result;
+    });
     
     // Create smart list if name provided - filter by the tag applied to these imports
     if (options.listName && options.listName.trim()) {
@@ -332,11 +441,35 @@ const MainApp: React.FC = () => {
       localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updatedLists));
     }
     
-    if (options.standardize && standardizedCount > 0) {
-      toast.success(`Imported ${newProperties.length} properties (${standardizedCount} addresses standardized)`, { id: toastId });
-    } else {
-      toast.success(`Imported ${newProperties.length} properties`, { id: toastId });
+    const parts: string[] = [];
+    if (newProperties.length > 0) parts.push(`${newProperties.length} new`);
+    if (updatedProperties.length > 0) parts.push(`${updatedProperties.length} updated`);
+    if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
+    
+    toast.success(`Import complete: ${parts.join(', ')}`, { id: toastId });
+  };
+
+  // Helper function for duplicate detection
+  const normalizeAddressForDupes = (address: string, city: string, state: string): string => {
+    const streetSuffixes: Record<string, string> = {
+      'street': 'st', 'st': 'st', 'avenue': 'ave', 'ave': 'ave',
+      'drive': 'dr', 'dr': 'dr', 'road': 'rd', 'rd': 'rd',
+      'lane': 'ln', 'ln': 'ln', 'boulevard': 'blvd', 'blvd': 'blvd',
+      'court': 'ct', 'ct': 'ct', 'circle': 'cir', 'cir': 'cir',
+      'place': 'pl', 'pl': 'pl', 'way': 'way', 'trail': 'trl', 'trl': 'trl',
+    };
+    
+    let normalized = `${address} ${city} ${state}`
+      .toLowerCase()
+      .replace(/[.,#\-']/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    for (const [full, abbr] of Object.entries(streetSuffixes)) {
+      normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
     }
+    
+    return normalized;
   };
 
   const handleSaveList = (name: string, customRules?: FilterRule[]) => {
@@ -565,6 +698,7 @@ const MainApp: React.FC = () => {
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportData}
         fields={fields}
+        existingProperties={allProperties}
       />
 
       <BulkActionsBar

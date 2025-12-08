@@ -176,12 +176,40 @@ export async function verifyAddressBatch(
 
       if (error) {
         console.error('Batch address verification error:', error);
+        
+        // Check for quota exceeded or similar known errors
+        let userMessage = error.message || 'Address verification failed';
+        if (error.message?.includes('exceeded the free tier')) {
+          userMessage = 'Address verification quota exceeded. Please disable address standardization or upgrade your Geocodio API plan.';
+        } else if (error.message?.includes('QUOTA_EXCEEDED')) {
+          userMessage = 'Address verification quota exceeded. Please disable address standardization or upgrade your Geocodio API plan.';
+        }
+        
         // Mark all addresses in this chunk as failed
         chunk.forEach(addr => {
           resultMap.set(addr.index, {
             index: addr.index,
             success: false,
-            error: error.message,
+            error: userMessage,
+          });
+        });
+        continue;
+      }
+
+      // Check for error in response data (edge function returned error in body)
+      if (data?.error) {
+        console.error('Batch address verification returned error:', data.error);
+        
+        let userMessage = data.error;
+        if (data.code === 'QUOTA_EXCEEDED' || data.error.includes('exceeded the free tier')) {
+          userMessage = 'Address verification quota exceeded. Please disable address standardization or upgrade your Geocodio API plan.';
+        }
+        
+        chunk.forEach(addr => {
+          resultMap.set(addr.index, {
+            index: addr.index,
+            success: false,
+            error: userMessage,
           });
         });
         continue;

@@ -70,8 +70,28 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Geocodio batch API error:", response.status, errorText);
+      
+      // Try to extract specific error message from Geocodio
+      let errorMessage = "Batch address verification failed";
+      let errorCode = "GEOCODIO_ERROR";
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error) {
+          errorMessage = errorJson.error;
+          if (errorMessage.includes("exceeded the free tier")) {
+            errorCode = "QUOTA_EXCEEDED";
+          }
+        }
+      } catch {
+        // If not JSON, use the raw error text if available
+        if (errorText && errorText.length < 200) {
+          errorMessage = errorText;
+        }
+      }
+      
       return new Response(
-        JSON.stringify({ error: "Batch address verification failed" }),
+        JSON.stringify({ error: errorMessage, code: errorCode }),
         { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

@@ -120,6 +120,11 @@ export interface Property {
   propertyUrl?: string; // PropWire or other external link
   leadScore: number;
   customFields?: Record<string, any>;
+  // Scraped Airbnb data fields
+  listingTitle?: string;
+  roomType?: string;
+  propertyManager?: string;
+  host?: string;
 }
 
 export interface MarketingRequest {

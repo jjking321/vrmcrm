@@ -1,19 +1,27 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FieldDefinition, Property } from '@/types';
-import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Loader2 } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { transformImportToOwner } from '@/lib/ownerUtils';
+import { DuplicateReviewModal, DuplicateStrategy, normalizeAddress } from './DuplicateReviewModal';
 
 interface ImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (data: any[], options: { standardize: boolean; globalTags?: string[]; listName?: string }) => void;
+  onImport: (data: any[], options: { 
+    standardize: boolean; 
+    globalTags?: string[]; 
+    listName?: string;
+    duplicateStrategy?: DuplicateStrategy;
+    duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+  }) => void;
   fields: FieldDefinition[];
+  existingProperties: Property[];
 }
 
 // Auto-mapping rules: CSV header patterns -> target field
 const AUTO_MAP_PATTERNS: Record<string, string[]> = {
-  address: ['street', 'address', 'property address', 'street address'],
+  address: ['street', 'address', 'property address', 'street address', 'full address'],
   city: ['city'],
   state: ['state', 'st'],
   zip: ['zip', 'zipcode', 'zip code', 'postal'],
@@ -55,6 +63,14 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   
   bedrooms: ['bedrooms', 'beds', 'br'],
   bathrooms: ['bathrooms', 'baths', 'ba'],
+  
+  // Scraped Airbnb data fields
+  listingTitle: ['listing title', 'title', 'listing name', 'property name'],
+  roomType: ['room type', 'type'],
+  propertyManager: ['property manager', 'manager', 'pm', 'management company'],
+  host: ['host', 'airbnb host', 'host name'],
+  airbnbUrl: ['airbnb property link', 'airbnb url', 'airbnb link', 'airbnb'],
+  gisCoordinates: ['gis coordinates', 'coordinates', 'lat/long', 'latlong'],
 };
 
 function autoMapHeaders(headers: string[]): Record<string, string> {
@@ -82,6 +98,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   onClose, 
   onImport, 
   fields,
+  existingProperties,
 }) => {
   const [step, setStep] = useState<'upload' | 'map' | 'summary'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -94,6 +111,12 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [listName, setListName] = useState('');
   const [standardizeAddresses, setStandardizeAddresses] = useState(true);
   const [recordCount, setRecordCount] = useState(0);
+  
+  // Duplicate detection state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicates, setDuplicates] = useState<{ importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[]>([]);
+  const [nonDuplicates, setNonDuplicates] = useState<Record<string, any>[]>([]);
+  const [parsedImportData, setParsedImportData] = useState<Record<string, any>[]>([]);
 
   const parseCSV = (text: string) => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -198,16 +221,68 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
           return obj;
         });
 
-        onImport(parsedData, {
-          standardize: standardizeAddresses,
-          globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
-          listName: createList && listName ? listName : undefined,
+        // Build address index from existing properties
+        const existingAddressMap = new Map<string, Property>();
+        existingProperties.forEach(prop => {
+          const normalized = normalizeAddress(prop.address, prop.city, prop.state);
+          existingAddressMap.set(normalized, prop);
         });
 
-        handleClose();
+        // Check for duplicates
+        const foundDuplicates: { importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[] = [];
+        const nonDups: Record<string, any>[] = [];
+
+        parsedData.forEach(row => {
+          const address = row.address || '';
+          const city = row.city || '';
+          const state = row.state || '';
+          const normalized = normalizeAddress(address, city, state);
+          
+          const existingProp = existingAddressMap.get(normalized);
+          if (existingProp) {
+            foundDuplicates.push({
+              importRow: row,
+              existingProperty: existingProp,
+              normalizedAddress: normalized,
+            });
+          } else {
+            nonDups.push(row);
+          }
+        });
+
+        // If duplicates found, show modal
+        if (foundDuplicates.length > 0) {
+          setDuplicates(foundDuplicates);
+          setNonDuplicates(nonDups);
+          setParsedImportData(parsedData);
+          setShowDuplicateModal(true);
+        } else {
+          // No duplicates, proceed directly
+          onImport(parsedData, {
+            standardize: standardizeAddresses,
+            globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
+            listName: createList && listName ? listName : undefined,
+          });
+          handleClose();
+        }
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleDuplicateConfirm = (
+    strategy: DuplicateStrategy,
+    reviewDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>
+  ) => {
+    onImport(parsedImportData, {
+      standardize: standardizeAddresses,
+      globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
+      listName: createList && listName ? listName : undefined,
+      duplicateStrategy: strategy,
+      duplicateDecisions: reviewDecisions,
+    });
+    setShowDuplicateModal(false);
+    handleClose();
   };
 
   const handleClose = () => {
@@ -220,6 +295,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     setCreateList(false);
     setListName('');
     setStandardizeAddresses(true);
+    setShowDuplicateModal(false);
+    setDuplicates([]);
+    setNonDuplicates([]);
+    setParsedImportData([]);
     onClose();
   };
 
@@ -234,6 +313,14 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'propertyUrl', label: '🔗 Property URL', group: 'Property' },
     { id: 'bedrooms', label: '🛏️ Bedrooms', group: 'Property' },
     { id: 'bathrooms', label: '🚿 Bathrooms', group: 'Property' },
+    { id: 'gisCoordinates', label: '📍 GIS Coordinates', group: 'Property' },
+    
+    // Airbnb/Scraped Data
+    { id: 'listingTitle', label: '🏠 Listing Title', group: 'Airbnb' },
+    { id: 'roomType', label: '🛋️ Room Type', group: 'Airbnb' },
+    { id: 'propertyManager', label: '👔 Property Manager', group: 'Airbnb' },
+    { id: 'host', label: '👤 Host Name', group: 'Airbnb' },
+    { id: 'airbnbUrl', label: '🔗 Airbnb URL', group: 'Airbnb' },
     
     // Multiple Owners
     { id: 'owner1FirstName', label: '👤 Owner 1 First Name', group: 'Owners' },
@@ -475,6 +562,15 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Duplicate Review Modal */}
+      <DuplicateReviewModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        duplicates={duplicates}
+        nonDuplicates={nonDuplicates}
+        onConfirm={handleDuplicateConfirm}
+      />
     </div>
   );
 };

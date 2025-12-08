@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, SortConfig, FilterRule, PipelineStage, FieldDefinition } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { DEFAULT_STAGES, SYSTEM_FIELDS, DEFAULT_COLUMNS } from '@/data/mockData';
+import { DEFAULT_STAGES, DEFAULT_COLUMNS } from '@/data/mockData';
 import { useProperties, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
 import { useSavedLists, useAddSavedList, useDeleteSavedList } from '@/hooks/useSavedLists';
 import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipelineStages';
 import { useImportProperties } from '@/hooks/useImportProperties';
+import { useFieldDefinitions, useInitializeFieldDefinitions, useAddFieldDefinition, useDeleteFieldDefinition, useUpdateFieldDefinition } from '@/hooks/useFieldDefinitions';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
@@ -29,7 +30,9 @@ const MainApp: React.FC = () => {
   const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
   const { data: savedLists = [] } = useSavedLists();
   const { data: stages = DEFAULT_STAGES } = usePipelineStages();
+  const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
   const { mutate: initStages } = useInitializePipelineStages();
+  const { mutate: initFields } = useInitializeFieldDefinitions();
 
   const updatePropertyMutation = useUpdateProperty();
   const deletePropertiesMutation = useDeleteProperties();
@@ -37,13 +40,15 @@ const MainApp: React.FC = () => {
   const addSavedListMutation = useAddSavedList();
   const deleteSavedListMutation = useDeleteSavedList();
   const importPropertiesMutation = useImportProperties();
+  const addFieldMutation = useAddFieldDefinition();
+  const deleteFieldMutation = useDeleteFieldDefinition();
+  const updateFieldMutation = useUpdateFieldDefinition();
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
-  const [fields, setFields] = useState<FieldDefinition[]>(SYSTEM_FIELDS);
 
   // Filter & Sort State
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,22 +63,18 @@ const MainApp: React.FC = () => {
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // Initialize pipeline stages when company is ready
+  // Initialize pipeline stages and field definitions when company is ready
   useEffect(() => {
     if (companyId) {
       initStages();
+      initFields();
     }
-  }, [companyId, initStages]);
+  }, [companyId, initStages, initFields]);
 
-  // Load custom fields from localStorage (these can stay local for now)
-  useEffect(() => {
-    if (companyId) {
-      const storedFields = localStorage.getItem(`custom_fields_${companyId}`);
-      if (storedFields) {
-        setFields([...SYSTEM_FIELDS, ...JSON.parse(storedFields)]);
-      }
-    }
-  }, [companyId]);
+  // Filter visible fields (exclude hidden ones)
+  const fields = useMemo(() => {
+    return fieldDefinitions.filter(f => !f.isHidden);
+  }, [fieldDefinitions]);
 
   // Apply filter rules to a property
   const applyFilterRules = (property: Property, rules: FilterRule[], matchType: 'and' | 'or'): boolean => {
@@ -241,16 +242,19 @@ const MainApp: React.FC = () => {
   };
 
   const handleAddField = (field: FieldDefinition) => {
-    setFields(prev => [...prev, field]);
-    const customFields = [...fields.filter(f => !f.isSystem), field];
-    localStorage.setItem(`custom_fields_${companyId}`, JSON.stringify(customFields));
-    toast.success(`Added field "${field.label}"`);
+    addFieldMutation.mutate({
+      label: field.label,
+      type: field.type,
+      options: field.options,
+    });
   };
 
   const handleDeleteField = (fieldId: string) => {
-    setFields(prev => prev.filter(f => f.id !== fieldId));
-    const customFields = fields.filter(f => !f.isSystem && f.id !== fieldId);
-    localStorage.setItem(`custom_fields_${companyId}`, JSON.stringify(customFields));
+    deleteFieldMutation.mutate(fieldId);
+  };
+
+  const handleToggleFieldVisibility = (fieldId: string, isHidden: boolean) => {
+    updateFieldMutation.mutate({ id: fieldId, updates: { is_hidden: isHidden } });
   };
 
   const handleDeleteProperties = (ids: string[]) => {
@@ -272,7 +276,7 @@ const MainApp: React.FC = () => {
   const selectedProperty = selectedPropertyId ? allProperties.find(p => p.id === selectedPropertyId) : null;
 
   // Loading state
-  if (propertiesLoading) {
+  if (propertiesLoading || fieldsLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -325,9 +329,10 @@ const MainApp: React.FC = () => {
     if (view === 'settings') {
       return (
         <Settings
-          fields={fields}
+          fields={fieldDefinitions}
           onAddField={handleAddField}
           onDeleteField={handleDeleteField}
+          onToggleFieldVisibility={handleToggleFieldVisibility}
         />
       );
     }

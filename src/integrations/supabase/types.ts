@@ -86,6 +86,48 @@ export type Database = {
         }
         Relationships: []
       }
+      field_definitions: {
+        Row: {
+          company_id: string
+          created_at: string
+          field_key: string
+          id: string
+          is_hidden: boolean
+          is_system: boolean
+          label: string
+          options: Json | null
+          sort_order: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          field_key: string
+          id?: string
+          is_hidden?: boolean
+          is_system?: boolean
+          label: string
+          options?: Json | null
+          sort_order?: number
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          field_key?: string
+          id?: string
+          is_hidden?: boolean
+          is_system?: boolean
+          label?: string
+          options?: Json | null
+          sort_order?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       owners: {
         Row: {
           age: number | null

@@ -171,6 +171,8 @@ export interface FieldDefinition {
   type: CustomFieldType;
   options?: string[];
   isSystem: boolean;
+  isHidden?: boolean;
+  fieldKey?: string;
   required?: boolean;
 }
 

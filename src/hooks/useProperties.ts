@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Property, Owner, Activity, MarketData } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useState, useCallback } from 'react';
 
 interface DbProperty {
   id: string;
@@ -139,66 +140,107 @@ const toProperty = (
   })),
 });
 
-export const useProperties = () => {
-  const { company, user } = useAuth();
-  const companyId = company?.id;
+const PAGE_SIZE = 500;
 
-  return useQuery({
+export const useProperties = () => {
+  const { company } = useAuth();
+  const companyId = company?.id;
+  const [offset, setOffset] = useState(0);
+  const [allLoadedProperties, setAllLoadedProperties] = useState<Property[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+
+  const fetchBatch = async (currentOffset: number): Promise<Property[]> => {
+    if (!companyId) return [];
+
+    // Fetch properties with limit and offset
+    const { data: properties, error: propError } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .range(currentOffset, currentOffset + PAGE_SIZE - 1);
+
+    if (propError) throw propError;
+    if (!properties?.length) return [];
+
+    const propertyIds = properties.map(p => p.id);
+
+    // Fetch owners and activities in parallel
+    const [ownersRes, activitiesRes] = await Promise.all([
+      supabase
+        .from('owners')
+        .select('*')
+        .in('property_id', propertyIds),
+      supabase
+        .from('activity_logs')
+        .select('*')
+        .in('property_id', propertyIds)
+        .order('date', { ascending: false }),
+    ]);
+
+    if (ownersRes.error) throw ownersRes.error;
+    if (activitiesRes.error) throw activitiesRes.error;
+
+    // Group by property_id
+    const ownersByProp = new Map<string, DbOwner>();
+    (ownersRes.data || []).forEach(o => {
+      ownersByProp.set(o.property_id, o as unknown as DbOwner);
+    });
+
+    const activitiesByProp = new Map<string, DbActivity[]>();
+    (activitiesRes.data || []).forEach(a => {
+      const list = activitiesByProp.get(a.property_id) || [];
+      list.push(a as unknown as DbActivity);
+      activitiesByProp.set(a.property_id, list);
+    });
+
+    return properties.map(p =>
+      toProperty(
+        p as unknown as DbProperty,
+        ownersByProp.get(p.id) || null,
+        activitiesByProp.get(p.id) || []
+      )
+    );
+  };
+
+  const query = useQuery({
     queryKey: ['properties', companyId],
     queryFn: async (): Promise<Property[]> => {
-      if (!companyId) return [];
-
-      // Fetch properties
-      const { data: properties, error: propError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      if (propError) throw propError;
-      if (!properties?.length) return [];
-
-      const propertyIds = properties.map(p => p.id);
-
-      // Fetch owners and activities in parallel
-      const [ownersRes, activitiesRes] = await Promise.all([
-        supabase
-          .from('owners')
-          .select('*')
-          .in('property_id', propertyIds),
-        supabase
-          .from('activity_logs')
-          .select('*')
-          .in('property_id', propertyIds)
-          .order('date', { ascending: false }),
-      ]);
-
-      if (ownersRes.error) throw ownersRes.error;
-      if (activitiesRes.error) throw activitiesRes.error;
-
-      // Group by property_id
-      const ownersByProp = new Map<string, DbOwner>();
-      (ownersRes.data || []).forEach(o => {
-        ownersByProp.set(o.property_id, o as unknown as DbOwner);
-      });
-
-      const activitiesByProp = new Map<string, DbActivity[]>();
-      (activitiesRes.data || []).forEach(a => {
-        const list = activitiesByProp.get(a.property_id) || [];
-        list.push(a as unknown as DbActivity);
-        activitiesByProp.set(a.property_id, list);
-      });
-
-      return properties.map(p =>
-        toProperty(
-          p as unknown as DbProperty,
-          ownersByProp.get(p.id) || null,
-          activitiesByProp.get(p.id) || []
-        )
-      );
+      const initialBatch = await fetchBatch(0);
+      setHasMore(initialBatch.length === PAGE_SIZE);
+      setOffset(PAGE_SIZE);
+      setAllLoadedProperties(initialBatch);
+      return initialBatch;
     },
     enabled: !!companyId,
   });
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isFetchingMore || !companyId) return;
+    
+    setIsFetchingMore(true);
+    try {
+      const nextBatch = await fetchBatch(offset);
+      setHasMore(nextBatch.length === PAGE_SIZE);
+      setOffset(prev => prev + PAGE_SIZE);
+      setAllLoadedProperties(prev => [...prev, ...nextBatch]);
+    } catch (error) {
+      console.error('Failed to load more properties:', error);
+      toast.error('Failed to load more properties');
+    } finally {
+      setIsFetchingMore(false);
+    }
+  }, [hasMore, isFetchingMore, companyId, offset]);
+
+  // Return combined data from initial query + loaded more
+  return {
+    ...query,
+    data: allLoadedProperties.length > 0 ? allLoadedProperties : (query.data || []),
+    hasMore,
+    loadMore,
+    isFetchingMore,
+  };
 };
 
 export const useAddProperty = () => {

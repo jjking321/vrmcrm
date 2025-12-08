@@ -20,14 +20,15 @@ import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const MainApp: React.FC = () => {
   const { company } = useAuth();
   const companyId = company?.id;
 
   // Data hooks
-  const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
+  const { data: allProperties = [], isLoading: propertiesLoading, hasMore, loadMore, isFetchingMore } = useProperties();
   const { data: savedLists = [] } = useSavedLists();
   const { data: stages = DEFAULT_STAGES } = usePipelineStages();
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
@@ -393,24 +394,43 @@ const MainApp: React.FC = () => {
 
         <div className="mt-4">
           {listViewMode === 'table' ? (
-            <PropertyTable
-              properties={sortedProperties}
-              onSelectProperty={handleSelectProperty}
-              sortConfig={sortConfig}
-              onSort={handleSort}
-              visibleColumns={visibleColumns}
-              stages={stages}
-              fields={fields}
-              selectedIds={selectedIds}
-              onToggleSelection={(id) => {
-                const newSelection = new Set(selectedIds);
-                if (newSelection.has(id)) newSelection.delete(id);
-                else newSelection.add(id);
-                setSelectedIds(newSelection);
-              }}
-              onSelectAll={(ids) => setSelectedIds(new Set(ids))}
-              onSelectOwner={handleSelectOwner}
-            />
+            <>
+              <PropertyTable
+                properties={sortedProperties}
+                onSelectProperty={handleSelectProperty}
+                sortConfig={sortConfig}
+                onSort={handleSort}
+                visibleColumns={visibleColumns}
+                stages={stages}
+                fields={fields}
+                selectedIds={selectedIds}
+                onToggleSelection={(id) => {
+                  const newSelection = new Set(selectedIds);
+                  if (newSelection.has(id)) newSelection.delete(id);
+                  else newSelection.add(id);
+                  setSelectedIds(newSelection);
+                }}
+                onSelectAll={(ids) => setSelectedIds(new Set(ids))}
+                onSelectOwner={handleSelectOwner}
+              />
+              {hasMore && (
+                <div className="flex justify-center py-6">
+                  <Button
+                    variant="outline"
+                    onClick={loadMore}
+                    disabled={isFetchingMore}
+                    className="gap-2"
+                  >
+                    {isFetchingMore ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                    {isFetchingMore ? 'Loading...' : 'Load more properties'}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="h-[calc(100vh-280px)]">
               <KanbanBoard

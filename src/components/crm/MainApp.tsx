@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, SortConfig, FilterRule, PipelineStage, FieldDefinition } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { DEFAULT_STAGES, SYSTEM_FIELDS, MOCK_PROPERTIES, DEFAULT_COLUMNS } from '@/data/mockData';
+import { DEFAULT_STAGES, SYSTEM_FIELDS, DEFAULT_COLUMNS } from '@/data/mockData';
+import { useProperties, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
+import { useSavedLists, useAddSavedList, useDeleteSavedList } from '@/hooks/useSavedLists';
+import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipelineStages';
+import { useImportProperties } from '@/hooks/useImportProperties';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
@@ -15,20 +19,30 @@ import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { toast } from 'sonner';
-import { transformImportToOwner } from '@/lib/ownerUtils';
-import { verifyAddress } from '@/lib/enrichment';
+import { Loader2 } from 'lucide-react';
 
 const MainApp: React.FC = () => {
-  const { user, profile, company } = useAuth();
+  const { company } = useAuth();
   const companyId = company?.id;
+
+  // Data hooks
+  const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
+  const { data: savedLists = [] } = useSavedLists();
+  const { data: stages = DEFAULT_STAGES } = usePipelineStages();
+  const { mutate: initStages } = useInitializePipelineStages();
+
+  const updatePropertyMutation = useUpdateProperty();
+  const deletePropertiesMutation = useDeleteProperties();
+  const addPropertyMutation = useAddProperty();
+  const addSavedListMutation = useAddSavedList();
+  const deleteSavedListMutation = useDeleteSavedList();
+  const importPropertiesMutation = useImportProperties();
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
-  const [allProperties, setAllProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
-  const [stages] = useState<PipelineStage[]>(DEFAULT_STAGES);
   const [fields, setFields] = useState<FieldDefinition[]>(SYSTEM_FIELDS);
 
   // Filter & Sort State
@@ -37,7 +51,6 @@ const MainApp: React.FC = () => {
   const [matchType, setMatchType] = useState<'and' | 'or'>('and');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'address', direction: 'asc' });
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
-  const [savedLists, setSavedLists] = useState<SavedList[]>([]);
   const [deduplicateByOwner, setDeduplicateByOwner] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -45,33 +58,22 @@ const MainApp: React.FC = () => {
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-
-  // Load data on mount
+  // Initialize pipeline stages when company is ready
   useEffect(() => {
-    const stored = localStorage.getItem(`properties_${companyId}`);
-    if (stored) {
-      setAllProperties(JSON.parse(stored));
-    } else {
-      setAllProperties(MOCK_PROPERTIES);
+    if (companyId) {
+      initStages();
     }
+  }, [companyId, initStages]);
 
-    const storedLists = localStorage.getItem(`saved_lists_${companyId}`);
-    if (storedLists) {
-      setSavedLists(JSON.parse(storedLists));
-    }
-
-    const storedFields = localStorage.getItem(`custom_fields_${companyId}`);
-    if (storedFields) {
-      setFields([...SYSTEM_FIELDS, ...JSON.parse(storedFields)]);
+  // Load custom fields from localStorage (these can stay local for now)
+  useEffect(() => {
+    if (companyId) {
+      const storedFields = localStorage.getItem(`custom_fields_${companyId}`);
+      if (storedFields) {
+        setFields([...SYSTEM_FIELDS, ...JSON.parse(storedFields)]);
+      }
     }
   }, [companyId]);
-
-  // Persist data
-  useEffect(() => {
-    if (companyId && allProperties.length > 0) {
-      localStorage.setItem(`properties_${companyId}`, JSON.stringify(allProperties));
-    }
-  }, [allProperties, companyId]);
 
   // Apply filter rules to a property
   const applyFilterRules = (property: Property, rules: FilterRule[], matchType: 'and' | 'or'): boolean => {
@@ -80,7 +82,6 @@ const MainApp: React.FC = () => {
     const evaluateRule = (rule: FilterRule): boolean => {
       let value: any;
 
-      // Get the value based on field
       switch (rule.field) {
         case 'stageId':
           value = property.stageId;
@@ -113,7 +114,6 @@ const MainApp: React.FC = () => {
           value = property.customFields?.[rule.field] ?? '';
       }
 
-      // Evaluate based on operator
       switch (rule.operator) {
         case 'equals':
           return String(value).toLowerCase() === String(rule.value).toLowerCase();
@@ -145,7 +145,6 @@ const MainApp: React.FC = () => {
   const filteredProperties = useMemo(() => {
     let result = allProperties;
 
-    // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(p =>
@@ -156,10 +155,8 @@ const MainApp: React.FC = () => {
       );
     }
 
-    // Apply filter rules
     result = result.filter(p => applyFilterRules(p, filterRules, matchType));
 
-    // Deduplicate by owner
     if (deduplicateByOwner) {
       const seen = new Set<string>();
       result = result.filter(p => {
@@ -204,280 +201,33 @@ const MainApp: React.FC = () => {
   };
 
   const handleUpdateProperty = (id: string, updates: Partial<Property>) => {
-    setAllProperties(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    toast.success('Property updated');
+    updatePropertyMutation.mutate({ id, updates });
   };
 
   const handleAddProperty = (data: { address: string; city: string; state: string; zip: string; ownerName: string; ownerEmail: string; ownerPhone: string }) => {
-    const newProperty: Property = {
-      id: Math.random().toString(36).substr(2, 9),
-      companyId: companyId || 'unknown',
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      zip: data.zip,
-      bedrooms: 0,
-      bathrooms: 0,
-      image: `https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop`,
-      stageId: 'lead-list',
-      tags: [],
-      owner: {
-        name: data.ownerName,
-        email: data.ownerEmail,
-        phone: data.ownerPhone,
-        lastVerifiedDate: new Date().toISOString(),
-      },
-      activities: [],
-      marketData: {
-        adr: 0,
-        occupancyRate: 0,
-        projectedRevenue: 0,
-        propertyValue: 0,
-      },
-      customFields: {},
-    };
-    setAllProperties(prev => [newProperty, ...prev]);
-    toast.success(`Added ${data.address} to your leads`);
+    addPropertyMutation.mutate(data);
   };
 
-  const handleImportData = async (data: any[], options: { 
-    standardize: boolean; 
-    globalTags?: string[]; 
+  const handleImportData = async (data: any[], options: {
+    standardize: boolean;
+    globalTags?: string[];
     listName?: string;
     duplicateStrategy?: 'skip' | 'update' | 'merge' | 'review';
     duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
   }) => {
-    const toastId = toast.loading(`Importing ${data.length} properties...`);
-    
-    // Build address index for duplicate handling
-    const existingAddressMap = new Map<string, Property>();
-    allProperties.forEach(prop => {
-      const normalized = normalizeAddressForDupes(prop.address, prop.city, prop.state);
-      existingAddressMap.set(normalized, prop);
+    importPropertiesMutation.mutate({
+      data,
+      options,
+      existingProperties: allProperties,
     });
-    
-    const newProperties: Property[] = [];
-    const updatedProperties: { id: string; updates: Partial<Property> }[] = [];
-    let standardizedCount = 0;
-    
-    for (const row of data) {
-      let address = row.address || '';
-      let city = row.city || '';
-      let state = row.state || '';
-      let zip = row.zip || '';
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-      
-      // Handle GIS coordinates if provided
-      if (row.gisCoordinates) {
-        const coords = row.gisCoordinates.split(',').map((c: string) => parseFloat(c.trim()));
-        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-          latitude = coords[0];
-          longitude = coords[1];
-        }
-      }
-      
-      // Standardize address with Geocodio if enabled
-      if (options.standardize && address && city && state) {
-        try {
-          const result = await verifyAddress(address, city, state, zip);
-          if (result.success && result.data?.standardized) {
-            address = result.data.standardized.street;
-            city = result.data.standardized.city;
-            state = result.data.standardized.state;
-            zip = result.data.standardized.zip;
-            latitude = result.data.latitude;
-            longitude = result.data.longitude;
-            standardizedCount++;
-          }
-        } catch (err) {
-          console.error('Failed to standardize address:', address, err);
-        }
-      }
-      
-      // Check for duplicate
-      const normalizedAddr = normalizeAddressForDupes(address, city, state);
-      const existingProp = existingAddressMap.get(normalizedAddr);
-      
-      if (existingProp) {
-        // Handle duplicate based on strategy
-        const strategy = options.duplicateStrategy || 'skip';
-        let decision: 'keep_existing' | 'use_import' | 'merge' = 'keep_existing';
-        
-        if (strategy === 'review' && options.duplicateDecisions) {
-          decision = options.duplicateDecisions.get(normalizedAddr) || 'keep_existing';
-        } else if (strategy === 'update') {
-          decision = 'use_import';
-        } else if (strategy === 'merge') {
-          decision = 'merge';
-        }
-        
-        if (decision === 'keep_existing') {
-          continue; // Skip this import row
-        } else if (decision === 'use_import') {
-          // Replace existing with import data
-          updatedProperties.push({
-            id: existingProp.id,
-            updates: {
-              address,
-              city,
-              state,
-              zip,
-              latitude,
-              longitude,
-              bedrooms: parseInt(row.bedrooms) || existingProp.bedrooms,
-              bathrooms: parseFloat(row.bathrooms) || existingProp.bathrooms,
-              owner: transformImportToOwner(row),
-              tags: [...new Set([...(existingProp.tags || []), ...(options.globalTags || [])])],
-              propertyUrl: row.propertyUrl || existingProp.propertyUrl,
-              airbnbUrl: row.airbnbUrl || existingProp.airbnbUrl,
-              listingTitle: row.listingTitle || existingProp.listingTitle,
-              roomType: row.roomType || existingProp.roomType,
-              propertyManager: row.propertyManager || existingProp.propertyManager,
-              host: row.host || existingProp.host,
-            },
-          });
-        } else if (decision === 'merge') {
-          // Only fill empty fields
-          const mergeUpdates: Partial<Property> = {};
-          if (!existingProp.latitude && latitude) mergeUpdates.latitude = latitude;
-          if (!existingProp.longitude && longitude) mergeUpdates.longitude = longitude;
-          if (!existingProp.bedrooms && row.bedrooms) mergeUpdates.bedrooms = parseInt(row.bedrooms);
-          if (!existingProp.bathrooms && row.bathrooms) mergeUpdates.bathrooms = parseFloat(row.bathrooms);
-          if (!existingProp.propertyUrl && row.propertyUrl) mergeUpdates.propertyUrl = row.propertyUrl;
-          if (!existingProp.airbnbUrl && row.airbnbUrl) mergeUpdates.airbnbUrl = row.airbnbUrl;
-          if (!existingProp.listingTitle && row.listingTitle) mergeUpdates.listingTitle = row.listingTitle;
-          if (!existingProp.roomType && row.roomType) mergeUpdates.roomType = row.roomType;
-          if (!existingProp.propertyManager && row.propertyManager) mergeUpdates.propertyManager = row.propertyManager;
-          if (!existingProp.host && row.host) mergeUpdates.host = row.host;
-          
-          // Merge tags
-          if (options.globalTags?.length) {
-            mergeUpdates.tags = [...new Set([...(existingProp.tags || []), ...options.globalTags])];
-          }
-          
-          if (Object.keys(mergeUpdates).length > 0) {
-            updatedProperties.push({ id: existingProp.id, updates: mergeUpdates });
-          }
-        }
-      } else {
-        // New property
-        newProperties.push({
-          id: Math.random().toString(36).substr(2, 9),
-          companyId: companyId || 'unknown',
-          address,
-          city,
-          state,
-          zip,
-          latitude,
-          longitude,
-          bedrooms: parseInt(row.bedrooms) || 0,
-          bathrooms: parseFloat(row.bathrooms) || 0,
-          image: '',
-          stageId: 'lead-list',
-          tags: options.globalTags || [],
-          owner: transformImportToOwner(row),
-          activities: [],
-          marketData: {
-            adr: 0,
-            occupancyRate: 0,
-            projectedRevenue: 0,
-            propertyValue: 0,
-          },
-          propertyUrl: row.propertyUrl || '',
-          airbnbUrl: row.airbnbUrl || '',
-          listingTitle: row.listingTitle || undefined,
-          roomType: row.roomType || undefined,
-          propertyManager: row.propertyManager || undefined,
-          host: row.host || undefined,
-          customFields: {},
-        });
-      }
-    }
-
-    // Apply updates and add new properties
-    setAllProperties(prev => {
-      let result = [...prev];
-      
-      // Apply updates
-      updatedProperties.forEach(({ id, updates }) => {
-        result = result.map(p => p.id === id ? { ...p, ...updates } : p);
-      });
-      
-      // Add new properties
-      result = [...newProperties, ...result];
-      
-      return result;
-    });
-    
-    // Create smart list if name provided - filter by the tag applied to these imports
-    if (options.listName && options.listName.trim()) {
-      const importTag = options.globalTags?.[0] || `import-${Date.now()}`;
-      // If no global tags were applied, add a unique import tag to track this batch
-      if (!options.globalTags?.length) {
-        newProperties.forEach(p => {
-          p.tags = [importTag];
-        });
-      }
-      
-      const newList: SavedList = {
-        id: Date.now().toString(),
-        name: options.listName.trim(),
-        rules: [{
-          id: Date.now().toString(),
-          field: 'tags',
-          operator: 'contains',
-          value: importTag,
-        }],
-        matchType: 'and',
-      };
-      const updatedLists = [...savedLists, newList];
-      setSavedLists(updatedLists);
-      localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updatedLists));
-    }
-    
-    const parts: string[] = [];
-    if (newProperties.length > 0) parts.push(`${newProperties.length} new`);
-    if (updatedProperties.length > 0) parts.push(`${updatedProperties.length} updated`);
-    if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
-    
-    toast.success(`Import complete: ${parts.join(', ')}`, { id: toastId });
-  };
-
-  // Helper function for duplicate detection
-  const normalizeAddressForDupes = (address: string, city: string, state: string): string => {
-    const streetSuffixes: Record<string, string> = {
-      'street': 'st', 'st': 'st', 'avenue': 'ave', 'ave': 'ave',
-      'drive': 'dr', 'dr': 'dr', 'road': 'rd', 'rd': 'rd',
-      'lane': 'ln', 'ln': 'ln', 'boulevard': 'blvd', 'blvd': 'blvd',
-      'court': 'ct', 'ct': 'ct', 'circle': 'cir', 'cir': 'cir',
-      'place': 'pl', 'pl': 'pl', 'way': 'way', 'trail': 'trl', 'trl': 'trl',
-    };
-    
-    let normalized = `${address} ${city} ${state}`
-      .toLowerCase()
-      .replace(/[.,#\-']/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    for (const [full, abbr] of Object.entries(streetSuffixes)) {
-      normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
-    }
-    
-    return normalized;
   };
 
   const handleSaveList = (name: string, customRules?: FilterRule[]) => {
-    const newList: SavedList = {
-      id: Date.now().toString(),
+    addSavedListMutation.mutate({
       name,
       rules: customRules || filterRules,
       matchType: customRules ? 'and' : matchType,
-    };
-    const updated = [...savedLists, newList];
-    setSavedLists(updated);
-    localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updated));
-    toast.success(`Saved list "${name}"`);
+    });
   };
 
   const handleLoadList = (list: SavedList) => {
@@ -487,9 +237,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteList = (id: string) => {
-    const updated = savedLists.filter(l => l.id !== id);
-    setSavedLists(updated);
-    localStorage.setItem(`saved_lists_${companyId}`, JSON.stringify(updated));
+    deleteSavedListMutation.mutate(id);
   };
 
   const handleAddField = (field: FieldDefinition) => {
@@ -506,7 +254,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteProperties = (ids: string[]) => {
-    setAllProperties(prev => prev.filter(p => !ids.includes(p.id)));
+    deletePropertiesMutation.mutate(ids);
     setSelectedIds(new Set());
   };
 
@@ -523,9 +271,20 @@ const MainApp: React.FC = () => {
   // Render selected property detail
   const selectedProperty = selectedPropertyId ? allProperties.find(p => p.id === selectedPropertyId) : null;
 
+  // Loading state
+  if (propertiesLoading) {
+    return (
+      <div className="flex min-h-screen bg-background items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading your properties...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Main content based on view
   const renderContent = () => {
-    // Property detail view
     if (selectedProperty) {
       return (
         <PropertyDetail
@@ -539,7 +298,6 @@ const MainApp: React.FC = () => {
       );
     }
 
-    // Owner detail view
     if (selectedOwnerName) {
       return (
         <OwnerDetail
@@ -553,7 +311,6 @@ const MainApp: React.FC = () => {
       );
     }
 
-    // Dashboard view
     if (view === 'dashboard') {
       return (
         <Dashboard
@@ -603,11 +360,10 @@ const MainApp: React.FC = () => {
       );
     }
 
-    // Properties view
     return (
       <div>
         <h1 className="text-2xl font-bold text-foreground mb-6">Properties</h1>
-        
+
         <FilterBar
           rules={filterRules}
           onRulesChange={setFilterRules}

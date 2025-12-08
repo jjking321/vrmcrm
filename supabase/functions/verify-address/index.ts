@@ -67,8 +67,23 @@ serve(async (req) => {
     
     // Format standardized address
     const formattedAddress = result.formatted_address;
+    
+    // Build full street address with number, prefix/suffix, and unit
+    const streetNumber = addressComponents.number || '';
+    const streetName = addressComponents.formatted_street || addressComponents.street || '';
+    const unitType = addressComponents.secondaryunit || '';
+    const unitNumber = addressComponents.secondarynumber || '';
+    
+    // Construct the full street address
+    let fullStreet = `${streetNumber} ${streetName}`.trim();
+    if (unitType && unitNumber) {
+      fullStreet += `, ${unitType} ${unitNumber}`;
+    } else if (unitNumber) {
+      fullStreet += `, # ${unitNumber}`;
+    }
+    
     const standardized = {
-      street: addressComponents.formatted_street || `${addressComponents.number || ''} ${addressComponents.street || ''}`.trim(),
+      street: fullStreet,
       city: addressComponents.city,
       state: addressComponents.state,
       zip: addressComponents.zip,

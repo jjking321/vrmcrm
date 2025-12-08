@@ -4,7 +4,7 @@ import { Property } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { transformImportToOwner } from '@/lib/ownerUtils';
-import { verifyAddress } from '@/lib/enrichment';
+import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
 
 interface ImportOptions {
   standardize: boolean;
@@ -37,6 +37,15 @@ const normalizeAddressForDupes = (address: string, city: string, state: string):
   return normalized;
 };
 
+// Chunk array helper
+const chunkArray = <T>(array: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+};
+
 export const useImportProperties = () => {
   const queryClient = useQueryClient();
   const { company, user } = useAuth();
@@ -53,7 +62,7 @@ export const useImportProperties = () => {
     }) => {
       if (!company?.id) throw new Error('No company');
 
-      const toastId = toast.loading(`Importing ${data.length} properties...`);
+      const toastId = toast.loading(`Preparing import of ${data.length} properties...`);
 
       // Build address index for duplicate handling
       const existingAddressMap = new Map<string, Property>();
@@ -62,42 +71,71 @@ export const useImportProperties = () => {
         existingAddressMap.set(normalized, prop);
       });
 
-      const newProperties: any[] = [];
-      const updatedProperties: { id: string; updates: any }[] = [];
+      // ========== PHASE 1: Batch Address Standardization ==========
+      let standardizedData = data.map((row, idx) => ({ ...row, _originalIndex: idx }));
       let standardizedCount = 0;
 
-      for (const row of data) {
+      if (options.standardize) {
+        toast.loading(`Standardizing addresses...`, { id: toastId });
+        
+        // Build batch input for addresses that can be standardized
+        const addressesToVerify: BatchAddressInput[] = [];
+        data.forEach((row, idx) => {
+          if (row.address && row.city && row.state) {
+            addressesToVerify.push({
+              address: row.address,
+              city: row.city,
+              state: row.state,
+              zip: row.zip || '',
+              index: idx,
+            });
+          }
+        });
+
+        if (addressesToVerify.length > 0) {
+          const batchResults = await verifyAddressBatch(addressesToVerify);
+          
+          // Apply standardized results to data
+          standardizedData = data.map((row, idx) => {
+            const result = batchResults.get(idx);
+            if (result?.success && result.standardized) {
+              standardizedCount++;
+              return {
+                ...row,
+                _originalIndex: idx,
+                address: result.standardized.street,
+                city: result.standardized.city,
+                state: result.standardized.state,
+                zip: result.standardized.zip,
+                _latitude: result.latitude,
+                _longitude: result.longitude,
+              };
+            }
+            return { ...row, _originalIndex: idx };
+          });
+        }
+      }
+
+      // ========== PHASE 2: Categorize into new vs updates ==========
+      toast.loading(`Processing ${data.length} properties...`, { id: toastId });
+
+      const newProperties: any[] = [];
+      const updatedProperties: { id: string; normalizedAddr: string; row: any; mergeOnly: boolean }[] = [];
+
+      for (const row of standardizedData) {
         let address = row.address || '';
         let city = row.city || '';
         let state = row.state || '';
         let zip = row.zip || '';
-        let latitude: number | undefined;
-        let longitude: number | undefined;
+        let latitude = row._latitude;
+        let longitude = row._longitude;
 
-        // Handle GIS coordinates if provided
-        if (row.gisCoordinates) {
+        // Handle GIS coordinates if provided and not already set from standardization
+        if (!latitude && !longitude && row.gisCoordinates) {
           const coords = row.gisCoordinates.split(',').map((c: string) => parseFloat(c.trim()));
           if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
             latitude = coords[0];
             longitude = coords[1];
-          }
-        }
-
-        // Standardize address with Geocodio if enabled
-        if (options.standardize && address && city && state) {
-          try {
-            const result = await verifyAddress(address, city, state, zip);
-            if (result.success && result.data?.standardized) {
-              address = result.data.standardized.street;
-              city = result.data.standardized.city;
-              state = result.data.standardized.state;
-              zip = result.data.standardized.zip;
-              latitude = result.data.latitude;
-              longitude = result.data.longitude;
-              standardizedCount++;
-            }
-          } catch (err) {
-            console.error('Failed to standardize address:', address, err);
           }
         }
 
@@ -117,33 +155,12 @@ export const useImportProperties = () => {
             decision = 'merge';
           }
 
-          if (decision === 'keep_existing') {
-            continue;
-          } else if (decision === 'use_import' || decision === 'merge') {
-            const owner = transformImportToOwner(row);
+          if (decision !== 'keep_existing') {
             updatedProperties.push({
               id: existingProp.id,
-              updates: {
-                property: {
-                  address,
-                  city,
-                  state,
-                  zip,
-                  latitude,
-                  longitude,
-                  bedrooms: parseInt(row.bedrooms) || existingProp.bedrooms,
-                  bathrooms: parseFloat(row.bathrooms) || existingProp.bathrooms,
-                  tags: [...new Set([...(existingProp.tags || []), ...(options.globalTags || [])])],
-                  property_url: row.propertyUrl || existingProp.propertyUrl,
-                  airbnb_url: row.airbnbUrl || existingProp.airbnbUrl,
-                  listing_title: row.listingTitle || existingProp.listingTitle,
-                  room_type: row.roomType || existingProp.roomType,
-                  property_manager: row.propertyManager || existingProp.propertyManager,
-                  host: row.host || existingProp.host,
-                },
-                owner,
-                mergeOnly: decision === 'merge',
-              },
+              normalizedAddr,
+              row: { ...row, address, city, state, zip, _latitude: latitude, _longitude: longitude },
+              mergeOnly: decision === 'merge',
             });
           }
         } else {
@@ -173,120 +190,156 @@ export const useImportProperties = () => {
         }
       }
 
-      // Insert new properties
+      // ========== PHASE 3: Batch Insert New Properties ==========
+      let insertedCount = 0;
       if (newProperties.length > 0) {
+        toast.loading(`Inserting ${newProperties.length} new properties...`, { id: toastId });
+        
         const { data: insertedProps, error: propError } = await supabase
           .from('properties')
           .insert(newProperties.map(p => p.property))
           .select();
 
         if (propError) throw propError;
+        insertedCount = insertedProps?.length || 0;
 
-        // Insert owners for new properties
-        const ownerInserts = insertedProps.map((prop, idx) => ({
-          property_id: prop.id,
-          company_id: company.id,
-          name: newProperties[idx].owner.name || '',
-          email: newProperties[idx].owner.email || null,
-          phone: newProperties[idx].owner.phone || null,
-          owners: newProperties[idx].owner.owners || null,
-          phones: newProperties[idx].owner.phones || null,
-          mailing_address: newProperties[idx].owner.mailingAddress || null,
-          mailing_city: newProperties[idx].owner.mailingCity || null,
-          mailing_state: newProperties[idx].owner.mailingState || null,
-          mailing_zip: newProperties[idx].owner.mailingZip || null,
-          ownership_length_months: newProperties[idx].owner.ownershipLengthMonths || null,
-          owner_type: newProperties[idx].owner.ownerType || null,
-          owner_occupied: newProperties[idx].owner.ownerOccupied || null,
-          litigator: newProperties[idx].owner.litigator || false,
-        }));
+        // Batch insert all owners
+        if (insertedProps && insertedProps.length > 0) {
+          const ownerInserts = insertedProps.map((prop, idx) => ({
+            property_id: prop.id,
+            company_id: company.id,
+            name: newProperties[idx].owner.name || '',
+            email: newProperties[idx].owner.email || null,
+            phone: newProperties[idx].owner.phone || null,
+            owners: newProperties[idx].owner.owners || null,
+            phones: newProperties[idx].owner.phones || null,
+            mailing_address: newProperties[idx].owner.mailingAddress || null,
+            mailing_city: newProperties[idx].owner.mailingCity || null,
+            mailing_state: newProperties[idx].owner.mailingState || null,
+            mailing_zip: newProperties[idx].owner.mailingZip || null,
+            ownership_length_months: newProperties[idx].owner.ownershipLengthMonths || null,
+            owner_type: newProperties[idx].owner.ownerType || null,
+            owner_occupied: newProperties[idx].owner.ownerOccupied || null,
+            litigator: newProperties[idx].owner.litigator || false,
+          }));
 
-        const { error: ownerError } = await supabase
-          .from('owners')
-          .insert(ownerInserts);
-
-        if (ownerError) console.error('Error inserting owners:', ownerError);
-      }
-
-      // Update existing properties
-      for (const update of updatedProperties) {
-        const propUpdates = update.updates.property;
-        
-        // For merge, only update if existing value is empty
-        if (update.updates.mergeOnly) {
-          // Fetch current property to check empty fields
-          const { data: current } = await supabase
-            .from('properties')
-            .select('*')
-            .eq('id', update.id)
-            .single();
-
-          if (current) {
-            const mergeUpdates: Record<string, any> = {};
-            if (!current.latitude && propUpdates.latitude) mergeUpdates.latitude = propUpdates.latitude;
-            if (!current.longitude && propUpdates.longitude) mergeUpdates.longitude = propUpdates.longitude;
-            if (!current.bedrooms && propUpdates.bedrooms) mergeUpdates.bedrooms = propUpdates.bedrooms;
-            if (!current.bathrooms && propUpdates.bathrooms) mergeUpdates.bathrooms = propUpdates.bathrooms;
-            if (!current.property_url && propUpdates.property_url) mergeUpdates.property_url = propUpdates.property_url;
-            if (!current.airbnb_url && propUpdates.airbnb_url) mergeUpdates.airbnb_url = propUpdates.airbnb_url;
-            if (!current.listing_title && propUpdates.listing_title) mergeUpdates.listing_title = propUpdates.listing_title;
-            if (!current.room_type && propUpdates.room_type) mergeUpdates.room_type = propUpdates.room_type;
-            if (!current.property_manager && propUpdates.property_manager) mergeUpdates.property_manager = propUpdates.property_manager;
-            if (!current.host && propUpdates.host) mergeUpdates.host = propUpdates.host;
-            
-            if (propUpdates.tags?.length) {
-              mergeUpdates.tags = [...new Set([...(current.tags || []), ...propUpdates.tags])];
-            }
-
-            if (Object.keys(mergeUpdates).length > 0) {
-              await supabase
-                .from('properties')
-                .update(mergeUpdates)
-                .eq('id', update.id);
-            }
-          }
-        } else {
-          await supabase
-            .from('properties')
-            .update(propUpdates)
-            .eq('id', update.id);
+          const { error: ownerError } = await supabase.from('owners').insert(ownerInserts);
+          if (ownerError) console.error('Error inserting owners:', ownerError);
         }
       }
 
-      // Create smart list if name provided
+      // ========== PHASE 4: Batch Update Existing Properties ==========
+      let updatedCount = 0;
+      if (updatedProperties.length > 0) {
+        toast.loading(`Updating ${updatedProperties.length} existing properties...`, { id: toastId });
+
+        // Pre-fetch ALL properties that need merge in ONE query
+        const mergeIds = updatedProperties.filter(u => u.mergeOnly).map(u => u.id);
+        let currentPropsMap = new Map<string, any>();
+
+        if (mergeIds.length > 0) {
+          const { data: currentProperties } = await supabase
+            .from('properties')
+            .select('*')
+            .in('id', mergeIds);
+          
+          if (currentProperties) {
+            currentPropsMap = new Map(currentProperties.map(p => [p.id, p]));
+          }
+        }
+
+        // Process updates in parallel chunks
+        const UPDATE_CHUNK_SIZE = 50;
+        const updateChunks = chunkArray(updatedProperties, UPDATE_CHUNK_SIZE);
+
+        for (const chunk of updateChunks) {
+          await Promise.all(chunk.map(async (update) => {
+            const row = update.row;
+            const owner = transformImportToOwner(row);
+            
+            const propUpdates: Record<string, any> = {
+              address: row.address,
+              city: row.city,
+              state: row.state,
+              zip: row.zip,
+              latitude: row._latitude,
+              longitude: row._longitude,
+              bedrooms: parseInt(row.bedrooms) || 0,
+              bathrooms: parseFloat(row.bathrooms) || 0,
+              tags: [...new Set([...(existingAddressMap.get(update.normalizedAddr)?.tags || []), ...(options.globalTags || [])])],
+              property_url: row.propertyUrl || null,
+              airbnb_url: row.airbnbUrl || null,
+              listing_title: row.listingTitle || null,
+              room_type: row.roomType || null,
+              property_manager: row.propertyManager || null,
+              host: row.host || null,
+            };
+
+            if (update.mergeOnly) {
+              const current = currentPropsMap.get(update.id);
+              if (current) {
+                const mergeUpdates: Record<string, any> = {};
+                if (!current.latitude && propUpdates.latitude) mergeUpdates.latitude = propUpdates.latitude;
+                if (!current.longitude && propUpdates.longitude) mergeUpdates.longitude = propUpdates.longitude;
+                if (!current.bedrooms && propUpdates.bedrooms) mergeUpdates.bedrooms = propUpdates.bedrooms;
+                if (!current.bathrooms && propUpdates.bathrooms) mergeUpdates.bathrooms = propUpdates.bathrooms;
+                if (!current.property_url && propUpdates.property_url) mergeUpdates.property_url = propUpdates.property_url;
+                if (!current.airbnb_url && propUpdates.airbnb_url) mergeUpdates.airbnb_url = propUpdates.airbnb_url;
+                if (!current.listing_title && propUpdates.listing_title) mergeUpdates.listing_title = propUpdates.listing_title;
+                if (!current.room_type && propUpdates.room_type) mergeUpdates.room_type = propUpdates.room_type;
+                if (!current.property_manager && propUpdates.property_manager) mergeUpdates.property_manager = propUpdates.property_manager;
+                if (!current.host && propUpdates.host) mergeUpdates.host = propUpdates.host;
+                
+                if (propUpdates.tags?.length) {
+                  mergeUpdates.tags = [...new Set([...(current.tags || []), ...propUpdates.tags])];
+                }
+
+                if (Object.keys(mergeUpdates).length > 0) {
+                  await supabase.from('properties').update(mergeUpdates).eq('id', update.id);
+                  updatedCount++;
+                }
+              }
+            } else {
+              await supabase.from('properties').update(propUpdates).eq('id', update.id);
+              updatedCount++;
+            }
+          }));
+        }
+      }
+
+      // ========== PHASE 5: Create Smart List ==========
       if (options.listName && options.listName.trim()) {
         const importTag = options.globalTags?.[0] || `import-${Date.now()}`;
         
-        await supabase
-          .from('saved_lists')
-          .insert({
-            company_id: company.id,
-            created_by: user?.id,
-            name: options.listName.trim(),
-            rules: [{
-              id: Date.now().toString(),
-              field: 'tags',
-              operator: 'contains',
-              value: importTag,
-            }],
-            match_type: 'and',
-          });
+        await supabase.from('saved_lists').insert({
+          company_id: company.id,
+          created_by: user?.id,
+          name: options.listName.trim(),
+          rules: [{
+            id: Date.now().toString(),
+            field: 'tags',
+            operator: 'contains',
+            value: importTag,
+          }],
+          match_type: 'and',
+        });
       }
 
+      // ========== Report Results ==========
       const parts: string[] = [];
-      if (newProperties.length > 0) parts.push(`${newProperties.length} new`);
-      if (updatedProperties.length > 0) parts.push(`${updatedProperties.length} updated`);
+      if (insertedCount > 0) parts.push(`${insertedCount} new`);
+      if (updatedCount > 0) parts.push(`${updatedCount} updated`);
       if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
 
       toast.success(`Import complete: ${parts.join(', ')}`, { id: toastId });
 
-      return { newCount: newProperties.length, updatedCount: updatedProperties.length };
+      return { newCount: insertedCount, updatedCount };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['properties'] });
       queryClient.invalidateQueries({ queryKey: ['saved_lists'] });
     },
-    onError: (error, _, context) => {
+    onError: (error) => {
       toast.error(`Import failed: ${error.message}`);
     },
   });

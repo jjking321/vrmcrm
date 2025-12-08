@@ -128,6 +128,85 @@ export async function verifyAddress(
   }
 }
 
+export interface BatchAddressInput {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  index: number;
+}
+
+export interface BatchAddressResult {
+  index: number;
+  success: boolean;
+  standardized?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  error?: string;
+}
+
+const BATCH_CHUNK_SIZE = 1000; // Geocodio supports 10k but we chunk for reliability
+
+export async function verifyAddressBatch(
+  addresses: BatchAddressInput[]
+): Promise<Map<number, BatchAddressResult>> {
+  const resultMap = new Map<number, BatchAddressResult>();
+  
+  if (addresses.length === 0) return resultMap;
+
+  // Process in chunks to avoid timeout issues
+  const chunks: BatchAddressInput[][] = [];
+  for (let i = 0; i < addresses.length; i += BATCH_CHUNK_SIZE) {
+    chunks.push(addresses.slice(i, i + BATCH_CHUNK_SIZE));
+  }
+
+  console.log(`Batch verifying ${addresses.length} addresses in ${chunks.length} chunk(s)`);
+
+  for (const chunk of chunks) {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-address-batch', {
+        body: { addresses: chunk },
+      });
+
+      if (error) {
+        console.error('Batch address verification error:', error);
+        // Mark all addresses in this chunk as failed
+        chunk.forEach(addr => {
+          resultMap.set(addr.index, {
+            index: addr.index,
+            success: false,
+            error: error.message,
+          });
+        });
+        continue;
+      }
+
+      if (data?.results && Array.isArray(data.results)) {
+        data.results.forEach((result: BatchAddressResult) => {
+          resultMap.set(result.index, result);
+        });
+      }
+    } catch (err) {
+      console.error('Error in batch verification chunk:', err);
+      chunk.forEach(addr => {
+        resultMap.set(addr.index, {
+          index: addr.index,
+          success: false,
+          error: 'Batch verification failed',
+        });
+      });
+    }
+  }
+
+  return resultMap;
+}
+
 export function applyZillowData(property: Property, zillowData: ZillowData): Partial<Property> {
   const updates: Partial<Property> = {};
   

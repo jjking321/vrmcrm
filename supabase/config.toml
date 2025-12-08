@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.verify-address]
 verify_jwt = false
+
+[functions.verify-address-batch]
+verify_jwt = false

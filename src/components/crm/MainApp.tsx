@@ -14,6 +14,7 @@ import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
 import { KanbanBoard } from './KanbanBoard';
 import { AddPropertyModal } from './AddPropertyModal';
+import { NewDealModal } from './NewDealModal';
 import { ImportWizard } from './ImportWizard';
 import { Settings } from './Settings';
 import { OwnerTable } from './OwnerTable';
@@ -83,6 +84,7 @@ const MainApp: React.FC = () => {
   // Modal State
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isNewDealOpen, setIsNewDealOpen] = useState(false);
   
   // Pre-loaded import data from Data Cleanup Tool
   const [preLoadedImportData, setPreLoadedImportData] = useState<any[] | undefined>(undefined);
@@ -107,8 +109,30 @@ const MainApp: React.FC = () => {
     updatePropertyMutation.mutate({ id, updates });
   };
 
-  const handleAddProperty = (data: { address: string; city: string; state: string; zip: string; ownerName: string; ownerEmail: string; ownerPhone: string }) => {
+  const handleAddProperty = (data: { address: string; city: string; state: string; zip: string; ownerName: string; ownerEmail: string; ownerPhone: string; stageId?: string }) => {
     addPropertyMutation.mutate(data);
+  };
+
+  const handleAddToPipeline = (propertyId: string, stageId: string) => {
+    updatePropertyMutation.mutate({ id: propertyId, updates: { stageId } });
+    toast.success('Property added to pipeline');
+  };
+
+  const handleCreatePropertyWithStage = (data: { 
+    address: string; 
+    city: string; 
+    state: string; 
+    zip: string; 
+    ownerName: string; 
+    ownerEmail: string; 
+    ownerPhone: string;
+    stageId: string;
+  }) => {
+    addPropertyMutation.mutate(data, {
+      onSuccess: () => {
+        toast.success('Property created and added to pipeline');
+      }
+    });
   };
 
   const handleImportData = async (data: any[], options: {
@@ -278,6 +302,7 @@ const MainApp: React.FC = () => {
               stages={stages}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
               onSelectProperty={handleSelectProperty}
+              onNewDeal={() => setIsNewDealOpen(true)}
             />
           </div>
         </div>
@@ -415,6 +440,14 @@ const MainApp: React.FC = () => {
         onUpdateProperty={handleUpdateProperty}
         onDeleteProperties={handleDeleteProperties}
         onSaveList={handleSaveList}
+      />
+
+      <NewDealModal
+        isOpen={isNewDealOpen}
+        onClose={() => setIsNewDealOpen(false)}
+        stages={stages}
+        onAddToPipeline={handleAddToPipeline}
+        onCreateProperty={handleCreatePropertyWithStage}
       />
     </div>
   );

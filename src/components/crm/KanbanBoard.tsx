@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
-import { MapPin, DollarSign, User, Ban } from 'lucide-react';
+import { MapPin, DollarSign, User, Ban, Plus } from 'lucide-react';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';
 import { useExcludedPropertyIds } from '@/hooks/useExclusionMatches';
+import { Button } from '@/components/ui/button';
 
 interface KanbanBoardProps {
   properties: Property[];
   stages: PipelineStage[];
   onMoveProperty: (propertyId: string, newStageId: string) => void;
   onSelectProperty: (id: string) => void;
+  onNewDeal?: () => void;
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
@@ -18,6 +20,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   stages,
   onMoveProperty,
   onSelectProperty,
+  onNewDeal,
 }) => {
   const [draggedPropertyId, setDraggedPropertyId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
@@ -71,7 +74,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div className="flex gap-4 h-full overflow-x-auto pb-4">
+    <div className="flex flex-col h-full">
+      {onNewDeal && (
+        <div className="flex justify-end mb-4">
+          <Button onClick={onNewDeal} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Deal
+          </Button>
+        </div>
+      )}
+      <div className="flex gap-4 flex-1 overflow-x-auto pb-4">
       {stages.map((stage) => {
         const stageProperties = properties.filter(p => p.stageId === stage.id);
         const totalRevenue = stageProperties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
@@ -165,6 +177,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           </div>
         );
       })}
+      </div>
     </div>
   );
 };

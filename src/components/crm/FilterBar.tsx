@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
-import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, LayoutGrid, Table, Filter, Loader2 } from 'lucide-react';
+import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, Filter, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FilterRuleRow } from './FilterRuleRow';
 
@@ -160,30 +160,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* Result Count */}
         <div className="text-sm text-muted-foreground font-medium">
           {resultCount} {resultCount === 1 ? 'property' : 'properties'}
-        </div>
-
-        {/* View Toggle */}
-        <div className="flex items-center bg-muted rounded-lg p-1">
-          <button
-            onClick={() => onListViewModeChange('table')}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-              listViewMode === 'table' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Table className="w-4 h-4" />
-            Table
-          </button>
-          <button
-            onClick={() => onListViewModeChange('kanban')}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-              listViewMode === 'kanban' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            Pipeline
-          </button>
         </div>
 
         {/* Add Filter Button */}

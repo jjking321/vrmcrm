@@ -208,7 +208,71 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     }
   };
 
+  const processParsedData = (parsedData: Record<string, any>[]) => {
+    // Build address index from existing properties
+    const existingAddressMap = new Map<string, Property>();
+    existingProperties.forEach(prop => {
+      const normalized = normalizeAddress(prop.address, prop.city, prop.state);
+      existingAddressMap.set(normalized, prop);
+    });
+
+    // Check for duplicates
+    const foundDuplicates: { importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[] = [];
+    const nonDups: Record<string, any>[] = [];
+
+    parsedData.forEach(row => {
+      const address = row.address || '';
+      const city = row.city || '';
+      const state = row.state || '';
+      const normalized = normalizeAddress(address, city, state);
+      
+      const existingProp = existingAddressMap.get(normalized);
+      if (existingProp) {
+        foundDuplicates.push({
+          importRow: row,
+          existingProperty: existingProp,
+          normalizedAddress: normalized,
+        });
+      } else {
+        nonDups.push(row);
+      }
+    });
+
+    // If duplicates found, show modal
+    if (foundDuplicates.length > 0) {
+      setDuplicates(foundDuplicates);
+      setNonDuplicates(nonDups);
+      setParsedImportData(parsedData);
+      setShowDuplicateModal(true);
+    } else {
+      // No duplicates, proceed directly
+      onImport(parsedData, {
+        standardize: standardizeAddresses,
+        globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
+        listName: createList && listName ? listName : undefined,
+      });
+      handleClose();
+    }
+  };
+
   const handleImport = () => {
+    // Handle pre-loaded data from Data Cleanup Tool
+    if (preLoadedData && preLoadedData.length > 0 && preLoadedHeaders) {
+      const parsedData = preLoadedData.map(row => {
+        const obj: Record<string, any> = {};
+        Object.entries(mapping).forEach(([colIndex, fieldId]) => {
+          if (fieldId) {
+            const header = preLoadedHeaders[parseInt(colIndex)];
+            obj[fieldId] = row[header] || '';
+          }
+        });
+        return obj;
+      });
+      processParsedData(parsedData);
+      return;
+    }
+
+    // Original file-based import logic
     if (!file) return;
 
     const reader = new FileReader();
@@ -244,50 +308,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
           return obj;
         });
 
-        // Build address index from existing properties
-        const existingAddressMap = new Map<string, Property>();
-        existingProperties.forEach(prop => {
-          const normalized = normalizeAddress(prop.address, prop.city, prop.state);
-          existingAddressMap.set(normalized, prop);
-        });
-
-        // Check for duplicates
-        const foundDuplicates: { importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[] = [];
-        const nonDups: Record<string, any>[] = [];
-
-        parsedData.forEach(row => {
-          const address = row.address || '';
-          const city = row.city || '';
-          const state = row.state || '';
-          const normalized = normalizeAddress(address, city, state);
-          
-          const existingProp = existingAddressMap.get(normalized);
-          if (existingProp) {
-            foundDuplicates.push({
-              importRow: row,
-              existingProperty: existingProp,
-              normalizedAddress: normalized,
-            });
-          } else {
-            nonDups.push(row);
-          }
-        });
-
-        // If duplicates found, show modal
-        if (foundDuplicates.length > 0) {
-          setDuplicates(foundDuplicates);
-          setNonDuplicates(nonDups);
-          setParsedImportData(parsedData);
-          setShowDuplicateModal(true);
-        } else {
-          // No duplicates, proceed directly
-          onImport(parsedData, {
-            standardize: standardizeAddresses,
-            globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
-            listName: createList && listName ? listName : undefined,
-          });
-          handleClose();
-        }
+        processParsedData(parsedData);
       }
     };
     reader.readAsText(file);

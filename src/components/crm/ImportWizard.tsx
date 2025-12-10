@@ -17,6 +17,8 @@ interface ImportWizardProps {
   }) => void;
   fields: FieldDefinition[];
   existingProperties: Property[];
+  preLoadedData?: any[];
+  preLoadedHeaders?: string[];
 }
 
 // Auto-mapping rules: CSV header patterns -> target field
@@ -99,6 +101,8 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   onImport, 
   fields,
   existingProperties,
+  preLoadedData,
+  preLoadedHeaders,
 }) => {
   const [step, setStep] = useState<'upload' | 'map' | 'summary'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -117,6 +121,25 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [duplicates, setDuplicates] = useState<{ importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[]>([]);
   const [nonDuplicates, setNonDuplicates] = useState<Record<string, any>[]>([]);
   const [parsedImportData, setParsedImportData] = useState<Record<string, any>[]>([]);
+
+  // Handle pre-loaded data from Data Cleanup Tool
+  React.useEffect(() => {
+    if (isOpen && preLoadedData && preLoadedHeaders && preLoadedData.length > 0) {
+      setCsvHeaders(preLoadedHeaders);
+      // Convert data objects to preview format (array of arrays)
+      const preview = preLoadedData.slice(0, 5).map(row => 
+        preLoadedHeaders.map(h => row[h] || '')
+      );
+      setCsvPreview(preview);
+      setRecordCount(preLoadedData.length);
+      
+      // Auto-map headers
+      const autoMapping = autoMapHeaders(preLoadedHeaders);
+      setMapping(autoMapping);
+      
+      setStep('map');
+    }
+  }, [isOpen, preLoadedData, preLoadedHeaders]);
 
   const parseCSV = (text: string) => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);

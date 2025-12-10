@@ -23,19 +23,22 @@ interface ImportWizardProps {
 
 // Auto-mapping rules: CSV header patterns -> target field
 const AUTO_MAP_PATTERNS: Record<string, string[]> = {
-  address: ['street', 'address', 'property address', 'street address', 'full address'],
+  address: ['street', 'address', 'property address', 'street address', 'full address', 'site address'],
   city: ['city'],
   state: ['state', 'st'],
   zip: ['zip', 'zipcode', 'zip code', 'postal'],
   propertyUrl: ['url', 'property url', 'link', 'propwire'],
   
-  owner1FirstName: ['owner 1 first name', 'owner1 first name', 'first name 1', 'owner first', 'name 1'],
+  // Single owner name (for simpler imports)
+  ownerName: ['owner name', 'owner', 'name', 'applicant', 'applicant name', 'registrant', 'registrant name', 'full name', 'owner full name'],
+  
+  owner1FirstName: ['owner 1 first name', 'owner1 first name', 'first name 1', 'owner first'],
   owner1LastName: ['owner 1 last name', 'owner1 last name', 'last name 1', 'owner last'],
-  owner2FirstName: ['owner 2 first name', 'owner2 first name', 'first name 2', 'name 2'],
+  owner2FirstName: ['owner 2 first name', 'owner2 first name', 'first name 2'],
   owner2LastName: ['owner 2 last name', 'owner2 last name', 'last name 2'],
-  owner3FirstName: ['owner 3 first name', 'owner3 first name', 'first name 3', 'name 3'],
+  owner3FirstName: ['owner 3 first name', 'owner3 first name', 'first name 3'],
   owner3LastName: ['owner 3 last name', 'owner3 last name', 'last name 3'],
-  owner4FirstName: ['owner 4 first name', 'owner4 first name', 'first name 4', 'name 4'],
+  owner4FirstName: ['owner 4 first name', 'owner4 first name', 'first name 4'],
   owner4LastName: ['owner 4 last name', 'owner4 last name', 'last name 4'],
   
   mailingAddress: ['mailing address', 'owner mailing address', 'mail address', 'owner address'],
@@ -47,11 +50,11 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   ownerType: ['owner type', 'ownership type'],
   ownerOccupied: ['owner occupied', 'owner occ', 'oo', 'occupied'],
   
-  contactName: ['contact name', 'name 1', 'primary contact'],
-  email: ['email', 'owner email', 'e-mail'],
+  contactName: ['contact name', 'primary contact'],
+  email: ['email', 'owner email', 'e-mail', 'applicant email'],
   age: ['age', 'owner age'],
   
-  phone1: ['phone 1', 'phone1', 'primary phone', 'phone', 'phone number 1'],
+  phone1: ['phone 1', 'phone1', 'primary phone', 'phone', 'phone number 1', 'phone number', 'applicant phone'],
   phone1Type: ['phone 1 type', 'phone1 type', 'phone type 1'],
   phone1DNC: ['phone 1 dnc', 'phone1 dnc', 'dnc 1', 'phone 1 do not call'],
   phone2: ['phone 2', 'phone2', 'phone number 2'],
@@ -68,7 +71,7 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   
   // Scraped Airbnb data fields
   listingTitle: ['listing title', 'title', 'listing name', 'property name'],
-  roomType: ['room type', 'type'],
+  roomType: ['room type', 'type', 'permit type', 'registration type'],
   propertyManager: ['property manager', 'manager', 'pm', 'management company'],
   host: ['host', 'airbnb host', 'host name'],
   airbnbUrl: ['airbnb property link', 'airbnb url', 'airbnb link', 'airbnb'],

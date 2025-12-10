@@ -3,7 +3,7 @@ import { Property, PipelineStage, Activity } from '@/types';
 import { 
   ArrowLeft, Phone, Mail, MapPin, Building, DollarSign, 
   Calendar, FileText, MessageSquare, AlertTriangle,
-  PhoneOff, Clock, Home, Users
+  PhoneOff, Clock, Home, Users, Loader2
 } from 'lucide-react';
 import { Badge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
@@ -13,10 +13,11 @@ import {
   hasDoNotCall, isLitigator, formatMailingAddress, formatOwnershipLength,
   getPhoneTypeBadgeClass, getOwnerTypeBadgeClass
 } from '@/lib/ownerUtils';
+import { useOwnerProperties } from '@/hooks/useOwnerProperties';
 
 interface OwnerDetailProps {
   ownerName: string;
-  properties: Property[];
+  properties: Property[]; // Kept for backwards compatibility / immediate display
   stages: PipelineStage[];
   onBack: () => void;
   onSelectProperty: (id: string) => void;
@@ -31,20 +32,18 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   onSelectProperty,
   onSelectOwner,
 }) => {
-  // Find properties where any owner matches the name
-  const ownerProperties = properties.filter(p => {
-    const primaryName = getPrimaryOwnerName(p.owner);
-    if (primaryName === ownerName) return true;
-    
-    // Also check additional owners
-    if (p.owner.owners) {
-      return p.owner.owners.some(o => `${o.firstName} ${o.lastName}`.trim() === ownerName);
-    }
-    
-    return p.owner.name === ownerName;
-  });
+  // Fetch ALL properties for this owner from database
+  const { data: ownerProperties = [], isLoading } = useOwnerProperties(ownerName);
   
   const owner = ownerProperties[0]?.owner;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!owner || ownerProperties.length === 0) {
     return (

@@ -191,6 +191,7 @@ export type Database = {
           contact_name: string | null
           created_at: string
           email: string | null
+          emails: Json | null
           id: string
           last_verified_date: string | null
           litigator: boolean | null
@@ -215,6 +216,7 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           email?: string | null
+          emails?: Json | null
           id?: string
           last_verified_date?: string | null
           litigator?: boolean | null
@@ -239,6 +241,7 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           email?: string | null
+          emails?: Json | null
           id?: string
           last_verified_date?: string | null
           litigator?: boolean | null

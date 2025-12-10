@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Property } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { transformImportToOwner } from '@/lib/ownerUtils';
+import { transformImportToOwner, dedupePhones, dedupeEmails, mergeOwnerContacts } from '@/lib/ownerUtils';
 import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
 import { normalizeAddressForMatch, namesMatch, emailsMatch, phonesMatch } from '@/lib/exclusionUtils';
 import { parseFullAddress, isFullAddressField } from '@/lib/addressParser';
@@ -14,6 +14,7 @@ interface ImportOptions {
   listName?: string;
   duplicateStrategy?: 'skip' | 'update' | 'merge' | 'review';
   duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+  contactMergeMode?: 'stack' | 'override';
 }
 
 // Normalize address for duplicate detection
@@ -334,34 +335,47 @@ export const useImportProperties = () => {
         }
       }
 
-      // ========== PHASE 4: Batch Update Existing Properties ==========
+      // ========== PHASE 4: Batch Update Existing Properties & Owners ==========
       let updatedCount = 0;
       if (updatedProperties.length > 0) {
         toast.loading(`Updating ${updatedProperties.length} existing properties...`, { id: toastId });
 
         // Pre-fetch ALL properties that need merge in ONE query
-        const mergeIds = updatedProperties.filter(u => u.mergeOnly).map(u => u.id);
+        const allUpdateIds = updatedProperties.map(u => u.id);
         let currentPropsMap = new Map<string, any>();
+        let currentOwnersMap = new Map<string, any>();
 
-        if (mergeIds.length > 0) {
+        if (allUpdateIds.length > 0) {
           const { data: currentProperties } = await supabase
             .from('properties')
             .select('*')
-            .in('id', mergeIds);
+            .in('id', allUpdateIds);
           
           if (currentProperties) {
             currentPropsMap = new Map(currentProperties.map(p => [p.id, p]));
+          }
+
+          // Fetch existing owners for contact stacking
+          const { data: currentOwners } = await supabase
+            .from('owners')
+            .select('*')
+            .in('property_id', allUpdateIds);
+          
+          if (currentOwners) {
+            currentOwnersMap = new Map(currentOwners.map(o => [o.property_id, o]));
           }
         }
 
         // Process updates in parallel chunks
         const UPDATE_CHUNK_SIZE = 50;
         const updateChunks = chunkArray(updatedProperties, UPDATE_CHUNK_SIZE);
+        const contactMode = options.contactMergeMode || 'stack';
 
         for (const chunk of updateChunks) {
           await Promise.all(chunk.map(async (update) => {
             const row = update.row;
-            const owner = transformImportToOwner(row);
+            const importedOwner = transformImportToOwner(row);
+            const existingOwner = currentOwnersMap.get(update.id);
             
             const propUpdates: Record<string, any> = {
               address: row.address,
@@ -380,6 +394,52 @@ export const useImportProperties = () => {
               property_manager: row.propertyManager || null,
               host: row.host || null,
             };
+
+            // Build owner updates based on contact merge mode
+            let ownerUpdates: Record<string, any>;
+            
+            if (contactMode === 'stack' && existingOwner) {
+              // STACK: Add new contacts to existing ones (deduplicated)
+              const existingPhones = Array.isArray(existingOwner.phones) ? existingOwner.phones : [];
+              const existingEmails = Array.isArray(existingOwner.emails) ? existingOwner.emails : [];
+              const existingOwners = Array.isArray(existingOwner.owners) ? existingOwner.owners : [];
+              
+              ownerUpdates = {
+                phones: dedupePhones([...existingPhones, ...(importedOwner.phones || [])]),
+                emails: dedupeEmails([...existingEmails, ...(importedOwner.emails || [])]),
+                owners: mergeOwnerContacts(existingOwners, importedOwner.owners || []),
+                // Fill gaps for other fields
+                name: existingOwner.name || importedOwner.name,
+                email: existingOwner.email || importedOwner.email,
+                phone: existingOwner.phone || importedOwner.phone,
+                mailing_address: existingOwner.mailing_address || importedOwner.mailingAddress,
+                mailing_city: existingOwner.mailing_city || importedOwner.mailingCity,
+                mailing_state: existingOwner.mailing_state || importedOwner.mailingState,
+                mailing_zip: existingOwner.mailing_zip || importedOwner.mailingZip,
+                ownership_length_months: existingOwner.ownership_length_months || importedOwner.ownershipLengthMonths,
+                owner_type: existingOwner.owner_type || importedOwner.ownerType,
+                owner_occupied: existingOwner.owner_occupied ?? importedOwner.ownerOccupied,
+                litigator: existingOwner.litigator || importedOwner.litigator,
+              };
+            } else {
+              // OVERRIDE: Replace with imported data
+              ownerUpdates = {
+                name: importedOwner.name || '',
+                email: importedOwner.email || null,
+                phone: importedOwner.phone || null,
+                phones: importedOwner.phones || [],
+                emails: importedOwner.emails || [],
+                owners: importedOwner.owners || [],
+                mailing_address: importedOwner.mailingAddress || null,
+                mailing_city: importedOwner.mailingCity || null,
+                mailing_state: importedOwner.mailingState || null,
+                mailing_zip: importedOwner.mailingZip || null,
+                ownership_length_months: importedOwner.ownershipLengthMonths || null,
+                owner_type: importedOwner.ownerType || null,
+                owner_occupied: importedOwner.ownerOccupied || null,
+                litigator: importedOwner.litigator || false,
+              };
+            }
 
             if (update.mergeOnly) {
               const current = currentPropsMap.get(update.id);
@@ -402,13 +462,17 @@ export const useImportProperties = () => {
 
                 if (Object.keys(mergeUpdates).length > 0) {
                   await supabase.from('properties').update(mergeUpdates).eq('id', update.id);
-                  updatedCount++;
                 }
               }
             } else {
               await supabase.from('properties').update(propUpdates).eq('id', update.id);
-              updatedCount++;
             }
+
+            // Update owner data
+            if (existingOwner) {
+              await supabase.from('owners').update(ownerUpdates).eq('property_id', update.id);
+            }
+            updatedCount++;
           }));
         }
       }

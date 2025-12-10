@@ -1,4 +1,4 @@
-import { Owner, PhoneContact, OwnerContact } from '@/types';
+import { Owner, PhoneContact, OwnerContact, EmailContact } from '@/types';
 
 /**
  * Get the primary display name for an owner
@@ -158,12 +158,68 @@ export function getOwnerTypeBadgeClass(type?: string): string {
   return 'bg-slate-50 text-slate-600 border-slate-200';
 }
 
+// ============= Deduplication Helpers =============
+
+/**
+ * Normalize phone number for comparison (last 10 digits)
+ */
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '').slice(-10);
+}
+
+/**
+ * Deduplicate phones by normalized number
+ */
+export function dedupePhones(phones: PhoneContact[]): PhoneContact[] {
+  const seen = new Map<string, PhoneContact>();
+  for (const phone of phones) {
+    if (!phone.number) continue;
+    const key = normalizePhone(phone.number);
+    if (key.length >= 7 && !seen.has(key)) {
+      seen.set(key, phone);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+/**
+ * Deduplicate emails by address (case-insensitive)
+ */
+export function dedupeEmails(emails: EmailContact[]): EmailContact[] {
+  const seen = new Map<string, EmailContact>();
+  for (const email of emails) {
+    if (!email.address) continue;
+    const key = email.address.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.set(key, email);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+/**
+ * Merge owner contacts (dedupe by name similarity)
+ */
+export function mergeOwnerContacts(existing: OwnerContact[], incoming: OwnerContact[]): OwnerContact[] {
+  const result = [...existing];
+  for (const newOwner of incoming) {
+    if (!newOwner.firstName && !newOwner.lastName) continue;
+    const exists = result.some(e => 
+      (e.firstName?.toLowerCase() || '') === (newOwner.firstName?.toLowerCase() || '') &&
+      (e.lastName?.toLowerCase() || '') === (newOwner.lastName?.toLowerCase() || '')
+    );
+    if (!exists) result.push(newOwner);
+  }
+  return result;
+}
+
 /**
  * Transform import data row to Owner structure
  */
 export function transformImportToOwner(data: Record<string, any>): Owner {
   const owners: OwnerContact[] = [];
   const phones: PhoneContact[] = [];
+  const emails: EmailContact[] = [];
   
   // Parse multiple owners
   for (let i = 1; i <= 4; i++) {
@@ -190,6 +246,18 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
     }
   }
   
+  // Parse multiple emails
+  for (let i = 1; i <= 4; i++) {
+    const emailAddr = data[`email${i}`] || (i === 1 ? (data.email || data.ownerEmail) : null);
+    if (emailAddr && emailAddr.trim()) {
+      emails.push({
+        address: emailAddr.trim(),
+        type: 'unknown',
+        optedOut: false,
+      });
+    }
+  }
+  
   // Determine primary name for legacy field
   const primaryName = owners.length > 0 
     ? `${owners[0].firstName} ${owners[0].lastName}`.trim()
@@ -208,7 +276,8 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
     name: primaryName,
     owners: owners.length > 0 ? owners : undefined,
     phones: phones.length > 0 ? phones : undefined,
-    email: data.email || data.ownerEmail || '',
+    emails: emails.length > 0 ? emails : undefined,
+    email: emails.length > 0 ? emails[0].address : (data.email || data.ownerEmail || ''),
     phone: phones.length > 0 ? phones[0].number : (data.ownerPhone || ''),
     mailingAddress: data.mailingAddress || '',
     mailingCity: data.mailingCity || '',

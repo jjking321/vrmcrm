@@ -32,6 +32,13 @@ export interface PhoneContact {
   doNotCall: boolean;
 }
 
+// Individual email with metadata
+export interface EmailContact {
+  address: string;
+  type: 'personal' | 'work' | 'unknown';
+  optedOut: boolean;
+}
+
 // Individual owner (supports up to 4)
 export interface OwnerContact {
   firstName: string;
@@ -47,6 +54,9 @@ export interface Owner {
   
   // Multiple phones with DNC flags and types
   phones?: PhoneContact[];
+  
+  // Multiple emails with opt-out flags
+  emails?: EmailContact[];
   
   // Legacy single phone/email for backward compatibility
   email: string;

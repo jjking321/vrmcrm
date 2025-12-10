@@ -97,7 +97,9 @@ export const useDashboardStats = () => {
       const totalProperties = allProperties.length;
       
       // Calculate total revenue
-      const totalRevenue = allProperties.reduce((sum, p) => {
+      // Only calculate revenue for properties in the pipeline (have a stage_id)
+      const pipelineProperties = allProperties.filter(p => p.stage_id);
+      const totalRevenue = pipelineProperties.reduce((sum, p) => {
         const marketData = p.market_data as { projectedRevenue?: number } | null;
         return sum + (marketData?.projectedRevenue || 0);
       }, 0);

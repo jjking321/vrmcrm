@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { FieldDefinition, Property } from '@/types';
-import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 import { DuplicateReviewModal, DuplicateStrategy, normalizeAddress } from './DuplicateReviewModal';
@@ -14,6 +14,7 @@ interface ImportWizardProps {
     listName?: string;
     duplicateStrategy?: DuplicateStrategy;
     duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+    contactMergeMode?: 'stack' | 'override';
   }) => void;
   fields: FieldDefinition[];
   existingProperties: Property[];
@@ -63,6 +64,12 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   phone3: ['phone 3', 'phone3', 'phone number 3'],
   phone3Type: ['phone 3 type', 'phone3 type', 'phone type 3'],
   phone3DNC: ['phone 3 dnc', 'phone3 dnc', 'dnc 3', 'phone 3 do not call'],
+  
+  // Multiple emails
+  email1: ['email 1', 'email1', 'primary email'],
+  email2: ['email 2', 'email2', 'secondary email'],
+  email3: ['email 3', 'email3'],
+  email4: ['email 4', 'email4'],
   
   litigator: ['litigator', 'litigator flag', 'litigation'],
   
@@ -117,6 +124,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [createList, setCreateList] = useState(false);
   const [listName, setListName] = useState('');
   const [standardizeAddresses, setStandardizeAddresses] = useState(true);
+  const [contactMergeMode, setContactMergeMode] = useState<'stack' | 'override'>('stack');
   const [recordCount, setRecordCount] = useState(0);
   
   // Duplicate detection state
@@ -253,6 +261,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
         standardize: standardizeAddresses,
         globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
         listName: createList && listName ? listName : undefined,
+        contactMergeMode,
       });
       handleClose();
     }
@@ -327,6 +336,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
       listName: createList && listName ? listName : undefined,
       duplicateStrategy: strategy,
       duplicateDecisions: reviewDecisions,
+      contactMergeMode,
     });
     setShowDuplicateModal(false);
     handleClose();
@@ -342,6 +352,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     setCreateList(false);
     setListName('');
     setStandardizeAddresses(true);
+    setContactMergeMode('stack');
     setShowDuplicateModal(false);
     setDuplicates([]);
     setNonDuplicates([]);
@@ -405,6 +416,12 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'phone3', label: '📞 Phone 3', group: 'Phones' },
     { id: 'phone3Type', label: '📞 Phone 3 Type', group: 'Phones' },
     { id: 'phone3DNC', label: '🚫 Phone 3 Do Not Call', group: 'Phones' },
+    
+    // Multiple Emails
+    { id: 'email1', label: '✉️ Email 1', group: 'Emails' },
+    { id: 'email2', label: '✉️ Email 2', group: 'Emails' },
+    { id: 'email3', label: '✉️ Email 3', group: 'Emails' },
+    { id: 'email4', label: '✉️ Email 4', group: 'Emails' },
     
     // Compliance
     { id: 'litigator', label: '⚠️ Litigator Flag', group: 'Compliance' },
@@ -543,6 +560,44 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
                       </p>
                     </div>
                   </label>
+                </div>
+
+                {/* Contact Data Handling */}
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-3">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    When a property already exists:
+                  </span>
+                  <div className="space-y-2 ml-6">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="contactMerge" 
+                        value="stack" 
+                        checked={contactMergeMode === 'stack'} 
+                        onChange={() => setContactMergeMode('stack')}
+                        className="w-4 h-4 mt-0.5 text-brand focus:ring-brand"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">Add to existing contacts</span>
+                        <p className="text-xs text-muted-foreground">New phones, emails, and owners will be added to existing ones</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="contactMerge" 
+                        value="override" 
+                        checked={contactMergeMode === 'override'}
+                        onChange={() => setContactMergeMode('override')}
+                        className="w-4 h-4 mt-0.5 text-brand focus:ring-brand"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">Replace existing contacts</span>
+                        <p className="text-xs text-muted-foreground">Imported data will replace all existing contact information</p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 <div>

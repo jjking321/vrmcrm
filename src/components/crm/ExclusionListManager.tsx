@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 const EXCLUSION_FIELDS = [
   { id: 'ownerName', label: 'Owner Name' },
   { id: 'email', label: 'Email' },
+  { id: 'phone', label: 'Phone' },
   { id: 'address', label: 'Address' },
   { id: 'city', label: 'City' },
   { id: 'state', label: 'State' },
@@ -65,6 +66,7 @@ export const ExclusionListManager: React.FC = () => {
   const [manualEntry, setManualEntry] = useState({
     ownerName: '',
     email: '',
+    phone: '',
     address: '',
     city: '',
     state: '',
@@ -78,6 +80,7 @@ export const ExclusionListManager: React.FC = () => {
     return (
       e.ownerName?.toLowerCase().includes(search) ||
       e.email?.toLowerCase().includes(search) ||
+      e.phone?.includes(search) ||
       e.address?.toLowerCase().includes(search) ||
       e.city?.toLowerCase().includes(search)
     );
@@ -125,6 +128,8 @@ export const ExclusionListManager: React.FC = () => {
             autoMapping[idx.toString()] = 'ownerName';
           } else if (h.includes('email')) {
             autoMapping[idx.toString()] = 'email';
+          } else if (h.includes('phone') || h.includes('cell') || h.includes('mobile') || h === 'telephone') {
+            autoMapping[idx.toString()] = 'phone';
           } else if (h.includes('address') && !h.includes('mail')) {
             autoMapping[idx.toString()] = 'address';
           } else if (h === 'city') {
@@ -151,12 +156,13 @@ export const ExclusionListManager: React.FC = () => {
       return {
         ownerName: entry.ownerName,
         email: entry.email,
+        phone: entry.phone,
         address: entry.address,
         city: entry.city,
         state: entry.state,
         source: 'import' as const,
       };
-    }).filter(e => e.ownerName || e.email || e.address);
+    }).filter(e => e.ownerName || e.email || e.phone || e.address);
 
     if (entries.length === 0) {
       toast.error('No valid entries to import. Map at least one field.');
@@ -182,7 +188,7 @@ export const ExclusionListManager: React.FC = () => {
 
   // Handle manual add
   const handleManualAdd = () => {
-    if (!manualEntry.ownerName && !manualEntry.email && !manualEntry.address) {
+    if (!manualEntry.ownerName && !manualEntry.email && !manualEntry.phone && !manualEntry.address) {
       toast.error('Please fill at least one field');
       return;
     }
@@ -193,7 +199,7 @@ export const ExclusionListManager: React.FC = () => {
     }], {
       onSuccess: () => {
         setIsAddManualOpen(false);
-        setManualEntry({ ownerName: '', email: '', address: '', city: '', state: '', notes: '' });
+        setManualEntry({ ownerName: '', email: '', phone: '', address: '', city: '', state: '', notes: '' });
       },
     });
   };
@@ -235,7 +241,7 @@ export const ExclusionListManager: React.FC = () => {
             </div>
             <div className="h-10 w-px bg-border" />
             <div className="text-sm text-muted-foreground">
-              Imports will automatically skip properties that match by <span className="font-medium text-foreground">owner name</span>, <span className="font-medium text-foreground">email</span>, or <span className="font-medium text-foreground">site address</span>.
+              Imports will automatically skip properties that match by <span className="font-medium text-foreground">owner name</span>, <span className="font-medium text-foreground">email</span>, <span className="font-medium text-foreground">phone</span>, or <span className="font-medium text-foreground">site address</span>.
             </div>
           </div>
         </CardContent>
@@ -284,6 +290,7 @@ export const ExclusionListManager: React.FC = () => {
                 <TableRow>
                   <TableHead>Owner Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
@@ -294,6 +301,7 @@ export const ExclusionListManager: React.FC = () => {
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">{entry.ownerName || '-'}</TableCell>
                     <TableCell>{entry.email || '-'}</TableCell>
+                    <TableCell>{entry.phone || '-'}</TableCell>
                     <TableCell>
                       {entry.address ? (
                         <span>
@@ -454,6 +462,15 @@ export const ExclusionListManager: React.FC = () => {
                 value={manualEntry.email}
                 onChange={(e) => setManualEntry(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="john@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <Input
+                type="tel"
+                value={manualEntry.phone}
+                onChange={(e) => setManualEntry(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="(555) 123-4567"
               />
             </div>
             <div className="space-y-2">

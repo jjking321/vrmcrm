@@ -191,6 +191,7 @@ export interface ExclusionEntry {
   companyId: string;
   ownerName?: string;
   email?: string;
+  phone?: string;
   address?: string;
   city?: string;
   state?: string;

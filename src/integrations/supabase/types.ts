@@ -98,6 +98,7 @@ export type Database = {
           normalized_address: string | null
           notes: string | null
           owner_name: string | null
+          phone: string | null
           source: string
           state: string | null
         }
@@ -112,6 +113,7 @@ export type Database = {
           normalized_address?: string | null
           notes?: string | null
           owner_name?: string | null
+          phone?: string | null
           source?: string
           state?: string | null
         }
@@ -126,6 +128,7 @@ export type Database = {
           normalized_address?: string | null
           notes?: string | null
           owner_name?: string | null
+          phone?: string | null
           source?: string
           state?: string | null
         }

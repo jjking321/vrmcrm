@@ -1,13 +1,26 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Property, FilterRule, SortConfig } from '@/types';
 
-export const usePropertyFiltering = (allProperties: Property[]) => {
+export const usePropertyFiltering = (
+  allProperties: Property[], 
+  searchResults?: Property[] | null, 
+  debouncedSearchTerm?: string
+) => {
   // State
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
   const [matchType, setMatchType] = useState<'and' | 'or'>('and');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'address', direction: 'asc' });
   const [deduplicateByOwner, setDeduplicateByOwner] = useState(false);
+
+  // Determine which properties to use as base
+  // When searching with 2+ chars and have results, use search results from DB
+  // Otherwise use loaded properties
+  const baseProperties = useMemo(() => {
+    if (debouncedSearchTerm && debouncedSearchTerm.length >= 2 && searchResults) {
+      return searchResults;
+    }
+    return allProperties;
+  }, [debouncedSearchTerm, searchResults, allProperties]);
 
   // Apply filter rules to a property
   const applyFilterRules = useCallback((property: Property, rules: FilterRule[], match: 'and' | 'or'): boolean => {
@@ -77,18 +90,9 @@ export const usePropertyFiltering = (allProperties: Property[]) => {
 
   // Filtered properties
   const filteredProperties = useMemo(() => {
-    let result = allProperties;
+    let result = baseProperties;
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(p =>
-        p.address.toLowerCase().includes(term) ||
-        p.city.toLowerCase().includes(term) ||
-        p.owner.name.toLowerCase().includes(term) ||
-        p.tags.some(t => t.toLowerCase().includes(term))
-      );
-    }
-
+    // Filter rules only (no client-side search - that's handled by server)
     result = result.filter(p => applyFilterRules(p, filterRules, matchType));
 
     if (deduplicateByOwner) {
@@ -101,7 +105,7 @@ export const usePropertyFiltering = (allProperties: Property[]) => {
     }
 
     return result;
-  }, [allProperties, searchTerm, filterRules, matchType, deduplicateByOwner, applyFilterRules]);
+  }, [baseProperties, filterRules, matchType, deduplicateByOwner, applyFilterRules]);
 
   // Sorted properties
   const sortedProperties = useMemo(() => {
@@ -137,8 +141,6 @@ export const usePropertyFiltering = (allProperties: Property[]) => {
 
   return {
     // State & setters
-    searchTerm,
-    setSearchTerm,
     filterRules,
     setFilterRules,
     matchType,
@@ -150,5 +152,6 @@ export const usePropertyFiltering = (allProperties: Property[]) => {
     // Computed
     filteredProperties,
     sortedProperties,
+    isServerSearch: debouncedSearchTerm ? debouncedSearchTerm.length >= 2 : false,
   };
 };

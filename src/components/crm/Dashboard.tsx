@@ -2,9 +2,10 @@ import React from 'react';
 import { Property, PipelineStage, Activity } from '@/types';
 import { 
   DollarSign, TrendingUp, Users, Building, 
-  BarChart3, Phone, Mail, FileText, Calendar
+  BarChart3, Phone, Mail, FileText, Calendar, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDashboardStats } from '@/hooks/useDashboardStats';
 
 interface DashboardProps {
   properties: Property[];
@@ -21,17 +22,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectProperty,
   onViewChange,
 }) => {
-  // Aggregate stats
-  const totalRevenue = properties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
-  const uniqueOwners = new Set(properties.map(p => p.owner.name)).size;
+  // Fetch accurate stats from database
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
 
-  // Pipeline breakdown
-  const pipelineData = stages.map(stage => ({
-    ...stage,
-    count: properties.filter(p => p.stageId === stage.id).length,
-    revenue: properties.filter(p => p.stageId === stage.id)
-      .reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0),
-  }));
+  // Use database stats, fallback to prop-based calculation
+  const totalRevenue = stats?.totalRevenue ?? properties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
+  const uniqueOwners = stats?.uniqueOwners ?? new Set(properties.map(p => p.owner.name)).size;
+  const totalProperties = stats?.totalProperties ?? totalPropertyCount ?? properties.length;
+
+  // Pipeline breakdown - use database stats if available
+  const pipelineData = stats?.pipelineStats?.length 
+    ? stats.pipelineStats 
+    : stages.map(stage => ({
+        ...stage,
+        count: properties.filter(p => p.stageId === stage.id).length,
+        revenue: properties.filter(p => p.stageId === stage.id)
+          .reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0),
+      }));
 
   // High value properties
   const highValueProperties = [...properties]
@@ -75,7 +82,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Properties</p>
-              <p className="text-2xl font-bold text-foreground">{totalPropertyCount ?? properties.length}</p>
+              <p className="text-2xl font-bold text-foreground">{totalProperties.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -99,7 +106,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Unique Owners</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueOwners}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {statsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : uniqueOwners.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>

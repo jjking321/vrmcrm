@@ -400,36 +400,54 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                 const propLitigator = isLitigator(property.owner);
                 const propDNC = hasDoNotCall(property.owner);
                 
-                return (
-                  <div
-                    key={property.id}
-                    onClick={() => onSelectProperty(property.id)}
-                    className="p-4 hover:bg-muted/30 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
-                        <PropertyImage src={property.image} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-brand flex-shrink-0" />
-                          <p className="font-medium text-foreground truncate">{property.address}</p>
-                          {propLitigator && <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
-                          {propDNC && <PhoneOff className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
+                  return (
+                    <div
+                      key={property.id}
+                      onClick={() => onSelectProperty(property.id)}
+                      className="p-4 hover:bg-muted/30 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+                          <PropertyImage src={property.image} className="w-full h-full object-cover" />
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {property.city}, {property.state} {property.zip}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        {stage && <Badge label={stage.name} color={stage.color} />}
-                        <span className="text-sm text-emerald-600 font-medium">
-                          ${(property.marketData.projectedRevenue || 0).toLocaleString()}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-brand flex-shrink-0" />
+                            <p className="font-medium text-foreground truncate">{property.address}</p>
+                            {propLitigator && <AlertTriangle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />}
+                            {propDNC && <PhoneOff className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {property.city}, {property.state} {property.zip}
+                          </p>
+                          {/* Tags */}
+                          {property.tags.filter(t => !t.startsWith('list-')).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {property.tags.filter(t => !t.startsWith('list-')).slice(0, 3).map(tag => (
+                                <span
+                                  key={tag}
+                                  className="px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                              {property.tags.filter(t => !t.startsWith('list-')).length > 3 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{property.tags.filter(t => !t.startsWith('list-')).length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          {stage && <Badge label={stage.name} color={stage.color} />}
+                          <span className="text-sm text-emerald-600 font-medium">
+                            ${(property.marketData.projectedRevenue || 0).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
+                  );
               })}
             </div>
           </div>

@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useExclusionList, useExclusionCount, useAddExclusions, useDeleteExclusion, useClearExclusionList } from '@/hooks/useExclusionList';
-import { ExclusionEntry } from '@/types';
+import { useProperties } from '@/hooks/useProperties';
+import { findMatchingProperties } from '@/hooks/useExclusionMatches';
+import { ExclusionEntry, Property } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  Upload, Trash2, Search, AlertTriangle, Ban, Plus, X, FileSpreadsheet
+  Upload, Trash2, Search, AlertTriangle, Ban, Plus, X, FileSpreadsheet, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -46,6 +48,7 @@ const EXCLUSION_FIELDS = [
 export const ExclusionListManager: React.FC = () => {
   const { data: exclusions = [], isLoading } = useExclusionList();
   const { data: totalCount = 0 } = useExclusionCount();
+  const { data: properties = [] } = useProperties();
   const addExclusionsMutation = useAddExclusions();
   const deleteExclusionMutation = useDeleteExclusion();
   const clearListMutation = useClearExclusionList();
@@ -54,6 +57,8 @@ export const ExclusionListManager: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isAddManualOpen, setIsAddManualOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [viewMatchesEntry, setViewMatchesEntry] = useState<ExclusionEntry | null>(null);
+  const [matchingProperties, setMatchingProperties] = useState<Property[]>([]);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -170,7 +175,22 @@ export const ExclusionListManager: React.FC = () => {
     }
 
     addExclusionsMutation.mutate(entries, {
-      onSuccess: () => {
+      onSuccess: (count) => {
+        // Check how many existing properties match
+        const newExclusion: ExclusionEntry = entries[0] as any;
+        const matches = findMatchingProperties(properties, newExclusion as ExclusionEntry);
+        if (matches.length > 0) {
+          toast.info(`${matches.length} existing properties match this exclusion`, {
+            description: 'These properties will show an "Excluded" badge in your list.',
+            action: {
+              label: 'View Matches',
+              onClick: () => {
+                setMatchingProperties(matches);
+                setViewMatchesEntry(newExclusion as ExclusionEntry);
+              },
+            },
+          });
+        }
         setIsUploadOpen(false);
         resetUpload();
       },
@@ -193,15 +213,38 @@ export const ExclusionListManager: React.FC = () => {
       return;
     }
 
-    addExclusionsMutation.mutate([{
+    const newEntry = {
       ...manualEntry,
-      source: 'manual',
-    }], {
+      source: 'manual' as const,
+    };
+
+    addExclusionsMutation.mutate([newEntry], {
       onSuccess: () => {
+        // Check how many existing properties match
+        const matches = findMatchingProperties(properties, newEntry as any);
+        if (matches.length > 0) {
+          toast.info(`${matches.length} existing properties match this exclusion`, {
+            description: 'These properties will show an "Excluded" badge in your list.',
+            action: {
+              label: 'View Matches',
+              onClick: () => {
+                setMatchingProperties(matches);
+                setViewMatchesEntry(newEntry as any);
+              },
+            },
+          });
+        }
         setIsAddManualOpen(false);
         setManualEntry({ ownerName: '', email: '', phone: '', address: '', city: '', state: '', notes: '' });
       },
     });
+  };
+
+  // View matches for an exclusion entry
+  const handleViewMatches = (entry: ExclusionEntry) => {
+    const matches = findMatchingProperties(properties, entry);
+    setMatchingProperties(matches);
+    setViewMatchesEntry(entry);
   };
 
   return (
@@ -293,46 +336,65 @@ export const ExclusionListManager: React.FC = () => {
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Source</TableHead>
+                  <TableHead>Matches</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredExclusions.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.ownerName || '-'}</TableCell>
-                    <TableCell>{entry.email || '-'}</TableCell>
-                    <TableCell>{entry.phone || '-'}</TableCell>
-                    <TableCell>
-                      {entry.address ? (
-                        <span>
-                          {entry.address}
-                          {entry.city && `, ${entry.city}`}
-                          {entry.state && ` ${entry.state}`}
+                {filteredExclusions.map((entry) => {
+                  const matchCount = findMatchingProperties(properties, entry).length;
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell className="font-medium">{entry.ownerName || '-'}</TableCell>
+                      <TableCell>{entry.email || '-'}</TableCell>
+                      <TableCell>{entry.phone || '-'}</TableCell>
+                      <TableCell>
+                        {entry.address ? (
+                          <span>
+                            {entry.address}
+                            {entry.city && `, ${entry.city}`}
+                            {entry.state && ` ${entry.state}`}
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn(
+                          "text-xs px-2 py-0.5 rounded-full",
+                          entry.source === 'import' 
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        )}>
+                          {entry.source}
                         </span>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <span className={cn(
-                        "text-xs px-2 py-0.5 rounded-full",
-                        entry.source === 'import' 
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                      )}>
-                        {entry.source}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteExclusionMutation.mutate(entry.id)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {matchCount > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-amber-600 hover:text-amber-700"
+                            onClick={() => handleViewMatches(entry)}
+                          >
+                            <Eye className="w-3 h-3 mr-1" />
+                            {matchCount} match{matchCount !== 1 ? 'es' : ''}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">0 matches</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteExclusionMutation.mutate(entry.id)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -535,6 +597,47 @@ export const ExclusionListManager: React.FC = () => {
               disabled={clearListMutation.isPending}
             >
               {clearListMutation.isPending ? 'Clearing...' : 'Clear All'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Matches Dialog */}
+      <Dialog open={!!viewMatchesEntry} onOpenChange={(open) => !open && setViewMatchesEntry(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Matching Properties</DialogTitle>
+            <DialogDescription>
+              {matchingProperties.length} existing properties match this exclusion entry
+              {viewMatchesEntry?.ownerName && ` for "${viewMatchesEntry.ownerName}"`}
+              {viewMatchesEntry?.address && ` at "${viewMatchesEntry.address}"`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="max-h-[400px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Address</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>City</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {matchingProperties.map((property) => (
+                  <TableRow key={property.id}>
+                    <TableCell className="font-medium">{property.address}</TableCell>
+                    <TableCell>{property.owner.name || '-'}</TableCell>
+                    <TableCell>{property.city}, {property.state}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewMatchesEntry(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

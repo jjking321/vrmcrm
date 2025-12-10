@@ -92,7 +92,7 @@ const toProperty = (
   lotSize: dbProp.lot_size || undefined,
   propertyType: dbProp.property_type || undefined,
   image: dbProp.image || '',
-  stageId: dbProp.stage_id || 'lead-list',
+  stageId: dbProp.stage_id || undefined,
   tags: dbProp.tags || [],
   airbnbUrl: dbProp.airbnb_url || undefined,
   zillowUrl: dbProp.zillow_url || undefined,

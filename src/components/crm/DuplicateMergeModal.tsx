@@ -14,7 +14,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DuplicateProperty, DuplicateGroup, useMergeDuplicates } from '@/hooks/useDuplicateDetection';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Check, Calendar } from 'lucide-react';
+import { Check, Calendar, Phone, Mail, Users, PhoneOff } from 'lucide-react';
+import { PhoneContact, EmailContact, OwnerContact } from '@/types';
 
 interface DuplicateMergeModalProps {
   open: boolean;
@@ -29,6 +30,7 @@ interface MergeField {
   getValue: (prop: DuplicateProperty) => any;
   display: (value: any) => string;
   isOwnerField?: boolean;
+  isArrayField?: boolean;
 }
 
 const MERGE_FIELDS: MergeField[] = [
@@ -47,10 +49,64 @@ const MERGE_FIELDS: MergeField[] = [
   { key: 'latitude', label: 'Coordinates', getValue: p => p.latitude && p.longitude ? { lat: p.latitude, lng: p.longitude } : null, display: v => v ? 'Set' : '-' },
   // Owner fields
   { key: 'ownerName', label: 'Owner Name', getValue: p => p.owner?.name, display: v => v || '-', isOwnerField: true },
-  { key: 'ownerEmail', label: 'Owner Email', getValue: p => p.owner?.email, display: v => v || '-', isOwnerField: true },
-  { key: 'ownerPhone', label: 'Owner Phone', getValue: p => p.owner?.phone, display: v => v || '-', isOwnerField: true },
   { key: 'mailingAddress', label: 'Mailing Address', getValue: p => p.owner?.mailingAddress, display: v => v || '-', isOwnerField: true },
+  // Array fields - displayed separately
+  { key: 'phones', label: 'Phone Numbers', getValue: p => p.owner?.phones || [], display: v => v?.length > 0 ? `${v.length} phone(s)` : '-', isOwnerField: true, isArrayField: true },
+  { key: 'emails', label: 'Email Addresses', getValue: p => p.owner?.emails || [], display: v => v?.length > 0 ? `${v.length} email(s)` : '-', isOwnerField: true, isArrayField: true },
+  { key: 'ownerContacts', label: 'Owner Contacts', getValue: p => p.owner?.owners || [], display: v => v?.length > 0 ? `${v.length} owner(s)` : '-', isOwnerField: true, isArrayField: true },
 ];
+
+// Helper to render phone list
+const PhoneList: React.FC<{ phones: PhoneContact[] }> = ({ phones }) => {
+  if (!phones || phones.length === 0) return <span className="text-muted-foreground/50">-</span>;
+  return (
+    <div className="space-y-1">
+      {phones.map((p, i) => (
+        <div key={i} className="flex items-center gap-1 text-xs">
+          {p.doNotCall ? (
+            <PhoneOff className="w-3 h-3 text-amber-500" />
+          ) : (
+            <Phone className="w-3 h-3 text-muted-foreground" />
+          )}
+          <span className={cn(p.doNotCall && "text-amber-600")}>{p.number}</span>
+          {p.type && <Badge variant="outline" className="text-[10px] px-1 py-0">{p.type}</Badge>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Helper to render email list
+const EmailList: React.FC<{ emails: EmailContact[] }> = ({ emails }) => {
+  if (!emails || emails.length === 0) return <span className="text-muted-foreground/50">-</span>;
+  return (
+    <div className="space-y-1">
+      {emails.map((e, i) => (
+        <div key={i} className="flex items-center gap-1 text-xs">
+          <Mail className="w-3 h-3 text-muted-foreground" />
+          <span className="truncate max-w-[120px]">{e.address}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Helper to render owner contacts list
+const OwnerContactsList: React.FC<{ owners: OwnerContact[] }> = ({ owners }) => {
+  if (!owners || owners.length === 0) return <span className="text-muted-foreground/50">-</span>;
+  return (
+    <div className="space-y-1">
+      {owners.map((o, i) => (
+        <div key={i} className="flex items-center gap-1 text-xs">
+          <Users className="w-3 h-3 text-muted-foreground" />
+          <span className="truncate max-w-[120px]">
+            {o.firstName} {o.lastName}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
   open,
@@ -60,6 +116,7 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
 }) => {
   const [primaryId, setPrimaryId] = useState<string>('');
   const [fieldSelections, setFieldSelections] = useState<Record<string, string>>({});
+  const [contactMergeMode, setContactMergeMode] = useState<'stack' | 'override'>('stack');
   const mergeMutation = useMergeDuplicates();
 
   // Reset state when group changes
@@ -70,6 +127,7 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       )[0];
       setPrimaryId(oldest.id);
+      setContactMergeMode('stack');
       
       // Initialize field selections with primary's values
       const selections: Record<string, string> = {};
@@ -82,12 +140,41 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
 
   const properties = group?.properties || [];
 
+  // Calculate combined contact counts for preview
+  const combinedCounts = useMemo(() => {
+    if (!group) return { phones: 0, emails: 0, owners: 0 };
+    
+    const allPhones = new Set<string>();
+    const allEmails = new Set<string>();
+    const allOwners = new Set<string>();
+    
+    group.properties.forEach(p => {
+      (p.owner?.phones || []).forEach((ph: PhoneContact) => {
+        const normalized = ph.number.replace(/\D/g, '').slice(-10);
+        if (normalized) allPhones.add(normalized);
+      });
+      (p.owner?.emails || []).forEach((em: EmailContact) => {
+        if (em.address) allEmails.add(em.address.toLowerCase());
+      });
+      (p.owner?.owners || []).forEach((ow: OwnerContact) => {
+        const key = `${ow.firstName || ''} ${ow.lastName || ''}`.trim().toLowerCase();
+        if (key) allOwners.add(key);
+      });
+    });
+    
+    return {
+      phones: allPhones.size,
+      emails: allEmails.size,
+      owners: allOwners.size,
+    };
+  }, [group]);
+
   // Determine which fields have different values across duplicates
   const fieldsWithDifferences = useMemo(() => {
     if (!group) return new Set<string>();
     const diffs = new Set<string>();
     
-    MERGE_FIELDS.forEach(field => {
+    MERGE_FIELDS.filter(f => !f.isArrayField).forEach(field => {
       const values = group.properties.map(p => {
         const val = field.getValue(p);
         return JSON.stringify(val);
@@ -110,15 +197,13 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
     const mergedData: Partial<DuplicateProperty> = {};
     const mergedOwnerData: Partial<DuplicateProperty['owner']> = {};
 
-    MERGE_FIELDS.forEach(field => {
+    MERGE_FIELDS.filter(f => !f.isArrayField).forEach(field => {
       const selectedPropId = fieldSelections[field.key];
       const selectedProp = properties.find(p => p.id === selectedPropId);
       if (selectedProp) {
         const value = field.getValue(selectedProp);
         if (field.isOwnerField) {
           if (field.key === 'ownerName') mergedOwnerData.name = value;
-          if (field.key === 'ownerEmail') mergedOwnerData.email = value;
-          if (field.key === 'ownerPhone') mergedOwnerData.phone = value;
           if (field.key === 'mailingAddress') mergedOwnerData.mailingAddress = value;
         } else if (field.key === 'adr' || field.key === 'projectedRevenue' || field.key === 'propertyValue') {
           // Market data fields need to be merged into marketData object
@@ -138,6 +223,16 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
       }
     });
 
+    // For override mode, set contact data from primary record
+    if (contactMergeMode === 'override') {
+      const primaryProp = properties.find(p => p.id === primaryId);
+      if (primaryProp?.owner) {
+        mergedOwnerData.phones = primaryProp.owner.phones;
+        mergedOwnerData.emails = primaryProp.owner.emails;
+        mergedOwnerData.owners = primaryProp.owner.owners;
+      }
+    }
+
     // Merge all tags
     const allTags = new Set<string>();
     properties.forEach(p => p.tags.forEach(t => allTags.add(t)));
@@ -148,6 +243,8 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
       deletePropertyIds: deleteIds,
       mergedData,
       mergedOwnerData,
+      contactMergeMode,
+      allProperties: properties,
     });
 
     onMergeComplete();
@@ -156,6 +253,9 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
 
   if (!group) return null;
 
+  const nonArrayFields = MERGE_FIELDS.filter(f => !f.isArrayField);
+  const arrayFields = MERGE_FIELDS.filter(f => f.isArrayField);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
@@ -163,9 +263,9 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
           <DialogTitle>Merge Duplicates: {group.displayAddress}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden space-y-4">
           {/* Primary Record Selection */}
-          <div className="mb-4">
+          <div>
             <Label className="text-sm font-medium mb-2 block">Select primary record (will be kept):</Label>
             <RadioGroup value={primaryId} onValueChange={setPrimaryId} className="flex flex-wrap gap-3">
               {properties.map((prop, idx) => (
@@ -183,10 +283,49 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
             </RadioGroup>
           </div>
 
+          {/* Contact Merge Mode Selection */}
+          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+            <Label className="text-sm font-medium mb-2 block">
+              How to handle phones, emails, and owner contacts?
+            </Label>
+            <RadioGroup 
+              value={contactMergeMode} 
+              onValueChange={(v) => setContactMergeMode(v as 'stack' | 'override')}
+              className="space-y-2"
+            >
+              <div className="flex items-start space-x-2">
+                <RadioGroupItem value="stack" id="stack" className="mt-1" />
+                <Label htmlFor="stack" className="cursor-pointer">
+                  <span className="font-medium">Combine all contacts</span>
+                  <span className="text-xs text-muted-foreground block">
+                    Merge phones, emails, and owners from all records (recommended)
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start space-x-2">
+                <RadioGroupItem value="override" id="override" className="mt-1" />
+                <Label htmlFor="override" className="cursor-pointer">
+                  <span className="font-medium">Use primary only</span>
+                  <span className="text-xs text-muted-foreground block">
+                    Keep only the primary record's contacts
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
+            {contactMergeMode === 'stack' && (
+              <div className="mt-2 text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                <span>Combined result:</span>
+                <Badge variant="secondary" className="text-xs">{combinedCounts.phones} phones</Badge>
+                <Badge variant="secondary" className="text-xs">{combinedCounts.emails} emails</Badge>
+                <Badge variant="secondary" className="text-xs">{combinedCounts.owners} owners</Badge>
+              </div>
+            )}
+          </div>
+
           {/* Field Comparison Table */}
-          <ScrollArea className="h-[400px] border rounded-md">
+          <ScrollArea className="h-[300px] border rounded-md">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-card border-b">
+              <thead className="sticky top-0 bg-card border-b z-10">
                 <tr>
                   <th className="text-left p-2 font-medium w-32">Field</th>
                   {properties.map((prop, idx) => (
@@ -202,7 +341,7 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {MERGE_FIELDS.map(field => {
+                {nonArrayFields.map(field => {
                   const hasDiff = fieldsWithDifferences.has(field.key);
                   return (
                     <tr key={field.key} className={cn("border-b", hasDiff && "bg-amber-500/5")}>
@@ -242,6 +381,29 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
                     </tr>
                   );
                 })}
+
+                {/* Array fields section */}
+                <tr className="bg-muted/30">
+                  <td colSpan={properties.length + 1} className="p-2 font-medium text-xs text-muted-foreground uppercase tracking-wide">
+                    Contact Data {contactMergeMode === 'stack' ? '(will be combined)' : '(from primary only)'}
+                  </td>
+                </tr>
+                {arrayFields.map(field => (
+                  <tr key={field.key} className="border-b">
+                    <td className="p-2 font-medium text-muted-foreground">{field.label}</td>
+                    {properties.map(prop => {
+                      const value = field.getValue(prop);
+                      return (
+                        <td key={prop.id} className="p-2">
+                          {field.key === 'phones' && <PhoneList phones={value} />}
+                          {field.key === 'emails' && <EmailList emails={value} />}
+                          {field.key === 'ownerContacts' && <OwnerContactsList owners={value} />}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+
                 {/* Tags row */}
                 <tr className="border-b">
                   <td className="p-2 font-medium text-muted-foreground">Tags</td>
@@ -262,7 +424,7 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
             </table>
           </ScrollArea>
 
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground">
             <span className="text-amber-500">*</span> Fields with different values. Click a cell to select that value for the merged record. Tags from all records will be combined.
           </p>
         </div>

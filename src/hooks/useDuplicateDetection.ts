@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Property } from '@/types';
+import { PhoneContact, EmailContact, OwnerContact } from '@/types';
+import { dedupePhones, dedupeEmails, mergeOwnerContacts } from '@/lib/ownerUtils';
 
 interface DbPropertyWithOwner {
   id: string;
@@ -35,6 +36,7 @@ interface DbPropertyWithOwner {
     notes: string | null;
     owners: any;
     phones: any;
+    emails: any;
   } | null;
 }
 
@@ -68,8 +70,9 @@ export interface DuplicateProperty {
     mailingState: string | null;
     mailingZip: string | null;
     notes: string | null;
-    owners: any;
-    phones: any;
+    owners: OwnerContact[] | null;
+    phones: PhoneContact[] | null;
+    emails: EmailContact[] | null;
   } | null;
 }
 
@@ -144,7 +147,8 @@ export function useDuplicates() {
             mailing_zip,
             notes,
             owners,
-            phones
+            phones,
+            emails
           )
         `)
         .order('created_at', { ascending: true });
@@ -188,8 +192,9 @@ export function useDuplicates() {
             mailingState: ownerData.mailing_state,
             mailingZip: ownerData.mailing_zip,
             notes: ownerData.notes,
-            owners: ownerData.owners,
-            phones: ownerData.phones,
+            owners: (ownerData.owners || []) as unknown as OwnerContact[] | null,
+            phones: (ownerData.phones || []) as unknown as PhoneContact[] | null,
+            emails: (ownerData.emails || []) as unknown as EmailContact[] | null,
           } : null,
         };
 
@@ -226,13 +231,15 @@ interface MergeParams {
   deletePropertyIds: string[];
   mergedData: Partial<DuplicateProperty>;
   mergedOwnerData: Partial<DuplicateProperty['owner']>;
+  contactMergeMode: 'stack' | 'override';
+  allProperties: DuplicateProperty[];
 }
 
 export function useMergeDuplicates() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ keepPropertyId, deletePropertyIds, mergedData, mergedOwnerData }: MergeParams) => {
+    mutationFn: async ({ keepPropertyId, deletePropertyIds, mergedData, mergedOwnerData, contactMergeMode, allProperties }: MergeParams) => {
       // 1. Move activities from deleted properties to the kept property
       for (const deleteId of deletePropertyIds) {
         await supabase
@@ -266,25 +273,38 @@ export function useMergeDuplicates() {
       }
 
       // 3. Update the kept property's owner with merged data
-      if (mergedOwnerData && Object.keys(mergedOwnerData).length > 0) {
-        const ownerUpdate: any = {};
-        if (mergedOwnerData.name !== undefined) ownerUpdate.name = mergedOwnerData.name;
-        if (mergedOwnerData.email !== undefined) ownerUpdate.email = mergedOwnerData.email;
-        if (mergedOwnerData.phone !== undefined) ownerUpdate.phone = mergedOwnerData.phone;
-        if (mergedOwnerData.mailingAddress !== undefined) ownerUpdate.mailing_address = mergedOwnerData.mailingAddress;
-        if (mergedOwnerData.mailingCity !== undefined) ownerUpdate.mailing_city = mergedOwnerData.mailingCity;
-        if (mergedOwnerData.mailingState !== undefined) ownerUpdate.mailing_state = mergedOwnerData.mailingState;
-        if (mergedOwnerData.mailingZip !== undefined) ownerUpdate.mailing_zip = mergedOwnerData.mailingZip;
-        if (mergedOwnerData.notes !== undefined) ownerUpdate.notes = mergedOwnerData.notes;
-        if (mergedOwnerData.owners !== undefined) ownerUpdate.owners = mergedOwnerData.owners;
-        if (mergedOwnerData.phones !== undefined) ownerUpdate.phones = mergedOwnerData.phones;
+      const ownerUpdate: any = {};
+      if (mergedOwnerData?.name !== undefined) ownerUpdate.name = mergedOwnerData.name;
+      if (mergedOwnerData?.email !== undefined) ownerUpdate.email = mergedOwnerData.email;
+      if (mergedOwnerData?.phone !== undefined) ownerUpdate.phone = mergedOwnerData.phone;
+      if (mergedOwnerData?.mailingAddress !== undefined) ownerUpdate.mailing_address = mergedOwnerData.mailingAddress;
+      if (mergedOwnerData?.mailingCity !== undefined) ownerUpdate.mailing_city = mergedOwnerData.mailingCity;
+      if (mergedOwnerData?.mailingState !== undefined) ownerUpdate.mailing_state = mergedOwnerData.mailingState;
+      if (mergedOwnerData?.mailingZip !== undefined) ownerUpdate.mailing_zip = mergedOwnerData.mailingZip;
+      if (mergedOwnerData?.notes !== undefined) ownerUpdate.notes = mergedOwnerData.notes;
 
-        if (Object.keys(ownerUpdate).length > 0) {
-          await supabase
-            .from('owners')
-            .update(ownerUpdate)
-            .eq('property_id', keepPropertyId);
-        }
+      // Handle contacts based on merge mode
+      if (contactMergeMode === 'stack') {
+        // Combine all phones, emails, and owners from all properties
+        const allPhones = allProperties.flatMap(p => p.owner?.phones || []);
+        const allEmails = allProperties.flatMap(p => p.owner?.emails || []);
+        const allOwners = allProperties.flatMap(p => p.owner?.owners || []);
+        
+        ownerUpdate.phones = dedupePhones(allPhones);
+        ownerUpdate.emails = dedupeEmails(allEmails);
+        ownerUpdate.owners = mergeOwnerContacts([], allOwners);
+      } else {
+        // Override mode - use selected values from primary record
+        if (mergedOwnerData?.phones !== undefined) ownerUpdate.phones = mergedOwnerData.phones;
+        if (mergedOwnerData?.emails !== undefined) ownerUpdate.emails = mergedOwnerData.emails;
+        if (mergedOwnerData?.owners !== undefined) ownerUpdate.owners = mergedOwnerData.owners;
+      }
+
+      if (Object.keys(ownerUpdate).length > 0) {
+        await supabase
+          .from('owners')
+          .update(ownerUpdate)
+          .eq('property_id', keepPropertyId);
       }
 
       // 4. Delete owners of the duplicate properties
@@ -342,6 +362,11 @@ export function useAutoMergeDuplicates() {
           prop.tags.forEach(t => allTags.add(t));
         }
 
+        // Stack all contacts from all properties
+        const allPhones = group.properties.flatMap(p => p.owner?.phones || []);
+        const allEmails = group.properties.flatMap(p => p.owner?.emails || []);
+        const allOwners = group.properties.flatMap(p => p.owner?.owners || []);
+
         // Move activities
         for (const deleteId of deleteIds) {
           await supabase
@@ -355,6 +380,16 @@ export function useAutoMergeDuplicates() {
           .from('properties')
           .update({ tags: Array.from(allTags) })
           .eq('id', keep.id);
+
+        // Update kept owner with stacked contacts
+        await supabase
+          .from('owners')
+          .update({
+            phones: dedupePhones(allPhones) as unknown as any,
+            emails: dedupeEmails(allEmails) as unknown as any,
+            owners: mergeOwnerContacts([], allOwners) as unknown as any,
+          })
+          .eq('property_id', keep.id);
 
         // Delete owners
         for (const deleteId of deleteIds) {

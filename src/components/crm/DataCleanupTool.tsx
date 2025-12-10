@@ -23,11 +23,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useMalformedAddresses, useFixAddresses, MalformedProperty } from '@/hooks/useAddressFixer';
+import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 
 interface DataCleanupToolProps {
   onSendToImport?: (data: any[], headers: string[]) => void;
@@ -41,7 +42,7 @@ type TransformAction = {
 };
 
 export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport }) => {
-  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses'>('csv');
+  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses'>('csv');
   const [step, setStep] = useState<'upload' | 'transform' | 'preview'>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -61,6 +62,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   // Address fixer hooks
   const { data: malformedAddresses = [], isLoading: isLoadingMalformed, refetch: refetchMalformed } = useMalformedAddresses();
   const fixAddressesMutation = useFixAddresses();
+
+  // Address verification hooks
+  const { data: verificationData, isLoading: isLoadingVerification, refetch: refetchVerification } = useUnverifiedAddresses();
+  const bulkVerifyMutation = useBulkVerifyAddresses();
 
   // Suggestions for auto-detection
   const suggestions = useMemo(() => {
@@ -455,6 +460,162 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     </div>
   );
 
+  // Render Address Verification Tab
+  const renderAddressVerification = () => {
+    const unverifiedCount = verificationData?.unverified.length || 0;
+    const verifiedCount = verificationData?.verified || 0;
+    const totalCount = verificationData?.total || 0;
+    const verificationPercent = totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0;
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Verify Addresses</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Verify and geocode addresses using Geocodio for accurate location data
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetchVerification()}>
+            <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+          </Button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{verifiedCount}</p>
+                  <p className="text-xs text-muted-foreground">Verified</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Circle className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{unverifiedCount}</p>
+                  <p className="text-xs text-muted-foreground">Unverified</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <MapPin className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{verificationPercent}%</p>
+                  <p className="text-xs text-muted-foreground">Coverage</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {isLoadingVerification ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Scanning for unverified addresses...
+            </CardContent>
+          </Card>
+        ) : unverifiedCount === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-4" />
+              <p className="text-lg font-medium text-foreground">All addresses are verified!</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Every property has geocoordinates for mapping and location features.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="mb-4 border-primary/30 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {unverifiedCount} addresses need verification
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        These properties don't have geocoordinates yet
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => bulkVerifyMutation.mutate(verificationData?.unverified || [])}
+                    disabled={bulkVerifyMutation.isPending}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                    Verify All {unverifiedCount} Addresses
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-auto max-h-[50vh]">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-card z-10">
+                      <TableRow>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Address</TableHead>
+                        <TableHead>City</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Zip</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {verificationData?.unverified.slice(0, 50).map((prop) => (
+                        <TableRow key={prop.id}>
+                          <TableCell>
+                            <Circle className="w-4 h-4 text-muted-foreground/40" />
+                          </TableCell>
+                          <TableCell className="font-medium text-sm">
+                            {prop.address}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {prop.city}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {prop.state}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {prop.zip}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {unverifiedCount > 50 && (
+                  <div className="p-3 text-center text-sm text-muted-foreground border-t">
+                    Showing first 50 of {unverifiedCount} properties
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Main render with tabs
   return (
     <div>
@@ -463,16 +624,24 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
         Clean CSV data before import or fix existing database records
       </p>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses')} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses')} className="space-y-6">
         <TabsList>
           <TabsTrigger value="csv" className="gap-2">
             <Upload className="w-4 h-4" /> CSV Cleanup
           </TabsTrigger>
           <TabsTrigger value="fix-addresses" className="gap-2">
-            <MapPin className="w-4 h-4" /> Fix Addresses
+            <Wrench className="w-4 h-4" /> Fix Addresses
             {malformedAddresses.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
                 {malformedAddresses.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="verify-addresses" className="gap-2">
+            <CheckCircle2 className="w-4 h-4" /> Verify Addresses
+            {(verificationData?.unverified.length || 0) > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary/20 text-primary rounded">
+                {verificationData?.unverified.length}
               </span>
             )}
           </TabsTrigger>
@@ -480,6 +649,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
 
         <TabsContent value="fix-addresses">
           {renderAddressFixer()}
+        </TabsContent>
+
+        <TabsContent value="verify-addresses">
+          {renderAddressVerification()}
         </TabsContent>
 
         <TabsContent value="csv">

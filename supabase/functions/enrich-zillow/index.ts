@@ -75,39 +75,51 @@ serve(async (req) => {
     console.log("Bathrooms field check - bathrooms:", pd.bathrooms, "baths:", pd.baths, "resoFacts?.bathrooms:", pd.resoFacts?.bathrooms);
     console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "originalPhotos:", pd.originalPhotos?.length, "thumb:", pd.thumb);
     
+    // Helper function to check if URL is a valid property image (not Google Maps)
+    const isValidImageUrl = (url: string | undefined): boolean => {
+      if (!url) return false;
+      return !url.includes('maps.googleapis.com');
+    };
+    
     // Check multiple image sources in order of preference
     let validImage = null;
     let streetViewUrl = null;
     
     // 1. Try originalPhotos array first (actual property photos - highest quality)
     if (pd.originalPhotos && Array.isArray(pd.originalPhotos) && pd.originalPhotos.length > 0) {
-      const firstPhoto = pd.originalPhotos[0];
-      // originalPhotos can have nested structure with mixedSources
-      if (firstPhoto.mixedSources?.jpeg && firstPhoto.mixedSources.jpeg.length > 0) {
-        // Get the largest jpeg (usually last in array)
-        const jpegs = firstPhoto.mixedSources.jpeg;
-        validImage = jpegs[jpegs.length - 1]?.url || jpegs[0]?.url;
-      } else if (firstPhoto.url) {
-        validImage = firstPhoto.url;
+      for (const photo of pd.originalPhotos) {
+        // originalPhotos can have nested structure with mixedSources
+        if (photo.mixedSources?.jpeg && photo.mixedSources.jpeg.length > 0) {
+          const jpegs = photo.mixedSources.jpeg;
+          const jpegUrl = jpegs[jpegs.length - 1]?.url || jpegs[0]?.url;
+          if (isValidImageUrl(jpegUrl)) {
+            validImage = jpegUrl;
+            console.log("Found valid originalPhotos jpeg image:", validImage);
+            break;
+          }
+        } else if (isValidImageUrl(photo.url)) {
+          validImage = photo.url;
+          console.log("Found valid originalPhotos image:", validImage);
+          break;
+        }
       }
-      console.log("Found originalPhotos image:", validImage);
     }
     
     // 2. Try thumb (thumbnail image)
-    if (!validImage && pd.thumb && !pd.thumb.includes('maps.googleapis.com')) {
-      validImage = pd.thumb;
+    if (!validImage && isValidImageUrl(pd.thumb?.url || pd.thumb)) {
+      validImage = pd.thumb?.url || pd.thumb;
       console.log("Using thumb image:", validImage);
     }
     
     // 3. Try imgSrc
-    if (!validImage && pd.imgSrc && !pd.imgSrc.includes('maps.googleapis.com')) {
+    if (!validImage && isValidImageUrl(pd.imgSrc)) {
       validImage = pd.imgSrc;
       console.log("Using imgSrc image:", validImage);
     }
     
     // 4. Try hiResImageLink only if NOT a Google Maps URL
     if (!validImage && pd.hiResImageLink) {
-      if (!pd.hiResImageLink.includes('maps.googleapis.com')) {
+      if (isValidImageUrl(pd.hiResImageLink)) {
         validImage = pd.hiResImageLink;
         console.log("Using hiResImageLink image:", validImage);
       } else {
@@ -119,10 +131,22 @@ serve(async (req) => {
     
     // 5. Check streetViewTileImageUrlMediumAddress as last resort for streetViewUrl
     if (!validImage && !streetViewUrl && pd.streetViewTileImageUrlMediumAddress) {
-      if (!pd.streetViewTileImageUrlMediumAddress.includes('maps.googleapis.com')) {
+      if (isValidImageUrl(pd.streetViewTileImageUrlMediumAddress)) {
         validImage = pd.streetViewTileImageUrlMediumAddress;
       } else {
         streetViewUrl = pd.streetViewTileImageUrlMediumAddress;
+      }
+    }
+    
+    // If still no streetViewUrl, check if any originalPhotos has a Google Maps URL we can use
+    if (!validImage && !streetViewUrl && pd.originalPhotos && Array.isArray(pd.originalPhotos)) {
+      for (const photo of pd.originalPhotos) {
+        const photoUrl = photo.mixedSources?.jpeg?.[0]?.url || photo.url;
+        if (photoUrl && photoUrl.includes('maps.googleapis.com')) {
+          streetViewUrl = photoUrl;
+          console.log("Using originalPhotos Google Maps URL for Street View capture:", streetViewUrl);
+          break;
+        }
       }
     }
     

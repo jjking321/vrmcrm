@@ -257,7 +257,11 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 <MapPin className="w-6 h-6 text-brand" />
                 {property.address}
               </h1>
-              <p className="text-muted-foreground">{property.city}, {property.state} {property.zip}</p>
+              {(property.city || property.state || property.zip) && (
+                <p className="text-muted-foreground">
+                  {[property.city, property.state].filter(Boolean).join(', ')} {property.zip}
+                </p>
+              )}
             </>
           )}
         </div>

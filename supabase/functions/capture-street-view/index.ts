@@ -12,14 +12,6 @@ serve(async (req) => {
   }
 
   try {
-    const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
-    if (!FIRECRAWL_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "FIRECRAWL_API_KEY is not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
@@ -39,61 +31,32 @@ serve(async (req) => {
       );
     }
 
-    console.log("Capturing Street View screenshot for property:", propertyId);
+    console.log("Capturing Street View image for property:", propertyId);
     console.log("Street View URL:", streetViewUrl);
 
-    // Use Firecrawl to screenshot the Street View URL
-    const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: streetViewUrl,
-        formats: ["screenshot"],
-        waitFor: 2000, // Wait for Street View to load
-      }),
-    });
-
-    if (!firecrawlResponse.ok) {
-      const errorText = await firecrawlResponse.text();
-      console.error("Firecrawl API error:", firecrawlResponse.status, errorText);
+    // Directly fetch the Google Maps static image (no need for Firecrawl)
+    const imageResponse = await fetch(streetViewUrl);
+    
+    if (!imageResponse.ok) {
+      console.error("Failed to fetch image:", imageResponse.status);
       return new Response(
-        JSON.stringify({ error: "Failed to capture screenshot" }),
+        JSON.stringify({ error: "Failed to fetch Street View image" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const firecrawlData = await firecrawlResponse.json();
-    console.log("Firecrawl response success:", firecrawlData.success);
-
-    if (!firecrawlData.success || !firecrawlData.data?.screenshot) {
-      console.error("No screenshot in Firecrawl response");
-      return new Response(
-        JSON.stringify({ error: "Screenshot capture failed" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Extract base64 screenshot data
-    const screenshotBase64 = firecrawlData.data.screenshot;
+    // Get the image as bytes directly
+    const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+    const contentType = imageResponse.headers.get("content-type") || "image/png";
+    const extension = contentType.includes("jpeg") ? "jpg" : "png";
     
-    // Remove data URL prefix if present
-    const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
-    
-    // Convert base64 to Uint8Array
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    console.log("Image fetched successfully, size:", bytes.length, "bytes");
 
     // Create Supabase client with service role for storage upload
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Generate unique filename
-    const filename = `${propertyId}-streetview-${Date.now()}.png`;
+    const filename = `${propertyId}-streetview-${Date.now()}.${extension}`;
     
     console.log("Uploading to storage:", filename);
 
@@ -101,7 +64,7 @@ serve(async (req) => {
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("property-images")
       .upload(filename, bytes, {
-        contentType: "image/png",
+        contentType: contentType,
         upsert: true,
       });
 

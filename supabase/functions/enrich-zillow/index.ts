@@ -76,14 +76,25 @@ serve(async (req) => {
     console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "originalPhotos:", pd.originalPhotos?.length, "thumb:", pd.thumb);
     
     // Helper function to check if URL is a valid property image (not Google Maps)
-    const isValidImageUrl = (url: string | undefined): boolean => {
-      if (!url) return false;
-      return !url.includes('maps.googleapis.com');
+    const isGoogleMapsUrl = (url: string | undefined): boolean => {
+      if (!url || typeof url !== 'string') return false;
+      return url.includes('maps.googleapis.com');
+    };
+    
+    // Helper to extract URL from various formats (string, object with url, array of objects)
+    const extractUrl = (source: any): string | null => {
+      if (!source) return null;
+      if (typeof source === 'string') return source;
+      if (Array.isArray(source) && source.length > 0) {
+        return source[0]?.url || null;
+      }
+      if (source.url) return source.url;
+      return null;
     };
     
     // Check multiple image sources in order of preference
-    let validImage = null;
-    let streetViewUrl = null;
+    let validImage: string | null = null;
+    let streetViewUrl: string | null = null;
     
     // 1. Try originalPhotos array first (actual property photos - highest quality)
     if (pd.originalPhotos && Array.isArray(pd.originalPhotos) && pd.originalPhotos.length > 0) {
@@ -92,63 +103,65 @@ serve(async (req) => {
         if (photo.mixedSources?.jpeg && photo.mixedSources.jpeg.length > 0) {
           const jpegs = photo.mixedSources.jpeg;
           const jpegUrl = jpegs[jpegs.length - 1]?.url || jpegs[0]?.url;
-          if (isValidImageUrl(jpegUrl)) {
+          if (jpegUrl && !isGoogleMapsUrl(jpegUrl)) {
             validImage = jpegUrl;
             console.log("Found valid originalPhotos jpeg image:", validImage);
             break;
+          } else if (jpegUrl && isGoogleMapsUrl(jpegUrl) && !streetViewUrl) {
+            streetViewUrl = jpegUrl;
           }
-        } else if (isValidImageUrl(photo.url)) {
-          validImage = photo.url;
-          console.log("Found valid originalPhotos image:", validImage);
-          break;
+        } else if (photo.url) {
+          if (!isGoogleMapsUrl(photo.url)) {
+            validImage = photo.url;
+            console.log("Found valid originalPhotos image:", validImage);
+            break;
+          } else if (!streetViewUrl) {
+            streetViewUrl = photo.url;
+          }
         }
       }
     }
     
-    // 2. Try thumb (thumbnail image)
-    if (!validImage && isValidImageUrl(pd.thumb?.url || pd.thumb)) {
-      validImage = pd.thumb?.url || pd.thumb;
-      console.log("Using thumb image:", validImage);
+    // 2. Try thumb (can be string, object, or array)
+    if (!validImage) {
+      const thumbUrl = extractUrl(pd.thumb);
+      if (thumbUrl && !isGoogleMapsUrl(thumbUrl)) {
+        validImage = thumbUrl;
+        console.log("Using thumb image:", validImage);
+      } else if (thumbUrl && isGoogleMapsUrl(thumbUrl) && !streetViewUrl) {
+        streetViewUrl = thumbUrl;
+        console.log("Thumb is Google Maps, saving for Street View capture");
+      }
     }
     
     // 3. Try imgSrc
-    if (!validImage && isValidImageUrl(pd.imgSrc)) {
-      validImage = pd.imgSrc;
-      console.log("Using imgSrc image:", validImage);
+    if (!validImage && pd.imgSrc) {
+      if (!isGoogleMapsUrl(pd.imgSrc)) {
+        validImage = pd.imgSrc;
+        console.log("Using imgSrc image:", validImage);
+      } else if (!streetViewUrl) {
+        streetViewUrl = pd.imgSrc;
+      }
     }
     
-    // 4. Try hiResImageLink only if NOT a Google Maps URL
+    // 4. Try hiResImageLink
     if (!validImage && pd.hiResImageLink) {
-      if (isValidImageUrl(pd.hiResImageLink)) {
+      if (!isGoogleMapsUrl(pd.hiResImageLink)) {
         validImage = pd.hiResImageLink;
         console.log("Using hiResImageLink image:", validImage);
-      } else {
-        // Save the Street View URL for potential screenshot capture
+      } else if (!streetViewUrl) {
         streetViewUrl = pd.hiResImageLink;
-        console.log("Found Google Street View URL (needs capture):", streetViewUrl);
+        console.log("hiResImageLink is Google Maps, saving for Street View capture:", streetViewUrl);
       }
     }
     
-    // 5. Check streetViewTileImageUrlMediumAddress as last resort for streetViewUrl
-    if (!validImage && !streetViewUrl && pd.streetViewTileImageUrlMediumAddress) {
-      if (isValidImageUrl(pd.streetViewTileImageUrlMediumAddress)) {
-        validImage = pd.streetViewTileImageUrlMediumAddress;
-      } else {
-        streetViewUrl = pd.streetViewTileImageUrlMediumAddress;
-      }
+    // 5. Check streetViewImageUrl field as another source
+    if (!validImage && !streetViewUrl && pd.streetViewImageUrl) {
+      streetViewUrl = pd.streetViewImageUrl;
+      console.log("Using streetViewImageUrl for capture:", streetViewUrl);
     }
     
-    // If still no streetViewUrl, check if any originalPhotos has a Google Maps URL we can use
-    if (!validImage && !streetViewUrl && pd.originalPhotos && Array.isArray(pd.originalPhotos)) {
-      for (const photo of pd.originalPhotos) {
-        const photoUrl = photo.mixedSources?.jpeg?.[0]?.url || photo.url;
-        if (photoUrl && photoUrl.includes('maps.googleapis.com')) {
-          streetViewUrl = photoUrl;
-          console.log("Using originalPhotos Google Maps URL for Street View capture:", streetViewUrl);
-          break;
-        }
-      }
-    }
+    console.log("Final image decision - validImage:", validImage, "streetViewUrl:", streetViewUrl);
     
     const result = {
       zpid: pd.zpid,

@@ -13,6 +13,7 @@ export interface ZillowData {
   lotSize?: number;
   propertyType?: string;
   image?: string;
+  streetViewUrl?: string; // Google Street View URL that needs capture
   zillowUrl?: string;
   lastSoldPrice?: number;
   lastSoldDate?: string;
@@ -69,6 +70,37 @@ export async function fetchZillowData(property: Property): Promise<{ success: bo
   } catch (err) {
     console.error('Error fetching Zillow data:', err);
     return { success: false, error: 'Failed to fetch Zillow data' };
+  }
+}
+
+export async function captureStreetView(
+  streetViewUrl: string, 
+  propertyId: string
+): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  try {
+    console.log('Capturing Street View for property:', propertyId);
+    
+    const { data, error } = await supabase.functions.invoke('capture-street-view', {
+      body: { streetViewUrl, propertyId },
+    });
+
+    if (error) {
+      console.error('Street View capture error:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (data?.error) {
+      return { success: false, error: data.error };
+    }
+
+    if (data?.imageUrl) {
+      return { success: true, imageUrl: data.imageUrl };
+    }
+
+    return { success: false, error: 'No image URL returned' };
+  } catch (err) {
+    console.error('Error capturing Street View:', err);
+    return { success: false, error: 'Failed to capture Street View image' };
   }
 }
 
@@ -235,8 +267,8 @@ export async function verifyAddressBatch(
   return resultMap;
 }
 
-export function applyZillowData(property: Property, zillowData: ZillowData): Partial<Property> {
-  const updates: Partial<Property> = {};
+export function applyZillowData(property: Property, zillowData: ZillowData): Partial<Property> & { streetViewUrl?: string } {
+  const updates: Partial<Property> & { streetViewUrl?: string } = {};
   
   if (zillowData.bedrooms && zillowData.bedrooms > 0) {
     updates.bedrooms = zillowData.bedrooms;
@@ -268,7 +300,38 @@ export function applyZillowData(property: Property, zillowData: ZillowData): Par
       propertyValue: zillowData.zestimate,
     };
   }
+  
+  // Pass along streetViewUrl if no image was found (caller can capture it)
+  if (!zillowData.image && zillowData.streetViewUrl) {
+    updates.streetViewUrl = zillowData.streetViewUrl;
+  }
 
+  return updates;
+}
+
+// Helper function to apply Zillow data and capture Street View if needed
+export async function applyZillowDataWithStreetView(
+  property: Property, 
+  zillowData: ZillowData
+): Promise<Partial<Property>> {
+  const updates = applyZillowData(property, zillowData);
+  
+  // If we have a streetViewUrl but no image, try to capture it
+  if (updates.streetViewUrl && !updates.image) {
+    console.log('No property image found, attempting to capture Street View...');
+    const captureResult = await captureStreetView(updates.streetViewUrl, property.id);
+    
+    if (captureResult.success && captureResult.imageUrl) {
+      updates.image = captureResult.imageUrl;
+      console.log('Street View captured successfully:', captureResult.imageUrl);
+    } else {
+      console.warn('Failed to capture Street View:', captureResult.error);
+    }
+    
+    // Remove streetViewUrl from updates since we handled it
+    delete updates.streetViewUrl;
+  }
+  
   return updates;
 }
 

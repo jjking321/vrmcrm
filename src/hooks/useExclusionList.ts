@@ -11,6 +11,7 @@ const transformRow = (row: any): ExclusionEntry => ({
   companyId: row.company_id,
   ownerName: row.owner_name,
   email: row.email,
+  phone: row.phone,
   address: row.address,
   city: row.city,
   state: row.state,
@@ -64,6 +65,7 @@ export const useExclusionCount = () => {
 interface AddExclusionInput {
   ownerName?: string;
   email?: string;
+  phone?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -83,6 +85,7 @@ export const useAddExclusions = () => {
         company_id: company.id,
         owner_name: entry.ownerName || null,
         email: entry.email || null,
+        phone: entry.phone || null,
         address: entry.address || null,
         city: entry.city || null,
         state: entry.state || null,

@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
-import { normalizeAddressForMatch, namesMatch, emailsMatch } from '@/lib/exclusionUtils';
+import { normalizeAddressForMatch, namesMatch, emailsMatch, phonesMatch } from '@/lib/exclusionUtils';
 
 interface ImportOptions {
   standardize: boolean;
@@ -139,7 +139,7 @@ export const useImportProperties = () => {
       
       const { data: exclusionList } = await supabase
         .from('exclusion_list')
-        .select('owner_name, email, normalized_address, address, city, state')
+        .select('owner_name, email, phone, normalized_address, address, city, state')
         .eq('company_id', company.id);
       
       const exclusions = exclusionList || [];
@@ -178,6 +178,22 @@ export const useImportProperties = () => {
           if (exclusion.email && owner.email) {
             if (emailsMatch(exclusion.email, owner.email)) {
               return true;
+            }
+          }
+          
+          // Check phone match
+          if (exclusion.phone) {
+            // Check legacy phone field
+            if (owner.phone && phonesMatch(exclusion.phone, owner.phone)) {
+              return true;
+            }
+            // Check phones array
+            if (owner.phones && owner.phones.length > 0) {
+              for (const phoneContact of owner.phones) {
+                if (phoneContact.number && phonesMatch(exclusion.phone, phoneContact.number)) {
+                  return true;
+                }
+              }
             }
           }
           

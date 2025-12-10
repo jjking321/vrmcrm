@@ -96,3 +96,25 @@ export const emailsMatch = (email1: string, email2: string): boolean => {
   if (!email1 || !email2) return false;
   return email1.toLowerCase().trim() === email2.toLowerCase().trim();
 };
+
+/**
+ * Normalize a phone number for comparison
+ * Strips all non-digits and returns last 10 digits (handles country codes)
+ */
+export const normalizePhoneForMatch = (phone: string): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  // Return last 10 digits to handle country codes like +1
+  return digits.slice(-10);
+};
+
+/**
+ * Check if two phone numbers match
+ * Requires at least 10 digits for a valid match
+ */
+export const phonesMatch = (phone1: string, phone2: string): boolean => {
+  if (!phone1 || !phone2) return false;
+  const n1 = normalizePhoneForMatch(phone1);
+  const n2 = normalizePhoneForMatch(phone2);
+  return n1 === n2 && n1.length >= 10;
+};

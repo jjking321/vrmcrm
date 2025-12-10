@@ -75,6 +75,10 @@ const MainApp: React.FC = () => {
   // Modal State
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  
+  // Pre-loaded import data from Data Cleanup Tool
+  const [preLoadedImportData, setPreLoadedImportData] = useState<any[] | undefined>(undefined);
+  const [preLoadedImportHeaders, setPreLoadedImportHeaders] = useState<string[] | undefined>(undefined);
 
   // Initialize pipeline stages and field definitions when company is ready
   useEffect(() => {
@@ -229,7 +233,15 @@ const MainApp: React.FC = () => {
     }
 
     if (view === 'dataCleanup') {
-      return <DataCleanupTool />;
+      return (
+        <DataCleanupTool 
+          onSendToImport={(data, headers) => {
+            setPreLoadedImportData(data);
+            setPreLoadedImportHeaders(headers);
+            setIsImportOpen(true);
+          }}
+        />
+      );
     }
 
     if (view === 'owners') {
@@ -368,10 +380,16 @@ const MainApp: React.FC = () => {
 
       <ImportWizard
         isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
+        onClose={() => {
+          setIsImportOpen(false);
+          setPreLoadedImportData(undefined);
+          setPreLoadedImportHeaders(undefined);
+        }}
         onImport={handleImportData}
         fields={fields}
         existingProperties={allProperties}
+        preLoadedData={preLoadedImportData}
+        preLoadedHeaders={preLoadedImportHeaders}
       />
 
       <BulkActionsBar

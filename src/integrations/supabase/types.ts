@@ -86,6 +86,59 @@ export type Database = {
         }
         Relationships: []
       }
+      exclusion_list: {
+        Row: {
+          address: string | null
+          city: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          normalized_address: string | null
+          notes: string | null
+          owner_name: string | null
+          source: string
+          state: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          normalized_address?: string | null
+          notes?: string | null
+          owner_name?: string | null
+          source?: string
+          state?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          normalized_address?: string | null
+          notes?: string | null
+          owner_name?: string | null
+          source?: string
+          state?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exclusion_list_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_definitions: {
         Row: {
           company_id: string

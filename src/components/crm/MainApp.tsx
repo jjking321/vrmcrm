@@ -21,6 +21,7 @@ import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { DataCleanupTool } from './DataCleanupTool';
+import { ExclusionListManager } from './ExclusionListManager';
 import { toast } from 'sonner';
 import { Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -242,6 +243,10 @@ const MainApp: React.FC = () => {
           }}
         />
       );
+    }
+
+    if (view === 'exclusions') {
+      return <ExclusionListManager />;
     }
 
     if (view === 'owners') {

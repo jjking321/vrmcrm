@@ -183,5 +183,19 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
-export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup';
+export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions';
 export type ListViewMode = 'table' | 'kanban';
+
+export interface ExclusionEntry {
+  id: string;
+  companyId: string;
+  ownerName?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  normalizedAddress?: string;
+  source: 'manual' | 'import';
+  notes?: string;
+  createdAt: string;
+}

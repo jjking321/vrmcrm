@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
+import { normalizeAddressForMatch, namesMatch, emailsMatch } from '@/lib/exclusionUtils';
 
 interface ImportOptions {
   standardize: boolean;
@@ -133,12 +134,63 @@ export const useImportProperties = () => {
         }
       }
 
-      // ========== PHASE 2: Categorize into new vs updates ==========
+      // ========== PHASE 2: Fetch Exclusion List ==========
+      toast.loading(`Checking exclusion list...`, { id: toastId });
+      
+      const { data: exclusionList } = await supabase
+        .from('exclusion_list')
+        .select('owner_name, email, normalized_address, address, city, state')
+        .eq('company_id', company.id);
+      
+      const exclusions = exclusionList || [];
+
+      // ========== PHASE 3: Categorize into new vs updates (with exclusion filtering) ==========
       toast.loading(`Processing ${data.length} properties...`, { id: toastId });
 
       const newProperties: any[] = [];
       const updatedProperties: { id: string; normalizedAddr: string; row: any; mergeOnly: boolean }[] = [];
       let skippedCount = 0;
+      let excludedCount = 0;
+
+      // Helper function to check if a property matches exclusion list
+      const isExcluded = (row: any, address: string, city: string, state: string): boolean => {
+        const owner = transformImportToOwner(row);
+        const normalizedAddr = normalizeAddressForMatch(address, city, state);
+        
+        for (const exclusion of exclusions) {
+          // Check owner name match
+          if (exclusion.owner_name && owner.name) {
+            if (namesMatch(exclusion.owner_name, owner.name)) {
+              return true;
+            }
+            // Also check individual owner names if present
+            if (owner.owners && owner.owners.length > 0) {
+              for (const o of owner.owners) {
+                const fullName = `${o.firstName || ''} ${o.lastName || ''}`.trim();
+                if (fullName && namesMatch(exclusion.owner_name, fullName)) {
+                  return true;
+                }
+              }
+            }
+          }
+          
+          // Check email match
+          if (exclusion.email && owner.email) {
+            if (emailsMatch(exclusion.email, owner.email)) {
+              return true;
+            }
+          }
+          
+          // Check address match
+          if (exclusion.normalized_address && normalizedAddr) {
+            if (exclusion.normalized_address === normalizedAddr) {
+              return true;
+            }
+          }
+        }
+        
+        return false;
+      };
 
       for (const row of standardizedData) {
         let address = row.address || '';
@@ -155,6 +207,12 @@ export const useImportProperties = () => {
             latitude = coords[0];
             longitude = coords[1];
           }
+        }
+
+        // Check exclusion list
+        if (isExcluded(row, address, city, state)) {
+          excludedCount++;
+          continue;
         }
 
         // Check for duplicate
@@ -350,6 +408,7 @@ export const useImportProperties = () => {
       if (insertedCount > 0) parts.push(`${insertedCount} new`);
       if (updatedCount > 0) parts.push(`${updatedCount} updated`);
       if (skippedCount > 0) parts.push(`${skippedCount} duplicates skipped`);
+      if (excludedCount > 0) parts.push(`${excludedCount} excluded`);
       if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
 
       toast.success(`Import complete: ${parts.join(', ')}`, { id: toastId });

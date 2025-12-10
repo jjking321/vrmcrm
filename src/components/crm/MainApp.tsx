@@ -20,6 +20,7 @@ import { OwnerDetail } from './OwnerDetail';
 import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
+import { DataCleanupTool } from './DataCleanupTool';
 import { toast } from 'sonner';
 import { Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -225,6 +226,10 @@ const MainApp: React.FC = () => {
           onToggleFieldVisibility={handleToggleFieldVisibility}
         />
       );
+    }
+
+    if (view === 'dataCleanup') {
+      return <DataCleanupTool />;
     }
 
     if (view === 'owners') {

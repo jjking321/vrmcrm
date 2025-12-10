@@ -183,5 +183,5 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
-export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard';
+export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup';
 export type ListViewMode = 'table' | 'kanban';

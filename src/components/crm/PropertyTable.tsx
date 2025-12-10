@@ -2,9 +2,10 @@ import React from 'react';
 import { Property, PipelineStage, FieldDefinition, SortConfig } from '@/types';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
-import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName, getOwnerCount, hasDoNotCall, isLitigator, formatMailingAddress } from '@/lib/ownerUtils';
+import { useExcludedPropertyIds } from '@/hooks/useExclusionMatches';
 
 interface PropertyTableProps {
   properties: Property[];
@@ -33,6 +34,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
   onSelectAll,
   onSelectOwner,
 }) => {
+  const excludedIds = useExcludedPropertyIds(properties);
   const getAlign = (colId: string): 'left' | 'right' => {
     if (['estimatedRevenue', 'bedrooms', 'bathrooms'].includes(colId)) return 'right';
     return 'left';
@@ -84,17 +86,29 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     if (colId === 'address') {
       const ownerIsLitigator = isLitigator(property.owner);
       const ownerHasDNC = hasDoNotCall(property.owner);
+      const isExcluded = excludedIds.has(property.id);
       
       return (
         <td className={cellClass}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-muted relative">
               <PropertyImage src={property.image} className="w-full h-full object-cover" />
+              {isExcluded && (
+                <div className="absolute inset-0 bg-destructive/20 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-destructive" />
+                </div>
+              )}
             </div>
             <div>
               <div className="font-medium text-foreground flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-brand" />
                 {property.address}
+                {isExcluded && (
+                  <span title="On exclusion list" className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">
+                    <Ban className="w-3 h-3" />
+                    Excluded
+                  </span>
+                )}
                 {ownerIsLitigator && <span title="Litigator"><AlertTriangle className="w-3.5 h-3.5 text-red-500" /></span>}
                 {ownerHasDNC && <span title="Do Not Call"><PhoneOff className="w-3.5 h-3.5 text-amber-500" /></span>}
               </div>

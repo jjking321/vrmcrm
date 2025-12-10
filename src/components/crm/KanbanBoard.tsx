@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
-import { MapPin, DollarSign, User } from 'lucide-react';
+import { MapPin, DollarSign, User, Ban } from 'lucide-react';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';
+import { useExcludedPropertyIds } from '@/hooks/useExclusionMatches';
 
 interface KanbanBoardProps {
   properties: Property[];
@@ -20,6 +21,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 }) => {
   const [draggedPropertyId, setDraggedPropertyId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
+  const excludedIds = useExcludedPropertyIds(properties);
 
   const handleDragStart = (e: React.DragEvent, propertyId: string) => {
     setDraggedPropertyId(propertyId);
@@ -100,49 +102,59 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
             {/* Cards */}
             <div className="p-2 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">
-              {stageProperties.map((property) => (
-                <div
-                  key={property.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, property.id)}
-                  onClick={() => onSelectProperty(property.id)}
-                  className={cn(
-                    "bg-card rounded-lg p-3 shadow-soft border border-border cursor-pointer hover:shadow-medium transition-all",
-                    draggedPropertyId === property.id && "opacity-50"
-                  )}
-                >
-                  {/* Property Image */}
-                  <div className="relative w-full h-24 rounded-md overflow-hidden mb-2">
-                    <PropertyImage 
-                      src={property.image} 
-                      alt={property.address}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Property Info */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-start gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-brand mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground leading-tight">{property.address}</p>
-                        <p className="text-xs text-muted-foreground">{property.city}, {property.state}</p>
-                      </div>
+              {stageProperties.map((property) => {
+                const isExcluded = excludedIds.has(property.id);
+                return (
+                  <div
+                    key={property.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, property.id)}
+                    onClick={() => onSelectProperty(property.id)}
+                    className={cn(
+                      "bg-card rounded-lg p-3 shadow-soft border cursor-pointer hover:shadow-medium transition-all",
+                      draggedPropertyId === property.id && "opacity-50",
+                      isExcluded ? "border-destructive/50 bg-destructive/5" : "border-border"
+                    )}
+                  >
+                    {/* Property Image */}
+                    <div className="relative w-full h-24 rounded-md overflow-hidden mb-2">
+                      <PropertyImage 
+                        src={property.image} 
+                        alt={property.address}
+                        className="w-full h-full object-cover"
+                      />
+                      {isExcluded && (
+                        <div className="absolute top-1 right-1 bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Ban className="w-3 h-3" />
+                          Excluded
+                        </div>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
-                        <User className="w-3 h-3" />
-                        <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
+                    {/* Property Info */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-brand mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground leading-tight">{property.address}</p>
+                          <p className="text-xs text-muted-foreground">{property.city}, {property.state}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
-                        <DollarSign className="w-3 h-3" />
-                        <span>{(property.marketData.projectedRevenue / 1000).toFixed(0)}k</span>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
+                          <User className="w-3 h-3" />
+                          <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
+                          <DollarSign className="w-3 h-3" />
+                          <span>{(property.marketData.projectedRevenue / 1000).toFixed(0)}k</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {stageProperties.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground text-sm">

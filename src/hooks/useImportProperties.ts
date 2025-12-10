@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
 import { normalizeAddressForMatch, namesMatch, emailsMatch, phonesMatch } from '@/lib/exclusionUtils';
+import { parseFullAddress, isFullAddressField } from '@/lib/addressParser';
 
 interface ImportOptions {
   standardize: boolean;
@@ -215,6 +216,17 @@ export const useImportProperties = () => {
         let zip = row.zip || '';
         let latitude = row._latitude;
         let longitude = row._longitude;
+
+        // Auto-detect and parse full address in address field
+        if (isFullAddressField(address, city, state)) {
+          const parsed = parseFullAddress(address);
+          if (parsed.isValid) {
+            address = parsed.street;
+            city = parsed.city;
+            state = parsed.state;
+            zip = parsed.zip || zip;
+          }
+        }
 
         // Handle GIS coordinates if provided and not already set from standardization
         if (!latitude && !longitude && row.gisCoordinates) {

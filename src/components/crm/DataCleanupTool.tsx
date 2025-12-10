@@ -20,12 +20,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useMalformedAddresses, useFixAddresses, MalformedProperty } from '@/hooks/useAddressFixer';
 
 interface DataCleanupToolProps {
   onSendToImport?: (data: any[], headers: string[]) => void;
@@ -39,6 +41,7 @@ type TransformAction = {
 };
 
 export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport }) => {
+  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses'>('csv');
   const [step, setStep] = useState<'upload' | 'transform' | 'preview'>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -54,6 +57,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   const [combineColumns, setCombineColumns] = useState<string[]>([]);
   const [newColumnName, setNewColumnName] = useState('');
   const [separator, setSeparator] = useState(' ');
+
+  // Address fixer hooks
+  const { data: malformedAddresses = [], isLoading: isLoadingMalformed, refetch: refetchMalformed } = useMalformedAddresses();
+  const fixAddressesMutation = useFixAddresses();
 
   // Suggestions for auto-detection
   const suggestions = useMemo(() => {
@@ -342,63 +349,280 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     setRenameModalOpen(true);
   };
 
-  // Render upload step
-  if (step === 'upload') {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Data Cleanup Tool</h1>
-        <p className="text-muted-foreground mb-6">
-          Clean and transform your CSV data before importing to the CRM
-        </p>
+  // Render Address Fixer Tab
+  const renderAddressFixer = () => (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Fix Malformed Addresses</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Parse full addresses in your database into proper street, city, state, zip fields
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetchMalformed()}>
+          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+        </Button>
+      </div>
 
+      {isLoadingMalformed ? (
         <Card>
-          <CardContent className="pt-6">
-            <div 
-              className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => document.getElementById('file-upload')?.click()}
-            >
-              <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-foreground mb-1">Drop your CSV file here</p>
-              <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
-              <input
-                id="file-upload"
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Button variant="outline">Select File</Button>
-            </div>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Scanning for malformed addresses...
           </CardContent>
         </Card>
-      </div>
-    );
-  }
+      ) : malformedAddresses.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Check className="w-12 h-12 mx-auto text-green-500 mb-4" />
+            <p className="text-lg font-medium text-foreground">All addresses are properly formatted!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              No properties found with city/state embedded in the address field.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Found {malformedAddresses.length} properties with malformed addresses
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      These have city/state in the address field instead of separate columns
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => fixAddressesMutation.mutate(malformedAddresses)}
+                  disabled={fixAddressesMutation.isPending}
+                >
+                  <Wrench className="w-4 h-4 mr-1" />
+                  Fix All {malformedAddresses.length} Addresses
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-  // Render transform step
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-auto max-h-[50vh]">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-card z-10">
+                    <TableRow>
+                      <TableHead className="w-1/2">Current Address</TableHead>
+                      <TableHead>Parsed Street</TableHead>
+                      <TableHead>Parsed City</TableHead>
+                      <TableHead>Parsed State</TableHead>
+                      <TableHead>Parsed Zip</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {malformedAddresses.slice(0, 50).map((prop) => (
+                      <TableRow key={prop.id}>
+                        <TableCell className="font-mono text-sm text-amber-600">
+                          {prop.address}
+                        </TableCell>
+                        <TableCell className="text-sm text-green-600">
+                          {prop.parsed.street}
+                        </TableCell>
+                        <TableCell className="text-sm text-green-600">
+                          {prop.parsed.city}
+                        </TableCell>
+                        <TableCell className="text-sm text-green-600">
+                          {prop.parsed.state}
+                        </TableCell>
+                        <TableCell className="text-sm text-green-600">
+                          {prop.parsed.zip}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {malformedAddresses.length > 50 && (
+                <div className="p-3 text-center text-sm text-muted-foreground border-t">
+                  Showing first 50 of {malformedAddresses.length} properties
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+
+  // Main render with tabs
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-foreground mb-2">Data Cleanup Tool</h1>
+      <p className="text-muted-foreground mb-6">
+        Clean CSV data before import or fix existing database records
+      </p>
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses')} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="csv" className="gap-2">
+            <Upload className="w-4 h-4" /> CSV Cleanup
+          </TabsTrigger>
+          <TabsTrigger value="fix-addresses" className="gap-2">
+            <MapPin className="w-4 h-4" /> Fix Addresses
+            {malformedAddresses.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
+                {malformedAddresses.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fix-addresses">
+          {renderAddressFixer()}
+        </TabsContent>
+
+        <TabsContent value="csv">
+          {step === 'upload' ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div 
+                  className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium text-foreground mb-1">Drop your CSV file here</p>
+                  <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button variant="outline">Select File</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <CSVTransformView
+              transformedData={transformedData}
+              transformedHeaders={transformedHeaders}
+              fileName={fileName}
+              history={history}
+              suggestions={suggestions}
+              onUndo={handleUndo}
+              onRemoveDuplicates={handleRemoveDuplicates}
+              onRemoveEmptyRows={handleRemoveEmptyRows}
+              onDownloadCSV={handleDownloadCSV}
+              onSendToImport={handleSendToImport}
+              onCombineModal={openCombineModal}
+              onRenameModal={openRenameModal}
+              onTransformColumn={handleTransformColumn}
+              onDeleteColumn={handleDeleteColumn}
+              combineModalOpen={combineModalOpen}
+              setCombineModalOpen={setCombineModalOpen}
+              combineColumns={combineColumns}
+              setCombineColumns={setCombineColumns}
+              newColumnName={newColumnName}
+              setNewColumnName={setNewColumnName}
+              separator={separator}
+              setSeparator={setSeparator}
+              onCombineColumns={handleCombineColumns}
+              renameModalOpen={renameModalOpen}
+              setRenameModalOpen={setRenameModalOpen}
+              selectedColumn={selectedColumn}
+              onRenameColumn={handleRenameColumn}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+// Extracted CSV Transform View Component
+interface CSVTransformViewProps {
+  transformedData: any[];
+  transformedHeaders: string[];
+  fileName: string;
+  history: { data: any[]; headers: string[] }[];
+  suggestions: { message: string; action: () => void }[];
+  onUndo: () => void;
+  onRemoveDuplicates: () => void;
+  onRemoveEmptyRows: () => void;
+  onDownloadCSV: () => void;
+  onSendToImport: () => void;
+  onCombineModal: (col: string) => void;
+  onRenameModal: (col: string) => void;
+  onTransformColumn: (col: string, type: 'trim' | 'uppercase' | 'lowercase' | 'titlecase') => void;
+  onDeleteColumn: (col: string) => void;
+  combineModalOpen: boolean;
+  setCombineModalOpen: (open: boolean) => void;
+  combineColumns: string[];
+  setCombineColumns: (cols: string[] | ((prev: string[]) => string[])) => void;
+  newColumnName: string;
+  setNewColumnName: (name: string) => void;
+  separator: string;
+  setSeparator: (sep: string) => void;
+  onCombineColumns: (cols: string[], name: string, sep: string) => void;
+  renameModalOpen: boolean;
+  setRenameModalOpen: (open: boolean) => void;
+  selectedColumn: string;
+  onRenameColumn: (oldName: string, newName: string) => void;
+}
+
+const CSVTransformView: React.FC<CSVTransformViewProps> = ({
+  transformedData,
+  transformedHeaders,
+  fileName,
+  history,
+  suggestions,
+  onUndo,
+  onRemoveDuplicates,
+  onRemoveEmptyRows,
+  onDownloadCSV,
+  onSendToImport,
+  onCombineModal,
+  onRenameModal,
+  onTransformColumn,
+  onDeleteColumn,
+  combineModalOpen,
+  setCombineModalOpen,
+  combineColumns,
+  setCombineColumns,
+  newColumnName,
+  setNewColumnName,
+  separator,
+  setSeparator,
+  onCombineColumns,
+  renameModalOpen,
+  setRenameModalOpen,
+  selectedColumn,
+  onRenameColumn,
+}) => {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Data Cleanup Tool</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-muted-foreground text-sm">
             {transformedData.length} rows • {transformedHeaders.length} columns • {fileName}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleUndo} disabled={history.length === 0}>
+          <Button variant="outline" size="sm" onClick={onUndo} disabled={history.length === 0}>
             <Undo className="w-4 h-4 mr-1" /> Undo
           </Button>
-          <Button variant="outline" size="sm" onClick={handleRemoveDuplicates}>
+          <Button variant="outline" size="sm" onClick={onRemoveDuplicates}>
             Remove Duplicates
           </Button>
-          <Button variant="outline" size="sm" onClick={handleRemoveEmptyRows}>
+          <Button variant="outline" size="sm" onClick={onRemoveEmptyRows}>
             Remove Empty Rows
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDownloadCSV}>
+          <Button variant="outline" size="sm" onClick={onDownloadCSV}>
             <Download className="w-4 h-4 mr-1" /> Download CSV
           </Button>
-          <Button size="sm" onClick={handleSendToImport}>
+          <Button size="sm" onClick={onSendToImport}>
             <ArrowRight className="w-4 h-4 mr-1" /> Send to Import
           </Button>
         </div>
@@ -440,28 +664,28 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="bg-popover z-50">
-                          <DropdownMenuItem onClick={() => openCombineModal(header)}>
+                          <DropdownMenuItem onClick={() => onCombineModal(header)}>
                             <Merge className="w-4 h-4 mr-2" /> Combine with...
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openRenameModal(header)}>
+                          <DropdownMenuItem onClick={() => onRenameModal(header)}>
                             <Edit className="w-4 h-4 mr-2" /> Rename
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleTransformColumn(header, 'trim')}>
+                          <DropdownMenuItem onClick={() => onTransformColumn(header, 'trim')}>
                             Trim whitespace
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleTransformColumn(header, 'uppercase')}>
+                          <DropdownMenuItem onClick={() => onTransformColumn(header, 'uppercase')}>
                             UPPERCASE
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleTransformColumn(header, 'lowercase')}>
+                          <DropdownMenuItem onClick={() => onTransformColumn(header, 'lowercase')}>
                             lowercase
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleTransformColumn(header, 'titlecase')}>
+                          <DropdownMenuItem onClick={() => onTransformColumn(header, 'titlecase')}>
                             Title Case
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
-                            onClick={() => handleDeleteColumn(header)}
+                            onClick={() => onDeleteColumn(header)}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete column
@@ -543,7 +767,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
           <DialogFooter>
             <Button variant="outline" onClick={() => setCombineModalOpen(false)}>Cancel</Button>
             <Button 
-              onClick={() => handleCombineColumns(combineColumns, newColumnName || 'Combined', separator)}
+              onClick={() => onCombineColumns(combineColumns, newColumnName || 'Combined', separator)}
               disabled={combineColumns.length < 2}
             >
               Combine
@@ -569,7 +793,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameModalOpen(false)}>Cancel</Button>
-            <Button onClick={() => handleRenameColumn(selectedColumn, newColumnName)}>
+            <Button onClick={() => onRenameColumn(selectedColumn, newColumnName)}>
               Rename
             </Button>
           </DialogFooter>

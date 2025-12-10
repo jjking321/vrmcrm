@@ -277,6 +277,7 @@ export const useAddProperty = () => {
       ownerName: string;
       ownerEmail: string;
       ownerPhone: string;
+      stageId?: string;
     }) => {
       if (!company?.id) throw new Error('No company');
 
@@ -289,7 +290,7 @@ export const useAddProperty = () => {
           city: data.city,
           state: data.state,
           zip: data.zip,
-          stage_id: null, // Will use default
+          stage_id: data.stageId || null,
           tags: [],
           market_data: { adr: 0, occupancyRate: 0, projectedRevenue: 0, propertyValue: 0 },
         })

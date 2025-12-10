@@ -208,6 +208,7 @@ const MainApp: React.FC = () => {
       return (
         <Dashboard
           properties={allProperties}
+          totalPropertyCount={totalPropertyCount}
           stages={stages}
           onSelectProperty={handleSelectProperty}
           onViewChange={setView}

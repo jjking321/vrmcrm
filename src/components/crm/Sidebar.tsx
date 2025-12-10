@@ -33,13 +33,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, profile, company, logout } = useAuth();
   const [smartListsOpen, setSmartListsOpen] = useState(true);
 
-  const propertyLabel = totalPropertyCount && totalPropertyCount > propertyCount
-    ? `${propertyCount} of ${totalPropertyCount}`
-    : `${propertyCount}`;
-
   const navItems = [
     { id: 'dashboard' as ViewMode, label: 'Dashboard', icon: BarChart3 },
-    { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: propertyLabel },
+    { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: totalPropertyCount || propertyCount },
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
     { id: 'settings' as ViewMode, label: 'Settings', icon: Settings },
@@ -99,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Icon className={cn("w-4 h-4", isActive && "text-primary")} />
                 {item.label}
               </div>
-              {item.count && (
+              {item.count !== undefined && (
                 <span className={cn(
                   "text-xs px-1.5 py-0.5 rounded",
                   isActive ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"

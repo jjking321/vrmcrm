@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
-import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, LayoutGrid, Table, Filter } from 'lucide-react';
+import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, LayoutGrid, Table, Filter, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FilterRuleRow } from './FilterRuleRow';
 
@@ -19,6 +19,9 @@ interface FilterBarProps {
   onVisibleColumnsChange: (cols: string[]) => void;
   searchTerm: string;
   onSearchTermChange: (term: string) => void;
+  debouncedSearchTerm: string;
+  onDebouncedSearchTermChange: (term: string) => void;
+  isSearching?: boolean;
   listViewMode: 'table' | 'kanban';
   onListViewModeChange: (mode: 'table' | 'kanban') => void;
   deduplicateByOwner: boolean;
@@ -41,6 +44,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onVisibleColumnsChange,
   searchTerm,
   onSearchTermChange,
+  debouncedSearchTerm,
+  onDebouncedSearchTermChange,
+  isSearching,
   listViewMode,
   onListViewModeChange,
   deduplicateByOwner,
@@ -52,6 +58,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [showFilters, setShowFilters] = useState(rules.length > 0);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync showFilters state when rules change (e.g., when loading a smart list)
   useEffect(() => {
@@ -59,6 +66,30 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       setShowFilters(true);
     }
   }, [rules]);
+
+  // Handle search input with debouncing
+  const handleSearchChange = (value: string) => {
+    onSearchTermChange(value);
+    
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Set new debounce timer
+    debounceTimerRef.current = setTimeout(() => {
+      onDebouncedSearchTermChange(value);
+    }, 300);
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSaveList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,10 +148,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => onSearchTermChange(e.target.value)}
-            placeholder="Search addresses, owners, cities..."
-            className="w-full pl-10 pr-4 py-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none transition-all"
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search all properties..."
+            className="w-full pl-10 pr-10 py-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none transition-all"
           />
+          {isSearching && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+          )}
         </div>
 
         {/* Result Count */}

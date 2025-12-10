@@ -8,6 +8,7 @@ import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipel
 import { useImportProperties } from '@/hooks/useImportProperties';
 import { useFieldDefinitions, useInitializeFieldDefinitions, useAddFieldDefinition, useDeleteFieldDefinition, useUpdateFieldDefinition } from '@/hooks/useFieldDefinitions';
 import { usePropertyFiltering } from '@/hooks/usePropertyFiltering';
+import { usePropertySearch } from '@/hooks/usePropertySearch';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
@@ -49,10 +50,15 @@ const MainApp: React.FC = () => {
   const deleteFieldMutation = useDeleteFieldDefinition();
   const updateFieldMutation = useUpdateFieldDefinition();
 
+  // Search state (must be declared before usePropertyFiltering which uses it)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Server-side search
+  const { data: searchResults, isFetching: isSearching } = usePropertySearch(debouncedSearchTerm);
+
   // Filter & Sort (extracted to hook)
   const {
-    searchTerm,
-    setSearchTerm,
     filterRules,
     setFilterRules,
     matchType,
@@ -63,7 +69,8 @@ const MainApp: React.FC = () => {
     setDeduplicateByOwner,
     filteredProperties,
     sortedProperties,
-  } = usePropertyFiltering(allProperties);
+    isServerSearch,
+  } = usePropertyFiltering(allProperties, searchResults, debouncedSearchTerm);
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -296,6 +303,9 @@ const MainApp: React.FC = () => {
           onVisibleColumnsChange={setVisibleColumns}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
+          debouncedSearchTerm={debouncedSearchTerm}
+          onDebouncedSearchTermChange={setDebouncedSearchTerm}
+          isSearching={isSearching}
           listViewMode={listViewMode}
           onListViewModeChange={setListViewMode}
           deduplicateByOwner={deduplicateByOwner}
@@ -324,7 +334,7 @@ const MainApp: React.FC = () => {
                 onSelectAll={(ids) => setSelectedIds(new Set(ids))}
                 onSelectOwner={handleSelectOwner}
               />
-              {hasMore && (
+              {hasMore && !isServerSearch && (
                 <div className="flex justify-center py-6">
                   <Button
                     variant="outline"

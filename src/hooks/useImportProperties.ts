@@ -64,9 +64,19 @@ export const useImportProperties = () => {
 
       const toastId = toast.loading(`Preparing import of ${data.length} properties...`);
 
-      // Build address index for duplicate handling
-      const existingAddressMap = new Map<string, Property>();
-      existingProperties.forEach(prop => {
+      // ========== PHASE 0: Fetch ALL existing properties for duplicate detection ==========
+      toast.loading(`Checking for duplicates...`, { id: toastId });
+      
+      const { data: allExistingProps, error: fetchError } = await supabase
+        .from('properties')
+        .select('id, address, city, state, tags')
+        .eq('company_id', company.id);
+      
+      if (fetchError) throw fetchError;
+
+      // Build address index for duplicate handling from ALL database properties
+      const existingAddressMap = new Map<string, { id: string; address: string; city: string; state: string; tags: string[] }>();
+      (allExistingProps || []).forEach(prop => {
         const normalized = normalizeAddressForDupes(prop.address, prop.city, prop.state);
         existingAddressMap.set(normalized, prop);
       });
@@ -128,6 +138,7 @@ export const useImportProperties = () => {
 
       const newProperties: any[] = [];
       const updatedProperties: { id: string; normalizedAddr: string; row: any; mergeOnly: boolean }[] = [];
+      let skippedCount = 0;
 
       for (const row of standardizedData) {
         let address = row.address || '';
@@ -169,6 +180,8 @@ export const useImportProperties = () => {
               row: { ...row, address, city, state, zip, _latitude: latitude, _longitude: longitude },
               mergeOnly: decision === 'merge',
             });
+          } else {
+            skippedCount++;
           }
         } else {
           const owner = transformImportToOwner(row);
@@ -336,6 +349,7 @@ export const useImportProperties = () => {
       const parts: string[] = [];
       if (insertedCount > 0) parts.push(`${insertedCount} new`);
       if (updatedCount > 0) parts.push(`${updatedCount} updated`);
+      if (skippedCount > 0) parts.push(`${skippedCount} duplicates skipped`);
       if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
 
       toast.success(`Import complete: ${parts.join(', ')}`, { id: toastId });

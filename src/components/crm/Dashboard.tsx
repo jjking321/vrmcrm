@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 interface DashboardProps {
   properties: Property[];
+  totalPropertyCount?: number;
   stages: PipelineStage[];
   onSelectProperty: (id: string) => void;
   onViewChange: (view: 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard') => void;
@@ -15,6 +16,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({
   properties,
+  totalPropertyCount,
   stages,
   onSelectProperty,
   onViewChange,
@@ -73,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Properties</p>
-              <p className="text-2xl font-bold text-foreground">{properties.length}</p>
+              <p className="text-2xl font-bold text-foreground">{totalPropertyCount ?? properties.length}</p>
             </div>
           </div>
         </div>

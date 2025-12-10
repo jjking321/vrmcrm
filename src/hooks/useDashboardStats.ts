@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_STAGES } from '@/data/mockData';
 
 interface PipelineStat {
   id: string;
@@ -56,7 +57,6 @@ export const useDashboardStats = () => {
       // Handle pagination for properties if needed (>1000)
       let allProperties = propertiesResult.data || [];
       if (allProperties.length === 1000) {
-        // Fetch remaining properties
         let offset = 1000;
         while (true) {
           const { data, error } = await supabase
@@ -106,8 +106,10 @@ export const useDashboardStats = () => {
       const uniqueOwnerNames = new Set(allOwners.map(o => o.name?.toLowerCase().trim()).filter(Boolean));
       const uniqueOwners = uniqueOwnerNames.size;
 
-      // Calculate pipeline stats
-      const stages = pipelineResult.data || [];
+      // Use database stages or fall back to DEFAULT_STAGES
+      const stages = pipelineResult.data?.length ? pipelineResult.data : DEFAULT_STAGES;
+      
+      // Calculate pipeline stats using all properties
       const pipelineStats: PipelineStat[] = stages.map(stage => {
         const stageProperties = allProperties.filter(p => p.stage_id === stage.id);
         const stageRevenue = stageProperties.reduce((sum, p) => {

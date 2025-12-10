@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_STAGES, DEFAULT_COLUMNS } from '@/data/mockData';
-import { useProperties, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
+import { useProperties, useTotalPropertyCount, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
 import { useSavedLists, useAddSavedList, useDeleteSavedList } from '@/hooks/useSavedLists';
 import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipelineStages';
 import { useImportProperties } from '@/hooks/useImportProperties';
@@ -30,6 +30,7 @@ const MainApp: React.FC = () => {
 
   // Data hooks
   const { data: allProperties = [], isLoading: propertiesLoading, hasMore, loadMore, isFetchingMore } = useProperties();
+  const { data: totalPropertyCount = 0 } = useTotalPropertyCount();
   const { data: savedLists = [] } = useSavedLists();
   const { data: stages = DEFAULT_STAGES } = usePipelineStages();
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
@@ -313,7 +314,9 @@ const MainApp: React.FC = () => {
                     ) : (
                       <ChevronDown className="h-4 w-4" />
                     )}
-                    {isFetchingMore ? 'Loading...' : 'Load more properties'}
+                    {isFetchingMore 
+                      ? 'Loading...' 
+                      : `Load more (${totalPropertyCount - allProperties.length} remaining)`}
                   </Button>
                 </div>
               )}
@@ -341,6 +344,7 @@ const MainApp: React.FC = () => {
         onImportClick={() => setIsImportOpen(true)}
         onAddPropertyClick={() => setIsAddPropertyOpen(true)}
         propertyCount={allProperties.length}
+        totalPropertyCount={totalPropertyCount}
         savedLists={savedLists}
         onLoadList={handleLoadList}
         onDeleteList={handleDeleteList}

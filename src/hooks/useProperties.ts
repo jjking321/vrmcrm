@@ -142,6 +142,27 @@ const toProperty = (
 
 const PAGE_SIZE = 500;
 
+export const useTotalPropertyCount = () => {
+  const { company } = useAuth();
+  const companyId = company?.id;
+
+  return useQuery({
+    queryKey: ['properties-count', companyId],
+    queryFn: async (): Promise<number> => {
+      if (!companyId) return 0;
+      
+      const { count, error } = await supabase
+        .from('properties')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId);
+
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!companyId,
+  });
+};
+
 export const useProperties = () => {
   const { company } = useAuth();
   const companyId = company?.id;

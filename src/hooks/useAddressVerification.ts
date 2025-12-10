@@ -22,20 +22,39 @@ export function useUnverifiedAddresses() {
     queryFn: async () => {
       if (!company?.id) return { unverified: [], verified: 0, total: 0 };
 
-      // Fetch all properties
-      const { data, error } = await supabase
-        .from('properties')
-        .select('id, address, city, state, zip, latitude, longitude')
-        .eq('company_id', company.id);
+      // Fetch all properties using pagination to bypass 1000 row limit
+      let allProperties: Array<{
+        id: string;
+        address: string;
+        city: string;
+        state: string;
+        zip: string;
+        latitude: number | null;
+        longitude: number | null;
+      }> = [];
+      let offset = 0;
+      const BATCH_SIZE = 1000;
 
-      if (error) throw error;
+      while (true) {
+        const { data, error } = await supabase
+          .from('properties')
+          .select('id, address, city, state, zip, latitude, longitude')
+          .eq('company_id', company.id)
+          .range(offset, offset + BATCH_SIZE - 1);
 
-      const properties = data || [];
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allProperties = [...allProperties, ...data];
+        offset += BATCH_SIZE;
+
+        if (data.length < BATCH_SIZE) break;
+      }
+
       const unverified: UnverifiedProperty[] = [];
       let verifiedCount = 0;
 
-      for (const prop of properties) {
-        // Properties with valid latitude AND longitude are considered verified
+      for (const prop of allProperties) {
         if (prop.latitude !== null && prop.longitude !== null) {
           verifiedCount++;
         } else {
@@ -46,7 +65,7 @@ export function useUnverifiedAddresses() {
       return {
         unverified,
         verified: verifiedCount,
-        total: properties.length,
+        total: allProperties.length,
       };
     },
     enabled: !!company?.id,

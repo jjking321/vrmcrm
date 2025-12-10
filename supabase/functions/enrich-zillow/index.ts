@@ -73,11 +73,58 @@ serve(async (req) => {
     console.log("PropertyDetails keys:", Object.keys(pd).join(", "));
     console.log("Bedrooms field check - bedrooms:", pd.bedrooms, "beds:", pd.beds, "resoFacts?.bedrooms:", pd.resoFacts?.bedrooms);
     console.log("Bathrooms field check - bathrooms:", pd.bathrooms, "baths:", pd.baths, "resoFacts?.bathrooms:", pd.resoFacts?.bathrooms);
-    console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "streetViewTileImageUrlMediumAddress:", pd.streetViewTileImageUrlMediumAddress);
+    console.log("Image field check - hiResImageLink:", pd.hiResImageLink, "imgSrc:", pd.imgSrc, "originalPhotos:", pd.originalPhotos?.length, "thumb:", pd.thumb);
     
-    // Skip Google Maps URLs as they have restricted signatures that won't work outside Zillow
-    const rawImage = pd.hiResImageLink || pd.imgSrc || pd.streetViewTileImageUrlMediumAddress;
-    const validImage = rawImage && !rawImage.includes('maps.googleapis.com') ? rawImage : null;
+    // Check multiple image sources in order of preference
+    let validImage = null;
+    let streetViewUrl = null;
+    
+    // 1. Try originalPhotos array first (actual property photos - highest quality)
+    if (pd.originalPhotos && Array.isArray(pd.originalPhotos) && pd.originalPhotos.length > 0) {
+      const firstPhoto = pd.originalPhotos[0];
+      // originalPhotos can have nested structure with mixedSources
+      if (firstPhoto.mixedSources?.jpeg && firstPhoto.mixedSources.jpeg.length > 0) {
+        // Get the largest jpeg (usually last in array)
+        const jpegs = firstPhoto.mixedSources.jpeg;
+        validImage = jpegs[jpegs.length - 1]?.url || jpegs[0]?.url;
+      } else if (firstPhoto.url) {
+        validImage = firstPhoto.url;
+      }
+      console.log("Found originalPhotos image:", validImage);
+    }
+    
+    // 2. Try thumb (thumbnail image)
+    if (!validImage && pd.thumb && !pd.thumb.includes('maps.googleapis.com')) {
+      validImage = pd.thumb;
+      console.log("Using thumb image:", validImage);
+    }
+    
+    // 3. Try imgSrc
+    if (!validImage && pd.imgSrc && !pd.imgSrc.includes('maps.googleapis.com')) {
+      validImage = pd.imgSrc;
+      console.log("Using imgSrc image:", validImage);
+    }
+    
+    // 4. Try hiResImageLink only if NOT a Google Maps URL
+    if (!validImage && pd.hiResImageLink) {
+      if (!pd.hiResImageLink.includes('maps.googleapis.com')) {
+        validImage = pd.hiResImageLink;
+        console.log("Using hiResImageLink image:", validImage);
+      } else {
+        // Save the Street View URL for potential screenshot capture
+        streetViewUrl = pd.hiResImageLink;
+        console.log("Found Google Street View URL (needs capture):", streetViewUrl);
+      }
+    }
+    
+    // 5. Check streetViewTileImageUrlMediumAddress as last resort for streetViewUrl
+    if (!validImage && !streetViewUrl && pd.streetViewTileImageUrlMediumAddress) {
+      if (!pd.streetViewTileImageUrlMediumAddress.includes('maps.googleapis.com')) {
+        validImage = pd.streetViewTileImageUrlMediumAddress;
+      } else {
+        streetViewUrl = pd.streetViewTileImageUrlMediumAddress;
+      }
+    }
     
     const result = {
       zpid: pd.zpid,
@@ -91,6 +138,7 @@ serve(async (req) => {
       lotSize: pd.lotSizeSF || pd.lotSize || pd.resoFacts?.lotSize,
       propertyType: pd.homeType || pd.propertyType || pd.homeStatus,
       image: validImage,
+      streetViewUrl: streetViewUrl, // For frontend to trigger capture if needed
       zillowUrl: data.zillowURL || (pd.zpid ? `https://www.zillow.com/homedetails/${pd.zpid}_zpid/` : null),
       lastSoldPrice: pd.lastSoldPrice,
       lastSoldDate: pd.dateSold || pd.datePosted,

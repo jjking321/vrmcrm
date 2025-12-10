@@ -2,10 +2,11 @@ import React from 'react';
 import { Property, PipelineStage, FieldDefinition, SortConfig } from '@/types';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
-import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users, Ban } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, MapPin, DollarSign, PhoneOff, AlertTriangle, Users, Ban, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName, getOwnerCount, hasDoNotCall, isLitigator, formatMailingAddress } from '@/lib/ownerUtils';
 import { useExcludedPropertyIds } from '@/hooks/useExclusionMatches';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PropertyTableProps {
   properties: Property[];
@@ -87,6 +88,7 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
       const ownerIsLitigator = isLitigator(property.owner);
       const ownerHasDNC = hasDoNotCall(property.owner);
       const isExcluded = excludedIds.has(property.id);
+      const isVerified = property.latitude !== null && property.longitude !== null;
       
       return (
         <td className={cellClass}>
@@ -101,7 +103,20 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
             </div>
             <div>
               <div className="font-medium text-foreground flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-brand" />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {isVerified ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <Circle className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isVerified ? 'Address verified' : 'Address not verified'}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {property.address}
                 {isExcluded && (
                   <span title="On exclusion list" className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">

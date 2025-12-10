@@ -3,7 +3,7 @@ import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
-import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
+import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { 
   getPrimaryOwnerName, getAllOwnerNames, getOwnerCount, getPrimaryPhone, 
   getCallablePhones, hasDoNotCall, isLitigator, formatMailingAddress,
@@ -96,7 +96,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
     try {
       const result = await fetchZillowData(property);
       if (result.success && result.data) {
-        const updates = applyZillowData(property, result.data);
+        const updates = await applyZillowDataWithStreetView(property, result.data);
         onUpdateProperty(property.id, updates);
         toast.success('Property data enriched from Zillow');
       } else {

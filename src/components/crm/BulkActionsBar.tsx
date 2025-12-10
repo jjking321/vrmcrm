@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Property, PipelineStage, FilterRule } from '@/types';
 import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchZillowData, fetchAirbnbEstimate, applyZillowData, applyAirROIData } from '@/lib/enrichment';
+import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
 
 interface BulkActionsBarProps {
@@ -86,7 +86,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
       try {
         const result = await fetchZillowData(property);
         if (result.success && result.data) {
-          const updates = applyZillowData(property, result.data);
+          const updates = await applyZillowDataWithStreetView(property, result.data);
           onUpdateProperty(property.id, updates);
           successCount++;
         }

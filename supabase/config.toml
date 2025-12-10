@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.verify-address-batch]
 verify_jwt = false
+
+[functions.capture-street-view]
+verify_jwt = false

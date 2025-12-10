@@ -23,12 +23,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useMalformedAddresses, useFixAddresses, MalformedProperty } from '@/hooks/useAddressFixer';
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
+import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
+import { DuplicateMergeModal } from './DuplicateMergeModal';
 
 interface DataCleanupToolProps {
   onSendToImport?: (data: any[], headers: string[]) => void;
@@ -42,7 +44,7 @@ type TransformAction = {
 };
 
 export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport }) => {
-  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses'>('csv');
+  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates'>('duplicates');
   const [step, setStep] = useState<'upload' | 'transform' | 'preview'>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -66,6 +68,14 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   // Address verification hooks
   const { data: verificationData, isLoading: isLoadingVerification, refetch: refetchVerification } = useUnverifiedAddresses();
   const bulkVerifyMutation = useBulkVerifyAddresses();
+
+  // Duplicate detection hooks
+  const { data: duplicateGroups = [], isLoading: isLoadingDuplicates, refetch: refetchDuplicates } = useDuplicates();
+  const autoMergeMutation = useAutoMergeDuplicates();
+  const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<DuplicateGroup | null>(null);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+
+  const totalDuplicateProperties = duplicateGroups.reduce((sum, g) => sum + g.properties.length, 0);
 
   // Suggestions for auto-detection
   const suggestions = useMemo(() => {
@@ -616,6 +626,119 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     );
   };
 
+  // Render Duplicate Finder Tab
+  const renderDuplicateFinder = () => (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Find & Merge Duplicates</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Detect duplicate properties by address and merge them into single records
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetchDuplicates()}>
+          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+        </Button>
+      </div>
+
+      {isLoadingDuplicates ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Scanning for duplicate addresses...
+          </CardContent>
+        </Card>
+      ) : duplicateGroups.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Check className="w-12 h-12 mx-auto text-green-500 mb-4" />
+            <p className="text-lg font-medium text-foreground">No duplicates found!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              All properties have unique addresses.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Copy className="w-5 h-5 text-amber-500" />
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Found {duplicateGroups.length} addresses with duplicates ({totalDuplicateProperties} total properties)
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Review each group to merge records and remove duplicates
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline"
+                    onClick={() => autoMergeMutation.mutate({ groups: duplicateGroups, strategy: 'oldest' })}
+                    disabled={autoMergeMutation.isPending}
+                  >
+                    Auto-merge (Keep Oldest)
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => autoMergeMutation.mutate({ groups: duplicateGroups, strategy: 'newest' })}
+                    disabled={autoMergeMutation.isPending}
+                  >
+                    Auto-merge (Keep Newest)
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-2">
+            {duplicateGroups.map((group) => (
+              <Card key={group.normalizedAddress} className="hover:border-primary/30 transition-colors">
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-amber-600">{group.properties.length}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{group.displayAddress}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {group.properties.length} copies found
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedDuplicateGroup(group);
+                        setMergeModalOpen(true);
+                      }}
+                    >
+                      <Merge className="w-4 h-4 mr-1" />
+                      Review & Merge
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      <DuplicateMergeModal
+        open={mergeModalOpen}
+        onOpenChange={setMergeModalOpen}
+        group={selectedDuplicateGroup}
+        onMergeComplete={() => {
+          setSelectedDuplicateGroup(null);
+          refetchDuplicates();
+        }}
+      />
+    </div>
+  );
+
   // Main render with tabs
   return (
     <div>
@@ -624,8 +747,16 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
         Clean CSV data before import or fix existing database records
       </p>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses')} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates')} className="space-y-6">
         <TabsList>
+          <TabsTrigger value="duplicates" className="gap-2">
+            <Copy className="w-4 h-4" /> Find Duplicates
+            {duplicateGroups.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
+                {duplicateGroups.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="csv" className="gap-2">
             <Upload className="w-4 h-4" /> CSV Cleanup
           </TabsTrigger>
@@ -646,6 +777,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
             )}
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="duplicates">
+          {renderDuplicateFinder()}
+        </TabsContent>
 
         <TabsContent value="fix-addresses">
           {renderAddressFixer()}

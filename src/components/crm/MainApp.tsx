@@ -88,8 +88,12 @@ const MainApp: React.FC = () => {
     if (isServerSearch) {
       return clientSortedProperties;
     }
-    // If filter rules are active, use server filtered results
-    if (hasFilterRules && serverFilteredProperties.length > 0) {
+    // If filter rules are active, always use server results
+    if (hasFilterRules) {
+      // If still loading, return empty to show loading state
+      if (isFiltering) {
+        return [];
+      }
       // Apply client-side sorting and deduplication to server results
       let result = [...serverFilteredProperties];
       
@@ -128,7 +132,7 @@ const MainApp: React.FC = () => {
     }
     // Otherwise use client sorted (from loaded properties)
     return clientSortedProperties;
-  }, [isServerSearch, hasFilterRules, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
+  }, [isServerSearch, hasFilterRules, isFiltering, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');

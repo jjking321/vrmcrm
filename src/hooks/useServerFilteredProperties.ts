@@ -256,12 +256,13 @@ export const useServerFilteredProperties = (
         }
       }
 
-      // Build base query
+      // Build base query - use range to override default 1000 row limit
       let query = supabase
         .from('properties')
         .select('*')
         .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, 9999);
 
       // Constrain to owner filter results if applicable
       if (ownerPropertyIds !== null && ownerPropertyIds.length > 0) {

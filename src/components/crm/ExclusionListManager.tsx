@@ -1,12 +1,12 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useExclusionList, useExclusionCount, useAddExclusions, useDeleteExclusion, useClearExclusionList } from '@/hooks/useExclusionList';
-import { useProperties, useDeleteProperties } from '@/hooks/useProperties';
-import { findMatchingProperties, isPropertyExcluded } from '@/hooks/useExclusionMatches';
-import { ExclusionEntry, Property } from '@/types';
+import { useDeleteProperties } from '@/hooks/useProperties';
+import { useAllExclusionMatches, useFindMatchesForExclusion } from '@/hooks/useAllExclusionMatches';
+import { ExclusionEntry } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  Upload, Trash2, Search, AlertTriangle, Ban, Plus, X, FileSpreadsheet, Eye
+  Upload, Trash2, Search, AlertTriangle, Ban, Plus, X, FileSpreadsheet, Eye, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -45,10 +45,68 @@ const EXCLUSION_FIELDS = [
   { id: 'state', label: 'State' },
 ];
 
+// Sub-component for viewing matches (uses its own hook)
+const ViewMatchesDialog: React.FC<{
+  entry: ExclusionEntry | null;
+  onClose: () => void;
+}> = ({ entry, onClose }) => {
+  const { data: matches = [], isLoading } = useFindMatchesForExclusion(entry);
+
+  return (
+    <Dialog open={!!entry} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Matching Properties</DialogTitle>
+          <DialogDescription>
+            {isLoading ? 'Loading...' : `${matches.length} existing properties match this exclusion entry`}
+            {entry?.ownerName && ` for "${entry.ownerName}"`}
+            {entry?.address && ` at "${entry.address}"`}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="max-h-[400px] overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : matches.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No matching properties found</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Address</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>City</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {matches.map((property) => (
+                  <TableRow key={property.id}>
+                    <TableCell className="font-medium">{property.address}</TableCell>
+                    <TableCell>{property.ownerName || '-'}</TableCell>
+                    <TableCell>{property.city}, {property.state}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export const ExclusionListManager: React.FC = () => {
   const { data: exclusions = [], isLoading } = useExclusionList();
   const { data: totalCount = 0 } = useExclusionCount();
-  const { data: properties = [] } = useProperties();
+  const { data: allMatches, isLoading: isLoadingMatches } = useAllExclusionMatches();
   const addExclusionsMutation = useAddExclusions();
   const deleteExclusionMutation = useDeleteExclusion();
   const clearListMutation = useClearExclusionList();
@@ -60,12 +118,10 @@ export const ExclusionListManager: React.FC = () => {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [isDeleteMatchesConfirmOpen, setIsDeleteMatchesConfirmOpen] = useState(false);
   const [viewMatchesEntry, setViewMatchesEntry] = useState<ExclusionEntry | null>(null);
-  const [matchingProperties, setMatchingProperties] = useState<Property[]>([]);
 
-  // Calculate all matching properties across all exclusions
-  const allMatchingProperties = useMemo(() => {
-    return properties.filter(p => isPropertyExcluded(p, exclusions));
-  }, [properties, exclusions]);
+  // Use the database-queried match count and IDs
+  const matchCount = allMatches?.count ?? 0;
+  const matchingPropertyIds = allMatches?.propertyIds ?? [];
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -182,22 +238,8 @@ export const ExclusionListManager: React.FC = () => {
     }
 
     addExclusionsMutation.mutate(entries, {
-      onSuccess: (count) => {
-        // Check how many existing properties match
-        const newExclusion: ExclusionEntry = entries[0] as any;
-        const matches = findMatchingProperties(properties, newExclusion as ExclusionEntry);
-        if (matches.length > 0) {
-          toast.info(`${matches.length} existing properties match this exclusion`, {
-            description: 'These properties will show an "Excluded" badge in your list.',
-            action: {
-              label: 'View Matches',
-              onClick: () => {
-                setMatchingProperties(matches);
-                setViewMatchesEntry(newExclusion as ExclusionEntry);
-              },
-            },
-          });
-        }
+      onSuccess: () => {
+        toast.success(`Added ${entries.length} exclusion entries`);
         setIsUploadOpen(false);
         resetUpload();
       },
@@ -227,20 +269,7 @@ export const ExclusionListManager: React.FC = () => {
 
     addExclusionsMutation.mutate([newEntry], {
       onSuccess: () => {
-        // Check how many existing properties match
-        const matches = findMatchingProperties(properties, newEntry as any);
-        if (matches.length > 0) {
-          toast.info(`${matches.length} existing properties match this exclusion`, {
-            description: 'These properties will show an "Excluded" badge in your list.',
-            action: {
-              label: 'View Matches',
-              onClick: () => {
-                setMatchingProperties(matches);
-                setViewMatchesEntry(newEntry as any);
-              },
-            },
-          });
-        }
+        toast.success('Added exclusion entry');
         setIsAddManualOpen(false);
         setManualEntry({ ownerName: '', email: '', phone: '', address: '', city: '', state: '', notes: '' });
       },
@@ -249,18 +278,15 @@ export const ExclusionListManager: React.FC = () => {
 
   // View matches for an exclusion entry
   const handleViewMatches = (entry: ExclusionEntry) => {
-    const matches = findMatchingProperties(properties, entry);
-    setMatchingProperties(matches);
     setViewMatchesEntry(entry);
   };
 
   // Handle bulk delete of matching properties
   const handleDeleteMatchingProperties = () => {
-    const ids = allMatchingProperties.map(p => p.id);
-    deletePropertiesMutation.mutate(ids, {
+    deletePropertiesMutation.mutate(matchingPropertyIds, {
       onSuccess: () => {
         setIsDeleteMatchesConfirmOpen(false);
-        toast.success(`Deleted ${ids.length} matching properties from database`);
+        toast.success(`Deleted ${matchingPropertyIds.length} matching properties from database`);
       },
     });
   };
@@ -304,21 +330,25 @@ export const ExclusionListManager: React.FC = () => {
               <div className="h-10 w-px bg-border" />
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  {isLoadingMatches ? (
+                    <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  )}
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{allMatchingProperties.length}</p>
+                  <p className="text-2xl font-bold">{isLoadingMatches ? '...' : matchCount}</p>
                   <p className="text-sm text-muted-foreground">Properties Match</p>
                 </div>
               </div>
             </div>
-            {allMatchingProperties.length > 0 && (
+            {matchCount > 0 && (
               <Button 
                 variant="destructive" 
                 onClick={() => setIsDeleteMatchesConfirmOpen(true)}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete {allMatchingProperties.length} Matching Properties
+                Delete {matchCount} Matching Properties
               </Button>
             )}
           </div>
@@ -376,9 +406,7 @@ export const ExclusionListManager: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredExclusions.map((entry) => {
-                  const matchCount = findMatchingProperties(properties, entry).length;
-                  return (
+                {filteredExclusions.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell className="font-medium">{entry.ownerName || '-'}</TableCell>
                       <TableCell>{entry.email || '-'}</TableCell>
@@ -403,19 +431,15 @@ export const ExclusionListManager: React.FC = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {matchCount > 0 ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-amber-600 hover:text-amber-700"
-                            onClick={() => handleViewMatches(entry)}
-                          >
-                            <Eye className="w-3 h-3 mr-1" />
-                            {matchCount} match{matchCount !== 1 ? 'es' : ''}
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">0 matches</span>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-amber-600 hover:text-amber-700"
+                          onClick={() => handleViewMatches(entry)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          View
+                        </Button>
                       </TableCell>
                       <TableCell>
                         <Button
@@ -428,8 +452,7 @@ export const ExclusionListManager: React.FC = () => {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                  ))}
               </TableBody>
             </Table>
           )}
@@ -638,45 +661,10 @@ export const ExclusionListManager: React.FC = () => {
       </Dialog>
 
       {/* View Matches Dialog */}
-      <Dialog open={!!viewMatchesEntry} onOpenChange={(open) => !open && setViewMatchesEntry(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Matching Properties</DialogTitle>
-            <DialogDescription>
-              {matchingProperties.length} existing properties match this exclusion entry
-              {viewMatchesEntry?.ownerName && ` for "${viewMatchesEntry.ownerName}"`}
-              {viewMatchesEntry?.address && ` at "${viewMatchesEntry.address}"`}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>City</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {matchingProperties.map((property) => (
-                  <TableRow key={property.id}>
-                    <TableCell className="font-medium">{property.address}</TableCell>
-                    <TableCell>{property.owner.name || '-'}</TableCell>
-                    <TableCell>{property.city}, {property.state}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewMatchesEntry(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ViewMatchesDialog 
+        entry={viewMatchesEntry} 
+        onClose={() => setViewMatchesEntry(null)} 
+      />
 
       {/* Delete Matching Properties Confirm Dialog */}
       <Dialog open={isDeleteMatchesConfirmOpen} onOpenChange={setIsDeleteMatchesConfirmOpen}>
@@ -687,22 +675,9 @@ export const ExclusionListManager: React.FC = () => {
               Delete Matching Properties?
             </DialogTitle>
             <DialogDescription>
-              This will permanently delete <span className="font-semibold text-foreground">{allMatchingProperties.length} properties</span> from your database that match entries in your exclusion list. This action cannot be undone.
+              This will permanently delete <span className="font-semibold text-foreground">{matchCount} properties</span> from your database that match entries in your exclusion list. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
-          {allMatchingProperties.length > 0 && allMatchingProperties.length <= 10 && (
-            <div className="max-h-[200px] overflow-y-auto bg-muted/50 rounded-lg p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Properties to delete:</p>
-              <ul className="space-y-1 text-sm">
-                {allMatchingProperties.map(p => (
-                  <li key={p.id} className="text-foreground">
-                    {p.address}, {p.city}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteMatchesConfirmOpen(false)}>
@@ -713,7 +688,7 @@ export const ExclusionListManager: React.FC = () => {
               onClick={handleDeleteMatchingProperties}
               disabled={deletePropertiesMutation.isPending}
             >
-              {deletePropertiesMutation.isPending ? 'Deleting...' : `Delete ${allMatchingProperties.length} Properties`}
+              {deletePropertiesMutation.isPending ? 'Deleting...' : `Delete ${matchCount} Properties`}
             </Button>
           </DialogFooter>
         </DialogContent>

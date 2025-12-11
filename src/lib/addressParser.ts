@@ -47,18 +47,29 @@ export function parseFullAddress(fullAddress: string): ParsedAddress {
     return result;
   }
 
-  const trimmed = fullAddress.trim();
+  let trimmed = fullAddress.trim();
   if (!trimmed) {
     return result;
   }
 
-  // Try to extract ZIP code first (5 digits or 5+4 format)
-  const zipMatch = trimmed.match(/\b(\d{5})(?:-\d{4})?\s*$/);
+  // Strip common country suffixes (e.g., ", USA", ", US", ", United States")
+  const countrySuffixes = [', USA', ', US', ', United States', ',USA', ',US'];
+  for (const suffix of countrySuffixes) {
+    if (trimmed.toUpperCase().endsWith(suffix.toUpperCase())) {
+      trimmed = trimmed.slice(0, -suffix.length).trim();
+      break;
+    }
+  }
+
+  // Try to extract ZIP code (5 digits or 5+4 format) - more flexible matching
+  const zipMatch = trimmed.match(/\b(\d{5})(?:-\d{4})?\b\s*,?\s*$/);
   let workingAddress = trimmed;
   
   if (zipMatch) {
     result.zip = zipMatch[1];
     workingAddress = trimmed.slice(0, zipMatch.index).trim();
+    // Remove trailing comma if present
+    workingAddress = workingAddress.replace(/,\s*$/, '').trim();
   }
 
   // Split by comma to get components

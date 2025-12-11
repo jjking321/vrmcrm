@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Users, Loader2 } from 'lucide-react';
 import { AggregatedOwner } from '@/hooks/useAllOwners';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 interface OwnerTableProps {
   owners: AggregatedOwner[];
@@ -15,10 +16,10 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({
   isLoading,
   onSelectOwner 
 }) => {
-  const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' }>({
-    field: 'totalRevenue',
-    direction: 'desc'
-  });
+  const [sortConfig, setSortConfig] = usePersistedState<{ field: string; direction: 'asc' | 'desc' }>(
+    'crm-owner-sort-config',
+    { field: 'totalRevenue', direction: 'desc' }
+  );
 
   const handleSort = (field: string) => {
     setSortConfig(prev => ({

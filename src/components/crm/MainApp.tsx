@@ -55,8 +55,23 @@ const MainApp: React.FC = () => {
   const updateFieldMutation = useUpdateFieldDefinition();
 
   // Search state (must be declared before usePropertyFiltering which uses it)
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('crm-search-term');
+      return stored ? JSON.parse(stored) : '';
+    } catch { return ''; }
+  });
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('crm-search-term');
+      return stored ? JSON.parse(stored) : '';
+    } catch { return ''; }
+  });
+
+  // Persist search term to sessionStorage
+  React.useEffect(() => {
+    sessionStorage.setItem('crm-search-term', JSON.stringify(searchTerm));
+  }, [searchTerm]);
 
   // Server-side search
   const { data: searchResults, isFetching: isSearching } = usePropertySearch(debouncedSearchTerm);

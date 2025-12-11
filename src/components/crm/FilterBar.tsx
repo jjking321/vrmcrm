@@ -162,8 +162,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Result Count */}
-        <div className="text-sm text-muted-foreground font-medium">
-          {resultCount} {resultCount === 1 ? 'property' : 'properties'}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+          {isFiltering && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isFiltering ? (
+            <span>Filtering...</span>
+          ) : (
+            <span>{resultCount} {resultCount === 1 ? 'property' : 'properties'}</span>
+          )}
         </div>
 
         {/* Add Filter Button */}

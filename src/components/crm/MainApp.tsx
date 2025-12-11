@@ -402,6 +402,16 @@ const MainApp: React.FC = () => {
         />
 
         <div className="mt-4">
+          {isFiltering && (
+            <div className="h-1 w-full bg-muted overflow-hidden rounded-full mb-4">
+              <div 
+                className="h-full bg-primary w-1/3 animate-pulse"
+                style={{ 
+                  animation: 'indeterminate 1.5s infinite ease-in-out',
+                }}
+              />
+            </div>
+          )}
           {listViewMode === 'table' ? (
             <>
               <PropertyTable

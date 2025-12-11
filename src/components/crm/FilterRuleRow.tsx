@@ -213,7 +213,13 @@ export const FilterRuleRow: React.FC<FilterRuleRowProps> = ({
       {/* Field Selector */}
       <select
         value={rule.field}
-        onChange={(e) => onChange({ ...rule, field: e.target.value, value: '', operator: 'equals' })}
+        onChange={(e) => {
+          const newField = e.target.value;
+          const newFieldType = newField === 'tags' ? 'tags' : (fields.find(f => f.id === newField)?.type || 'text');
+          const validOperators = OPERATORS.filter(op => op.types.includes(newFieldType));
+          const defaultOperator = validOperators[0]?.value || 'equals';
+          onChange({ ...rule, field: newField, value: '', operator: defaultOperator });
+        }}
         className="px-3 py-1.5 border border-input rounded-md text-sm bg-card focus:ring-1 focus:ring-brand focus:border-brand outline-none min-w-[140px]"
       >
         <option value="">Select field...</option>

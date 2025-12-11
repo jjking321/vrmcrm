@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { isFullAddressField } from '@/lib/addressParser';
 
 export interface MalformedProperty {
   id: string;
@@ -10,6 +9,11 @@ export interface MalformedProperty {
   city: string;
   state: string;
   zip: string;
+}
+
+export interface FixAddressesResult {
+  fixed: number;
+  failed: MalformedProperty[];
 }
 
 export function useMalformedAddresses() {
@@ -20,31 +24,23 @@ export function useMalformedAddresses() {
     queryFn: async () => {
       if (!company?.id) return [];
 
-      // Fetch all properties with empty city/state
+      // Fetch all properties with empty city, state, OR zip
       const { data, error } = await supabase
         .from('properties')
         .select('id, address, city, state, zip')
         .eq('company_id', company.id)
-        .or('city.is.null,city.eq.,state.is.null,state.eq.');
+        .or('city.is.null,city.eq.,state.is.null,state.eq.,zip.is.null,zip.eq.');
 
       if (error) throw error;
 
-      // Filter those with full addresses in address field
-      const malformed: MalformedProperty[] = [];
-      
-      for (const prop of data || []) {
-        if (isFullAddressField(prop.address, prop.city || '', prop.state || '')) {
-          malformed.push({
-            id: prop.id,
-            address: prop.address,
-            city: prop.city || '',
-            state: prop.state || '',
-            zip: prop.zip || '',
-          });
-        }
-      }
-
-      return malformed;
+      // Return all incomplete addresses for Geocodio processing
+      return (data || []).map(prop => ({
+        id: prop.id,
+        address: prop.address,
+        city: prop.city || '',
+        state: prop.state || '',
+        zip: prop.zip || '',
+      }));
     },
     enabled: !!company?.id,
   });
@@ -55,19 +51,23 @@ export function useFixAddresses() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (properties: MalformedProperty[]) => {
-      if (!company?.id || properties.length === 0) return { fixed: 0 };
+    mutationFn: async (properties: MalformedProperty[]): Promise<FixAddressesResult> => {
+      if (!company?.id || properties.length === 0) return { fixed: 0, failed: [] };
 
       const toastId = toast.loading(`Fixing ${properties.length} addresses via Geocodio...`);
 
-      // Send all addresses to Geocodio for proper parsing
-      const addressesToVerify = properties.map((prop, idx) => ({
-        address: prop.address,
-        city: '',
-        state: '',
-        zip: '',
-        index: idx,
-      }));
+      // Build full address strings for Geocodio
+      const addressesToVerify = properties.map((prop, idx) => {
+        // Combine available parts into a full address string for Geocodio
+        const parts = [prop.address, prop.city, prop.state, prop.zip].filter(p => p.trim());
+        return {
+          address: parts.join(', '),
+          city: '',
+          state: '',
+          zip: '',
+          index: idx,
+        };
+      });
 
       const { data, error } = await supabase.functions.invoke('verify-address-batch', {
         body: { addresses: addressesToVerify },
@@ -75,43 +75,60 @@ export function useFixAddresses() {
 
       if (error || data?.error) {
         toast.error(data?.error || error?.message || 'Failed to verify addresses', { id: toastId });
-        return { fixed: 0 };
+        return { fixed: 0, failed: properties };
       }
 
-      // Update properties with Geocodio-parsed results
+      // Track both successes and failures
       let fixed = 0;
+      const failed: MalformedProperty[] = [];
       const CHUNK_SIZE = 50;
-      const successfulResults = (data.results || []).filter((r: any) => r.success && r.standardized);
-
-      for (let i = 0; i < successfulResults.length; i += CHUNK_SIZE) {
-        const chunk = successfulResults.slice(i, i + CHUNK_SIZE);
+      
+      // Process results
+      const results = data.results || [];
+      
+      for (let i = 0; i < results.length; i += CHUNK_SIZE) {
+        const chunk = results.slice(i, i + CHUNK_SIZE);
         
         await Promise.all(
           chunk.map(async (result: any) => {
             const prop = properties[result.index];
-            const { error: updateError } = await supabase
-              .from('properties')
-              .update({
-                address: result.standardized.street,
-                city: result.standardized.city,
-                state: result.standardized.state,
-                zip: result.standardized.zip,
-                latitude: result.latitude,
-                longitude: result.longitude,
-              })
-              .eq('id', prop.id);
+            
+            if (result.success && result.standardized && 
+                result.standardized.city && result.standardized.state && result.standardized.zip) {
+              const { error: updateError } = await supabase
+                .from('properties')
+                .update({
+                  address: result.standardized.street,
+                  city: result.standardized.city,
+                  state: result.standardized.state,
+                  zip: result.standardized.zip,
+                  latitude: result.latitude,
+                  longitude: result.longitude,
+                })
+                .eq('id', prop.id);
 
-            if (!updateError) {
-              fixed++;
+              if (!updateError) {
+                fixed++;
+              } else {
+                failed.push(prop);
+              }
+            } else {
+              // Geocodio couldn't fully parse this address
+              failed.push(prop);
             }
           })
         );
 
-        toast.loading(`Fixed ${Math.min(i + CHUNK_SIZE, successfulResults.length)} / ${successfulResults.length}...`, { id: toastId });
+        toast.loading(`Processed ${Math.min(i + CHUNK_SIZE, results.length)} / ${results.length}...`, { id: toastId });
       }
 
-      toast.success(`Fixed ${fixed} addresses via Geocodio`, { id: toastId });
-      return { fixed };
+      if (failed.length > 0) {
+        toast.warning(`Fixed ${fixed} addresses, ${failed.length} could not be parsed`, { id: toastId });
+      } else {
+        toast.success(`Fixed ${fixed} addresses via Geocodio`, { id: toastId });
+      }
+      
+      return { fixed, failed };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['properties'] });

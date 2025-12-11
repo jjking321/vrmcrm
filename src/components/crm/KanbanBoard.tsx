@@ -150,7 +150,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         <div className="flex-1 grid grid-cols-2 gap-2">
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
                             <User className="w-3 h-3" />
-                            <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
+                            <span className="truncate">{getPrimaryOwnerName(property.owner)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
                             <DollarSign className="w-3 h-3" />

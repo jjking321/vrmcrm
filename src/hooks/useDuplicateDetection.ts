@@ -151,7 +151,8 @@ export function useDuplicates() {
             emails
           )
         `)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .range(0, 9999);
 
       if (error) throw error;
 

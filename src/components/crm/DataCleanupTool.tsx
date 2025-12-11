@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useMalformedAddresses, useFixAddresses, MalformedProperty } from '@/hooks/useAddressFixer';
+import { useMalformedAddresses, useFixAddresses, MalformedProperty, FixAddressesResult } from '@/hooks/useAddressFixer';
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
 import { DuplicateMergeModal } from './DuplicateMergeModal';
@@ -64,6 +64,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   // Address fixer hooks
   const { data: malformedAddresses = [], isLoading: isLoadingMalformed, refetch: refetchMalformed } = useMalformedAddresses();
   const fixAddressesMutation = useFixAddresses();
+  const [failedAddresses, setFailedAddresses] = useState<MalformedProperty[]>([]);
 
   // Address verification hooks
   const { data: verificationData, isLoading: isLoadingVerification, refetch: refetchVerification } = useUnverifiedAddresses();
@@ -364,17 +365,27 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     setRenameModalOpen(true);
   };
 
+  // Handle fix addresses with failure tracking
+  const handleFixAddresses = async (addresses: MalformedProperty[]) => {
+    const result = await fixAddressesMutation.mutateAsync(addresses);
+    if (result.failed.length > 0) {
+      setFailedAddresses(result.failed);
+    } else {
+      setFailedAddresses([]);
+    }
+  };
+
   // Render Address Fixer Tab
   const renderAddressFixer = () => (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Fix Malformed Addresses</h2>
+          <h2 className="text-xl font-semibold text-foreground">Fix Incomplete Addresses</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Parse full addresses in your database into proper street, city, state, zip fields
+            Find and fix properties missing city, state, or zip using Geocodio
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetchMalformed()}>
+        <Button variant="outline" size="sm" onClick={() => { refetchMalformed(); setFailedAddresses([]); }}>
           <RefreshCw className="w-4 h-4 mr-1" /> Refresh
         </Button>
       </div>
@@ -382,81 +393,156 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
       {isLoadingMalformed ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Scanning for malformed addresses...
+            Scanning for incomplete addresses...
           </CardContent>
         </Card>
-      ) : malformedAddresses.length === 0 ? (
+      ) : malformedAddresses.length === 0 && failedAddresses.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Check className="w-12 h-12 mx-auto text-green-500 mb-4" />
-            <p className="text-lg font-medium text-foreground">All addresses are properly formatted!</p>
+            <p className="text-lg font-medium text-foreground">All addresses are complete!</p>
             <p className="text-sm text-muted-foreground mt-1">
-              No properties found with city/state embedded in the address field.
+              No properties found with missing city, state, or zip.
             </p>
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
-            <CardContent className="py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <div>
-                    <p className="font-medium text-foreground">
-                      Found {malformedAddresses.length} properties with malformed addresses
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      These have city/state in the address field instead of separate columns
-                    </p>
+          {/* Incomplete addresses to fix */}
+          {malformedAddresses.length > 0 && (
+            <>
+              <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-500" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Found {malformedAddresses.length} properties with incomplete addresses
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Missing city, state, or zip - will attempt to fix via Geocodio
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => handleFixAddresses(malformedAddresses)}
+                      disabled={fixAddressesMutation.isPending}
+                    >
+                      <Wrench className="w-4 h-4 mr-1" />
+                      Fix All {malformedAddresses.length} Addresses
+                    </Button>
                   </div>
-                </div>
-                <Button 
-                  onClick={() => fixAddressesMutation.mutate(malformedAddresses)}
-                  disabled={fixAddressesMutation.isPending}
-                >
-                  <Wrench className="w-4 h-4 mr-1" />
-                  Fix All {malformedAddresses.length} Addresses
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-auto max-h-[50vh]">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-card z-10">
-                    <TableRow>
-                      <TableHead>Current Address (Full String)</TableHead>
-                      <TableHead>City</TableHead>
-                      <TableHead>State</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {malformedAddresses.slice(0, 50).map((prop) => (
-                      <TableRow key={prop.id}>
-                        <TableCell className="font-mono text-sm text-amber-600">
-                          {prop.address}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {prop.city || '(empty)'}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {prop.state || '(empty)'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {malformedAddresses.length > 50 && (
-                <div className="p-3 text-center text-sm text-muted-foreground border-t">
-                  Showing first 50 of {malformedAddresses.length} properties
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              <Card className="mb-4">
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[30vh]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableRow>
+                          <TableHead>Address</TableHead>
+                          <TableHead>City</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Zip</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {malformedAddresses.slice(0, 50).map((prop) => (
+                          <TableRow key={prop.id}>
+                            <TableCell className="font-mono text-sm">
+                              {prop.address}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.city && "text-muted-foreground italic")}>
+                              {prop.city || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.state && "text-muted-foreground italic")}>
+                              {prop.state || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.zip && "text-muted-foreground italic")}>
+                              {prop.zip || '(empty)'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {malformedAddresses.length > 50 && (
+                    <div className="p-3 text-center text-sm text-muted-foreground border-t">
+                      Showing first 50 of {malformedAddresses.length} properties
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Failed addresses - could not be fixed */}
+          {failedAddresses.length > 0 && (
+            <>
+              <Card className="mb-4 border-destructive/30 bg-destructive/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {failedAddresses.length} addresses could not be parsed
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Geocodio couldn't determine complete address info - try again or fix manually
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      onClick={() => handleFixAddresses(failedAddresses)}
+                      disabled={fixAddressesMutation.isPending}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-1" />
+                      Retry {failedAddresses.length} Failed
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[30vh]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableRow>
+                          <TableHead>Address</TableHead>
+                          <TableHead>City</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Zip</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {failedAddresses.map((prop) => (
+                          <TableRow key={prop.id}>
+                            <TableCell className="font-mono text-sm text-destructive">
+                              {prop.address}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.city && "text-muted-foreground italic")}>
+                              {prop.city || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.state && "text-muted-foreground italic")}>
+                              {prop.state || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !prop.zip && "text-muted-foreground italic")}>
+                              {prop.zip || '(empty)'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </>
       )}
     </div>

@@ -428,11 +428,9 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                 <Table>
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
-                      <TableHead className="w-1/2">Current Address</TableHead>
-                      <TableHead>Parsed Street</TableHead>
-                      <TableHead>Parsed City</TableHead>
-                      <TableHead>Parsed State</TableHead>
-                      <TableHead>Parsed Zip</TableHead>
+                      <TableHead>Current Address (Full String)</TableHead>
+                      <TableHead>City</TableHead>
+                      <TableHead>State</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -441,17 +439,11 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                         <TableCell className="font-mono text-sm text-amber-600">
                           {prop.address}
                         </TableCell>
-                        <TableCell className="text-sm text-green-600">
-                          {prop.parsed.street}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {prop.city || '(empty)'}
                         </TableCell>
-                        <TableCell className="text-sm text-green-600">
-                          {prop.parsed.city}
-                        </TableCell>
-                        <TableCell className="text-sm text-green-600">
-                          {prop.parsed.state}
-                        </TableCell>
-                        <TableCell className="text-sm text-green-600">
-                          {prop.parsed.zip}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {prop.state || '(empty)'}
                         </TableCell>
                       </TableRow>
                     ))}

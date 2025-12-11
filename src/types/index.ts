@@ -128,6 +128,7 @@ export interface Property {
   airbnbUrl?: string;
   zillowUrl?: string;
   propertyUrl?: string; // PropWire or other external link
+  bookingLink?: string; // Generic booking link (VRBO, etc.)
   
   customFields?: Record<string, any>;
   // Scraped Airbnb data fields

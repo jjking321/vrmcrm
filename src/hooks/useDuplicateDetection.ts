@@ -20,6 +20,7 @@ interface DbPropertyWithOwner {
   airbnb_url: string | null;
   zillow_url: string | null;
   property_url: string | null;
+  booking_link: string | null;
   market_data: any;
   created_at: string;
   latitude: number | null;
@@ -56,6 +57,7 @@ export interface DuplicateProperty {
   airbnbUrl: string | null;
   zillowUrl: string | null;
   propertyUrl: string | null;
+  bookingLink: string | null;
   marketData: any;
   createdAt: string;
   latitude: number | null;
@@ -132,6 +134,7 @@ export function useDuplicates() {
           airbnb_url,
           zillow_url,
           property_url,
+          booking_link,
           market_data,
           created_at,
           latitude,
@@ -179,6 +182,7 @@ export function useDuplicates() {
           airbnbUrl: prop.airbnb_url,
           zillowUrl: prop.zillow_url,
           propertyUrl: prop.property_url,
+          bookingLink: prop.booking_link,
           marketData: prop.market_data || {},
           createdAt: prop.created_at,
           latitude: prop.latitude,
@@ -261,6 +265,7 @@ export function useMergeDuplicates() {
       if (mergedData.airbnbUrl !== undefined) propertyUpdate.airbnb_url = mergedData.airbnbUrl;
       if (mergedData.zillowUrl !== undefined) propertyUpdate.zillow_url = mergedData.zillowUrl;
       if (mergedData.propertyUrl !== undefined) propertyUpdate.property_url = mergedData.propertyUrl;
+      if (mergedData.bookingLink !== undefined) propertyUpdate.booking_link = mergedData.bookingLink;
       if (mergedData.marketData !== undefined) propertyUpdate.market_data = mergedData.marketData;
       if (mergedData.latitude !== undefined) propertyUpdate.latitude = mergedData.latitude;
       if (mergedData.longitude !== undefined) propertyUpdate.longitude = mergedData.longitude;

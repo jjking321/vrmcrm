@@ -433,6 +433,7 @@ export type Database = {
           airbnb_url: string | null
           bathrooms: number
           bedrooms: number
+          booking_link: string | null
           city: string
           company_id: string
           created_at: string
@@ -464,6 +465,7 @@ export type Database = {
           airbnb_url?: string | null
           bathrooms?: number
           bedrooms?: number
+          booking_link?: string | null
           city?: string
           company_id: string
           created_at?: string
@@ -495,6 +497,7 @@ export type Database = {
           airbnb_url?: string | null
           bathrooms?: number
           bedrooms?: number
+          booking_link?: string | null
           city?: string
           company_id?: string
           created_at?: string

@@ -111,6 +111,7 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   propertyManager: ['property manager', 'manager', 'pm', 'management company'],
   host: ['host', 'airbnb host', 'host name'],
   airbnbUrl: ['airbnb property link', 'airbnb url', 'airbnb link', 'airbnb'],
+  bookingLink: ['booking link', 'booking url', 'vrbo', 'vrbo link', 'vrbo url', 'other booking'],
   gisCoordinates: ['gis coordinates', 'coordinates', 'lat/long', 'latlong'],
 };
 
@@ -408,6 +409,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'propertyManager', label: '👔 Property Manager', group: 'Airbnb' },
     { id: 'host', label: '👤 Host Name', group: 'Airbnb' },
     { id: 'airbnbUrl', label: '🔗 Airbnb URL', group: 'Airbnb' },
+    { id: 'bookingLink', label: '🔗 Booking Link (VRBO, etc.)', group: 'Airbnb' },
     
     // Multiple Owners
     { id: 'owner1FirstName', label: '👤 Owner 1 First Name', group: 'Owners' },

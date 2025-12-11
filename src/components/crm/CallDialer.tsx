@@ -277,7 +277,18 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
-                  title="External link"
+                  title="Property record"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+              {property?.bookingLink && (
+                <a
+                  href={property.bookingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 text-brand hover:bg-muted rounded-lg transition-colors"
+                  title="Booking link"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </a>

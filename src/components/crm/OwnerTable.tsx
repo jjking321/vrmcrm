@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Property } from '@/types';
-import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 
 interface OwnerTableProps {
   properties: Property[];
@@ -13,6 +13,10 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
     direction: 'desc'
   });
 
+  // Filter out properties with empty owner names
+  const propertiesWithOwner = properties.filter(p => p.owner?.name && p.owner.name.trim() !== '');
+  const propertiesWithoutOwner = properties.filter(p => !p.owner?.name || p.owner.name.trim() === '');
+
   // Aggregate owners
   const ownersMap = new Map<string, { 
     propertyCount: number;
@@ -22,7 +26,7 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
     totalRevenue: number;
   }>();
 
-  properties.forEach(p => {
+  propertiesWithOwner.forEach(p => {
     const existing = ownersMap.get(p.owner.name);
     if (existing) {
       ownersMap.set(p.owner.name, {
@@ -77,6 +81,12 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
 
   return (
     <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
+      {propertiesWithoutOwner.length > 0 && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>{propertiesWithoutOwner.length} properties have no owner name assigned</span>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>

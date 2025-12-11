@@ -223,8 +223,11 @@ export const FilterRuleRow: React.FC<FilterRuleRowProps> = ({
         className="px-3 py-1.5 border border-input rounded-md text-sm bg-card focus:ring-1 focus:ring-brand focus:border-brand outline-none min-w-[140px]"
       >
         <option value="">Select field...</option>
-        {fields.filter(f => !['tags', 'city', 'state', 'ownerName'].includes(f.id)).map(f => (
-          <option key={f.id} value={f.id}>{f.label}</option>
+        {fields.filter(f => {
+          const fieldKey = (f as any).fieldKey || f.id;
+          return !['tags', 'city', 'state', 'ownerName'].includes(fieldKey);
+        }).map(f => (
+          <option key={f.id} value={(f as any).fieldKey || f.id}>{f.label}</option>
         ))}
         <option value="city">City</option>
         <option value="state">State</option>

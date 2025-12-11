@@ -26,6 +26,8 @@ import { BulkActionsBar } from './BulkActionsBar';
 import PropertyDetail from './PropertyDetail';
 import { DataCleanupTool } from './DataCleanupTool';
 import { ExclusionListManager } from './ExclusionListManager';
+import { CallListsView } from './CallListsView';
+import { CallDialer } from './CallDialer';
 import { toast } from 'sonner';
 import { Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -168,6 +170,9 @@ const MainApp: React.FC = () => {
   // Pre-loaded import data from Data Cleanup Tool
   const [preLoadedImportData, setPreLoadedImportData] = useState<any[] | undefined>(undefined);
   const [preLoadedImportHeaders, setPreLoadedImportHeaders] = useState<string[] | undefined>(undefined);
+  
+  // Call list dialer state
+  const [dialerListId, setDialerListId] = useState<string | null>(null);
 
   // Initialize pipeline stages and field definitions when company is ready
   useEffect(() => {
@@ -383,6 +388,22 @@ const MainApp: React.FC = () => {
 
     if (view === 'exclusions') {
       return <ExclusionListManager />;
+    }
+
+    if (view === 'callLists') {
+      if (dialerListId) {
+        return (
+          <CallDialer 
+            listId={dialerListId} 
+            onBack={() => setDialerListId(null)} 
+          />
+        );
+      }
+      return (
+        <CallListsView 
+          onOpenDialer={(listId) => setDialerListId(listId)} 
+        />
+      );
     }
 
     if (view === 'owners') {

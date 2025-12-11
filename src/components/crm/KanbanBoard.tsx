@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
 import { MapPin, DollarSign, User, Ban, Plus } from 'lucide-react';
-import { PropertyImage } from './PropertyImagePlaceholder';
+
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';
 import { useExcludedPropertyIds } from '@/hooks/useExclusionMatches';
@@ -128,20 +128,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       isExcluded ? "border-destructive/50 bg-destructive/5" : "border-border"
                     )}
                   >
-                    {/* Property Image */}
-                    <div className="relative w-full h-24 rounded-md overflow-hidden mb-2">
-                      <PropertyImage 
-                        src={property.image} 
-                        alt={property.address}
-                        className="w-full h-full object-cover"
-                      />
-                      {isExcluded && (
-                        <div className="absolute top-1 right-1 bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Ban className="w-3 h-3" />
-                          Excluded
-                        </div>
-                      )}
-                    </div>
+                    {/* Excluded Badge */}
+                    {isExcluded && (
+                      <div className="bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mb-2">
+                        <Ban className="w-3 h-3" />
+                        Excluded
+                      </div>
+                    )}
 
                     {/* Property Info */}
                     <div className="space-y-1.5">

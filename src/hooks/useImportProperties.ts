@@ -94,26 +94,16 @@ export const useImportProperties = () => {
       if (options.standardize) {
         toast.loading(`Standardizing addresses...`, { id: toastId });
         
-        // Build batch input for addresses that can be standardized
+        // Build batch input - send ALL addresses to Geocodio for standardization
+        // Geocodio can handle any format: space-delimited, comma-delimited, partial, etc.
         const addressesToVerify: BatchAddressInput[] = [];
         data.forEach((row, idx) => {
-          if (row.address && row.city && row.state) {
-            // Separated address fields - send components
+          if (row.address) {
             addressesToVerify.push({
               address: row.address,
-              city: row.city,
-              state: row.state,
+              city: row.city || '',
+              state: row.state || '',
               zip: row.zip || '',
-              index: idx,
-            });
-          } else if (row.address && row.address.includes(',')) {
-            // Full address string (e.g., "115 Chipola Rd, Cocoa Beach, FL 32931, USA")
-            // Send entire string to Geocodio - it can parse full addresses
-            addressesToVerify.push({
-              address: row.address,
-              city: '',
-              state: '',
-              zip: '',
               index: idx,
             });
           }

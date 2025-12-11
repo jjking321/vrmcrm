@@ -133,7 +133,7 @@ const MainApp: React.FC = () => {
     }
     // Otherwise use client sorted (from loaded properties)
     return clientSortedProperties;
-  }, [isServerSearch, hasFilterRules, isFiltering, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
+  }, [isServerSearch, hasFilterRules, isFiltering, isInitialFilterLoad, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');

@@ -64,6 +64,8 @@ export const usePropertyFiltering = (
       switch (rule.operator) {
         case 'equals':
           return String(value).toLowerCase() === String(rule.value).toLowerCase();
+        case 'not_equals':
+          return String(value).toLowerCase() !== String(rule.value).toLowerCase();
         case 'contains':
           return String(value).toLowerCase().includes(String(rule.value).toLowerCase());
         case 'starts_with':
@@ -72,6 +74,24 @@ export const usePropertyFiltering = (
           return Number(value) > Number(rule.value);
         case 'lt':
           return Number(value) < Number(rule.value);
+        case 'any_of': {
+          // For tags, check if any selected tag is in the property's tags
+          const selectedTags = String(rule.value).split(',').filter(t => t.trim()).map(t => t.toLowerCase());
+          if (rule.field === 'tags') {
+            const propertyTags = property.tags.map(t => t.toLowerCase());
+            return selectedTags.some(tag => propertyTags.includes(tag));
+          }
+          return selectedTags.includes(String(value).toLowerCase());
+        }
+        case 'not_any_of': {
+          // For tags, check if none of the selected tags are in the property's tags
+          const selectedTags = String(rule.value).split(',').filter(t => t.trim()).map(t => t.toLowerCase());
+          if (rule.field === 'tags') {
+            const propertyTags = property.tags.map(t => t.toLowerCase());
+            return !selectedTags.some(tag => propertyTags.includes(tag));
+          }
+          return !selectedTags.includes(String(value).toLowerCase());
+        }
         case 'is_set':
           return value !== undefined && value !== null && value !== '';
         case 'is_not_set':

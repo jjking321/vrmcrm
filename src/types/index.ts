@@ -145,6 +145,7 @@ export interface MarketingRequest {
 
 export type FilterOperator = 
   | 'equals' 
+  | 'not_equals'
   | 'contains' 
   | 'starts_with'
   | 'gt'
@@ -152,7 +153,9 @@ export type FilterOperator =
   | 'is_set' 
   | 'is_not_set'
   | 'is_true'
-  | 'is_false';
+  | 'is_false'
+  | 'any_of'
+  | 'not_any_of';
 
 export interface FilterRule {
   id: string;

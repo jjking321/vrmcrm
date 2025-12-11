@@ -3,6 +3,7 @@ import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
 import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, Filter, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FilterRuleRow } from './FilterRuleRow';
+import { useUniqueTags } from '@/hooks/useUniqueTags';
 
 interface FilterBarProps {
   rules: FilterRule[];
@@ -53,6 +54,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onDeduplicateChange,
   resultCount,
 }) => {
+  const { data: availableTags = [] } = useUniqueTags();
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [showSavedLists, setShowSavedLists] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -350,6 +352,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 rule={rule}
                 fields={fields}
                 stages={stages}
+                availableTags={availableTags}
                 onChange={(updated) => updateRule(index, updated)}
                 onRemove={() => removeRule(index)}
               />

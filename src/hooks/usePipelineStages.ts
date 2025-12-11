@@ -26,7 +26,7 @@ export const usePipelineStages = () => {
   return useQuery({
     queryKey: ['pipeline_stages', companyId],
     queryFn: async (): Promise<PipelineStage[]> => {
-      if (!companyId) return DEFAULT_STAGES;
+      if (!companyId) return [];
 
       const { data, error } = await supabase
         .from('pipeline_stages')
@@ -36,9 +36,9 @@ export const usePipelineStages = () => {
 
       if (error) throw error;
 
-      // If no stages exist, return defaults
+      // Return empty array if no stages (initialization will create them)
       if (!data?.length) {
-        return DEFAULT_STAGES;
+        return [];
       }
 
       return data.map(d => toStage(d as unknown as DbPipelineStage));
@@ -64,9 +64,8 @@ export const useInitializePipelineStages = () => {
 
       if (existing?.length) return existing;
 
-      // Insert default stages
+      // Insert default stages (let database generate UUIDs)
       const stagesToInsert = DEFAULT_STAGES.map((stage, index) => ({
-        id: stage.id,
         company_id: company.id,
         name: stage.name,
         color: stage.color,

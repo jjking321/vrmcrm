@@ -58,6 +58,13 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Update selectedStageId when stages load
+  useEffect(() => {
+    if (stages.length > 0 && !selectedStageId) {
+      setSelectedStageId(stages[0].id);
+    }
+  }, [stages, selectedStageId]);
+
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -337,31 +344,39 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
           renderCreateForm()
         ) : (
           <div className="space-y-4">
-            {!selectedProperty && (
+            {stages.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Loading pipeline stages...</p>
+              </div>
+            ) : (
               <>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by address or owner name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                    autoFocus
-                  />
-                </div>
-                {renderSearchResults()}
-                {debouncedSearch.length < 2 && (
-                  <div className="flex justify-center pt-2">
-                    <Button variant="outline" onClick={() => setShowCreateForm(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create New Property
-                    </Button>
-                  </div>
+                {!selectedProperty && (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by address or owner name..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                        autoFocus
+                      />
+                    </div>
+                    {renderSearchResults()}
+                    {debouncedSearch.length < 2 && (
+                      <div className="flex justify-center pt-2">
+                        <Button variant="outline" onClick={() => setShowCreateForm(true)}>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create New Property
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
+
+                {selectedProperty && renderStageSelection()}
               </>
             )}
-
-            {selectedProperty && renderStageSelection()}
           </div>
         )}
       </DialogContent>

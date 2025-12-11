@@ -431,15 +431,19 @@ export const ExclusionListManager: React.FC = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-amber-600 hover:text-amber-700"
-                          onClick={() => handleViewMatches(entry)}
-                        >
-                          <Eye className="w-3 h-3 mr-1" />
-                          View
-                        </Button>
+                        {(allMatches?.matchesByEntry?.get(entry.id) ?? 0) > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-amber-600 hover:text-amber-700"
+                            onClick={() => handleViewMatches(entry)}
+                          >
+                            <Eye className="w-3 h-3 mr-1" />
+                            View ({allMatches?.matchesByEntry?.get(entry.id)})
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">None</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button

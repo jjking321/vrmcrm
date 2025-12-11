@@ -125,8 +125,14 @@ export const useAllExclusionMatches = () => {
         });
       }
 
-      // Find matching properties
-      const matchingIds: string[] = [];
+      // Find matching properties and track per-entry counts
+      const matchingIds = new Set<string>();
+      const matchesByEntry = new Map<string, number>();
+      
+      // Initialize counts for all exclusions
+      for (const exclusion of exclusions) {
+        matchesByEntry.set(exclusion.id, 0);
+      }
       
       for (const prop of properties || []) {
         const property = transformPropertyForMatching({
@@ -137,15 +143,16 @@ export const useAllExclusionMatches = () => {
         // Check against all exclusions
         for (const exclusion of exclusions) {
           if (propertyMatchesExclusion(property, exclusion)) {
-            matchingIds.push(prop.id);
-            break; // Property only needs to match once
+            matchingIds.add(prop.id);
+            matchesByEntry.set(exclusion.id, (matchesByEntry.get(exclusion.id) || 0) + 1);
           }
         }
       }
 
       return { 
-        count: matchingIds.length, 
-        propertyIds: matchingIds 
+        count: matchingIds.size, 
+        propertyIds: Array.from(matchingIds),
+        matchesByEntry
       };
     },
     enabled: !!company?.id && exclusions.length > 0,

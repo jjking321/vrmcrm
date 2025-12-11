@@ -23,6 +23,7 @@ interface FilterBarProps {
   debouncedSearchTerm: string;
   onDebouncedSearchTermChange: (term: string) => void;
   isSearching?: boolean;
+  isFiltering?: boolean;
   listViewMode: 'table' | 'kanban';
   onListViewModeChange: (mode: 'table' | 'kanban') => void;
   deduplicateByOwner: boolean;
@@ -48,6 +49,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   debouncedSearchTerm,
   onDebouncedSearchTermChange,
   isSearching,
+  isFiltering,
   listViewMode,
   onListViewModeChange,
   deduplicateByOwner,

@@ -9,6 +9,7 @@ import { useImportProperties } from '@/hooks/useImportProperties';
 import { useFieldDefinitions, useInitializeFieldDefinitions, useAddFieldDefinition, useDeleteFieldDefinition, useUpdateFieldDefinition } from '@/hooks/useFieldDefinitions';
 import { usePropertyFiltering } from '@/hooks/usePropertyFiltering';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
+import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
@@ -68,10 +69,66 @@ const MainApp: React.FC = () => {
     handleSort,
     deduplicateByOwner,
     setDeduplicateByOwner,
-    filteredProperties,
-    sortedProperties,
+    filteredProperties: clientFilteredProperties,
+    sortedProperties: clientSortedProperties,
     isServerSearch,
   } = usePropertyFiltering(allProperties, searchResults, debouncedSearchTerm);
+
+  // Server-side filtering when rules are active
+  const hasFilterRules = filterRules.length > 0;
+  const { data: serverFilteredProperties = [], isFetching: isFiltering } = useServerFilteredProperties(
+    filterRules,
+    matchType,
+    hasFilterRules && !isServerSearch // Only use server filtering when not already doing server search
+  );
+
+  // Determine which properties to use based on context
+  const displayProperties = useMemo(() => {
+    // If server search is active, use client filtered (which uses search results)
+    if (isServerSearch) {
+      return clientSortedProperties;
+    }
+    // If filter rules are active, use server filtered results
+    if (hasFilterRules && serverFilteredProperties.length > 0) {
+      // Apply client-side sorting and deduplication to server results
+      let result = [...serverFilteredProperties];
+      
+      if (deduplicateByOwner) {
+        const seen = new Set<string>();
+        result = result.filter(p => {
+          if (seen.has(p.owner.name)) return false;
+          seen.add(p.owner.name);
+          return true;
+        });
+      }
+      
+      // Sort
+      result.sort((a, b) => {
+        const { field, direction } = sortConfig;
+        let aVal: any, bVal: any;
+
+        if (field === 'estimatedRevenue') {
+          aVal = a.marketData.projectedRevenue || 0;
+          bVal = b.marketData.projectedRevenue || 0;
+        } else if (field === 'ownerName') {
+          aVal = a.owner.name;
+          bVal = b.owner.name;
+        } else {
+          aVal = (a as any)[field];
+          bVal = (b as any)[field];
+        }
+
+        if (typeof aVal === 'string') {
+          return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+      
+      return result;
+    }
+    // Otherwise use client sorted (from loaded properties)
+    return clientSortedProperties;
+  }, [isServerSearch, hasFilterRules, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
 
   // State
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -298,7 +355,7 @@ const MainApp: React.FC = () => {
           <h1 className="text-2xl font-bold text-foreground mb-6">Pipeline</h1>
           <div className="h-[calc(100vh-180px)]">
             <KanbanBoard
-              properties={filteredProperties}
+              properties={displayProperties}
               stages={stages}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
               onSelectProperty={handleSelectProperty}
@@ -335,14 +392,15 @@ const MainApp: React.FC = () => {
           onListViewModeChange={setListViewMode}
           deduplicateByOwner={deduplicateByOwner}
           onDeduplicateChange={setDeduplicateByOwner}
-          resultCount={sortedProperties.length}
+          resultCount={displayProperties.length}
+          isFiltering={isFiltering}
         />
 
         <div className="mt-4">
           {listViewMode === 'table' ? (
             <>
               <PropertyTable
-                properties={sortedProperties}
+                properties={displayProperties}
                 onSelectProperty={handleSelectProperty}
                 sortConfig={sortConfig}
                 onSort={handleSort}
@@ -359,7 +417,7 @@ const MainApp: React.FC = () => {
                 onSelectAll={(ids) => setSelectedIds(new Set(ids))}
                 onSelectOwner={handleSelectOwner}
               />
-              {hasMore && !isServerSearch && (
+              {hasMore && !isServerSearch && !hasFilterRules && (
                 <div className="flex justify-center py-6">
                   <Button
                     variant="outline"
@@ -382,7 +440,7 @@ const MainApp: React.FC = () => {
           ) : (
             <div className="h-[calc(100vh-280px)]">
               <KanbanBoard
-                properties={sortedProperties}
+                properties={displayProperties}
                 stages={stages}
                 onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
                 onSelectProperty={handleSelectProperty}

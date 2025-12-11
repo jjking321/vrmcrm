@@ -266,7 +266,7 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
                   className="p-1.5 hover:bg-muted rounded-lg transition-colors"
                   title="View on Airbnb"
                 >
-                  <div className="w-6 h-6 bg-[#FF5A5F] rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-200">
                     <img src={airbnbLogo} alt="Airbnb" className="w-4 h-4" />
                   </div>
                 </a>

@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label';
 import { 
   ArrowLeft, ArrowRight, Phone, PhoneOff, Voicemail, PhoneMissed, 
   XCircle, Calendar, SkipForward, Loader2, ExternalLink, AlertTriangle,
-  CheckCircle, Home
+  CheckCircle, Bed, Bath
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';
+import zillowLogo from '@/assets/zillow.png';
+import airbnbLogo from '@/assets/airbnb.png';
 
 interface CallDialerProps {
   listId: string;
@@ -224,6 +226,23 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
               <p className="text-sm text-muted-foreground">
                 {property?.city}, {property?.state} {property?.zip}
               </p>
+              {(property?.bedrooms || property?.bathrooms) && (
+                <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                  {property?.bedrooms && (
+                    <span className="flex items-center gap-1">
+                      <Bed className="w-3.5 h-3.5" />
+                      {property.bedrooms} bed
+                    </span>
+                  )}
+                  {property?.bedrooms && property?.bathrooms && <span>•</span>}
+                  {property?.bathrooms && (
+                    <span className="flex items-center gap-1">
+                      <Bath className="w-3.5 h-3.5" />
+                      {property.bathrooms} bath
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             
             {/* External links */}
@@ -233,10 +252,10 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
                   href={property.zillowUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
                   title="View on Zillow"
                 >
-                  <Home className="w-4 h-4" />
+                  <img src={zillowLogo} alt="Zillow" className="w-6 h-6" />
                 </a>
               )}
               {property?.airbnbUrl && (
@@ -244,10 +263,10 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
                   href={property.airbnbUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
                   title="View on Airbnb"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <img src={airbnbLogo} alt="Airbnb" className="w-6 h-6" />
                 </a>
               )}
               {property?.propertyUrl && (

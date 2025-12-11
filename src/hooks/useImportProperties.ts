@@ -18,6 +18,7 @@ interface ImportOptions {
   listName?: string;
   duplicateDecisions?: Map<string, DuplicateDecision>;
   contactMergeMode?: 'stack' | 'override';
+  importMode?: 'full' | 'updateOnly';
 }
 
 // Normalize address for duplicate detection
@@ -268,29 +269,34 @@ export const useImportProperties = () => {
             contactMergeMode: mergeMode as 'stack' | 'replace', // Stack or replace contacts per-duplicate
           });
         } else {
-          const owner = transformImportToOwner(row);
-          newProperties.push({
-            property: {
-              company_id: company.id,
-              address,
-              city,
-              state,
-              zip,
-              latitude,
-              longitude,
-              bedrooms: parseInt(row.bedrooms) || 0,
-              bathrooms: parseFloat(row.bathrooms) || 0,
-              tags: options.globalTags || [],
-              property_url: row.propertyUrl || null,
-              airbnb_url: row.airbnbUrl || null,
-              listing_title: row.listingTitle || null,
-              room_type: row.roomType || null,
-              property_manager: row.propertyManager || null,
-              host: row.host || null,
-              market_data: { adr: 0, occupancyRate: 0, projectedRevenue: 0, propertyValue: 0 },
-            },
-            owner,
-          });
+          // Check if we're in updateOnly mode - skip non-matches
+          if (options.importMode === 'updateOnly') {
+            skippedCount++;
+          } else {
+            const owner = transformImportToOwner(row);
+            newProperties.push({
+              property: {
+                company_id: company.id,
+                address,
+                city,
+                state,
+                zip,
+                latitude,
+                longitude,
+                bedrooms: parseInt(row.bedrooms) || 0,
+                bathrooms: parseFloat(row.bathrooms) || 0,
+                tags: options.globalTags || [],
+                property_url: row.propertyUrl || null,
+                airbnb_url: row.airbnbUrl || null,
+                listing_title: row.listingTitle || null,
+                room_type: row.roomType || null,
+                property_manager: row.propertyManager || null,
+                host: row.host || null,
+                market_data: { adr: 0, occupancyRate: 0, projectedRevenue: 0, propertyValue: 0 },
+              },
+              owner,
+            });
+          }
         }
       }
 
@@ -496,7 +502,11 @@ export const useImportProperties = () => {
       const parts: string[] = [];
       if (insertedCount > 0) parts.push(`${insertedCount} new`);
       if (updatedCount > 0) parts.push(`${updatedCount} updated`);
-      if (skippedCount > 0) parts.push(`${skippedCount} duplicates skipped`);
+      if (options.importMode === 'updateOnly' && skippedCount > 0) {
+        parts.push(`${skippedCount} non-matches skipped`);
+      } else if (skippedCount > 0) {
+        parts.push(`${skippedCount} duplicates skipped`);
+      }
       if (excludedCount > 0) parts.push(`${excludedCount} excluded`);
       if (options.standardize && standardizedCount > 0) parts.push(`${standardizedCount} standardized`);
 

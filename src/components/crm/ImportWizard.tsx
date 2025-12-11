@@ -43,6 +43,7 @@ interface ImportWizardProps {
     listName?: string;
     duplicateDecisions?: Map<string, DuplicateDecision>;
     contactMergeMode?: 'stack' | 'override';
+    importMode?: 'full' | 'updateOnly';
   }) => void;
   fields: FieldDefinition[];
   existingProperties: Property[];
@@ -153,6 +154,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [listName, setListName] = useState('');
   const [standardizeAddresses, setStandardizeAddresses] = useState(true);
   const [contactMergeMode, setContactMergeMode] = useState<'stack' | 'override'>('stack');
+  const [importMode, setImportMode] = useState<'full' | 'updateOnly'>('full');
   const [recordCount, setRecordCount] = useState(0);
   
   // Duplicate detection state
@@ -290,6 +292,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
         globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
         listName: createList && listName ? listName : undefined,
         contactMergeMode,
+        importMode,
       });
       handleClose();
     }
@@ -361,6 +364,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
       listName: createList && listName ? listName : undefined,
       duplicateDecisions: decisions,
       contactMergeMode,
+      importMode,
     });
     setShowDuplicateModal(false);
     handleClose();
@@ -377,6 +381,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     setListName('');
     setStandardizeAddresses(true);
     setContactMergeMode('stack');
+    setImportMode('full');
     setShowDuplicateModal(false);
     setDuplicates([]);
     setNonDuplicates([]);
@@ -565,6 +570,43 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
 
               {/* Options */}
               <div className="space-y-4 pt-4 border-t border-border">
+                {/* Import Mode */}
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-3">
+                    Import Mode
+                  </span>
+                  <div className="space-y-2 ml-1">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="importMode" 
+                        value="full" 
+                        checked={importMode === 'full'} 
+                        onChange={() => setImportMode('full')}
+                        className="w-4 h-4 mt-0.5 text-brand focus:ring-brand"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">Full Import</span>
+                        <p className="text-xs text-muted-foreground">Add new properties and update matches</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="importMode" 
+                        value="updateOnly" 
+                        checked={importMode === 'updateOnly'}
+                        onChange={() => setImportMode('updateOnly')}
+                        className="w-4 h-4 mt-0.5 text-brand focus:ring-brand"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-foreground">Update Only</span>
+                        <p className="text-xs text-muted-foreground">Only update existing properties, skip non-matches</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Geocodio Standardization */}
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <label className="flex items-start gap-3 cursor-pointer">

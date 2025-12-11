@@ -373,33 +373,47 @@ export const useServerFilteredProperties = (
 
       const propertyIds = properties.map(p => p.id);
 
-      // Fetch owners and activities
-      const [ownersRes, activitiesRes] = await Promise.all([
-        supabase
-          .from('owners')
-          .select('*')
-          .in('property_id', propertyIds),
-        supabase
-          .from('activity_logs')
-          .select('*')
-          .in('property_id', propertyIds)
-          .order('date', { ascending: false }),
-      ]);
-
-      if (ownersRes.error) throw ownersRes.error;
-      if (activitiesRes.error) throw activitiesRes.error;
-
+      // Batch fetch owners and activities to avoid URL length limits
+      // Supabase .in() with 700+ UUIDs exceeds HTTP URL length limits
+      const BATCH_SIZE = 100;
       const ownersByProp = new Map<string, DbOwner>();
-      (ownersRes.data || []).forEach(o => {
-        ownersByProp.set(o.property_id, o as unknown as DbOwner);
-      });
-
       const activitiesByProp = new Map<string, DbActivity[]>();
-      (activitiesRes.data || []).forEach(a => {
-        const list = activitiesByProp.get(a.property_id) || [];
-        list.push(a as unknown as DbActivity);
-        activitiesByProp.set(a.property_id, list);
-      });
+
+      // Process in batches
+      for (let i = 0; i < propertyIds.length; i += BATCH_SIZE) {
+        const batch = propertyIds.slice(i, i + BATCH_SIZE);
+        
+        const [ownersRes, activitiesRes] = await Promise.all([
+          supabase
+            .from('owners')
+            .select('*')
+            .in('property_id', batch),
+          supabase
+            .from('activity_logs')
+            .select('*')
+            .in('property_id', batch)
+            .order('date', { ascending: false }),
+        ]);
+
+        // Non-fatal errors - log but continue
+        if (ownersRes.error) {
+          console.warn('Owner batch fetch error:', ownersRes.error);
+        } else {
+          (ownersRes.data || []).forEach(o => {
+            ownersByProp.set(o.property_id, o as unknown as DbOwner);
+          });
+        }
+
+        if (activitiesRes.error) {
+          console.warn('Activity batch fetch error:', activitiesRes.error);
+        } else {
+          (activitiesRes.data || []).forEach(a => {
+            const list = activitiesByProp.get(a.property_id) || [];
+            list.push(a as unknown as DbActivity);
+            activitiesByProp.set(a.property_id, list);
+          });
+        }
+      }
 
       return properties.map(p =>
         toProperty(

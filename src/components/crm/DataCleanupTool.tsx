@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useMalformedAddresses, useFixAddresses, MalformedProperty, FixAddressesResult } from '@/hooks/useAddressFixer';
+import { useMalformedAddresses, useFixAddresses, useFixSingleAddress, useUpdatePropertyAddress, useApplyLocalParse, tryLocalParse, MalformedProperty, FixAddressesResult } from '@/hooks/useAddressFixer';
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
 import { DuplicateMergeModal } from './DuplicateMergeModal';
@@ -64,7 +64,14 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   // Address fixer hooks
   const { data: malformedAddresses = [], isLoading: isLoadingMalformed, refetch: refetchMalformed } = useMalformedAddresses();
   const fixAddressesMutation = useFixAddresses();
+  const fixSingleMutation = useFixSingleAddress();
+  const updateAddressMutation = useUpdatePropertyAddress();
+  const applyLocalParseMutation = useApplyLocalParse();
   const [failedAddresses, setFailedAddresses] = useState<MalformedProperty[]>([]);
+  
+  // Edit modal state
+  const [editingProperty, setEditingProperty] = useState<MalformedProperty | null>(null);
+  const [editForm, setEditForm] = useState({ address: '', city: '', state: '', zip: '' });
 
   // Address verification hooks
   const { data: verificationData, isLoading: isLoadingVerification, refetch: refetchVerification } = useUnverifiedAddresses();
@@ -375,6 +382,70 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     }
   };
 
+  // Handle local parse attempt for single address
+  const handleTryParse = (prop: MalformedProperty) => {
+    const { success, parsed } = tryLocalParse(prop);
+    if (success) {
+      toast.success(
+        `Parsed: ${parsed.street}, ${parsed.city}, ${parsed.state} ${parsed.zip}`,
+        {
+          action: {
+            label: 'Apply',
+            onClick: () => {
+              applyLocalParseMutation.mutate(
+                { propertyId: prop.id, parsed },
+                {
+                  onSuccess: () => toast.success('Address updated'),
+                  onError: (err) => toast.error(`Failed: ${err.message}`),
+                }
+              );
+            },
+          },
+        }
+      );
+    } else {
+      toast.error('Could not parse locally - try Geocodio or edit manually');
+    }
+  };
+
+  // Handle Geocodio for single address
+  const handleSendToGeocodio = (prop: MalformedProperty) => {
+    fixSingleMutation.mutate(prop, {
+      onSuccess: (standardized) => {
+        toast.success(`Fixed: ${standardized.street}, ${standardized.city}, ${standardized.state} ${standardized.zip}`);
+      },
+      onError: (err) => {
+        toast.error(`Geocodio failed: ${err.message}`);
+      },
+    });
+  };
+
+  // Open edit modal
+  const handleOpenEdit = (prop: MalformedProperty) => {
+    setEditingProperty(prop);
+    setEditForm({
+      address: prop.address,
+      city: prop.city,
+      state: prop.state,
+      zip: prop.zip,
+    });
+  };
+
+  // Save manual edit
+  const handleSaveEdit = () => {
+    if (!editingProperty) return;
+    updateAddressMutation.mutate(
+      { id: editingProperty.id, ...editForm },
+      {
+        onSuccess: () => {
+          toast.success('Address updated');
+          setEditingProperty(null);
+        },
+        onError: (err) => toast.error(`Failed: ${err.message}`),
+      }
+    );
+  };
+
   // Render Address Fixer Tab
   const renderAddressFixer = () => (
     <div>
@@ -382,7 +453,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
         <div>
           <h2 className="text-xl font-semibold text-foreground">Fix Incomplete Addresses</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Find and fix properties missing city, state, or zip using Geocodio
+            Parse locally first, then use Geocodio for remaining addresses
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => { refetchMalformed(); setFailedAddresses([]); }}>
@@ -421,7 +492,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                           Found {malformedAddresses.length} properties with incomplete addresses
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Missing city, state, or zip - will attempt to fix via Geocodio
+                          Local parse attempted first, then Geocodio for remaining
                         </p>
                       </div>
                     </div>
@@ -430,7 +501,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                       disabled={fixAddressesMutation.isPending}
                     >
                       <Wrench className="w-4 h-4 mr-1" />
-                      Fix All {malformedAddresses.length} Addresses
+                      Fix All {malformedAddresses.length}
                     </Button>
                   </div>
                 </CardContent>
@@ -438,7 +509,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
 
               <Card className="mb-4">
                 <CardContent className="p-0">
-                  <div className="overflow-auto max-h-[30vh]">
+                  <div className="overflow-auto max-h-[40vh]">
                     <Table>
                       <TableHeader className="sticky top-0 bg-card z-10">
                         <TableRow>
@@ -446,10 +517,11 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                           <TableHead>City</TableHead>
                           <TableHead>State</TableHead>
                           <TableHead>Zip</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {malformedAddresses.slice(0, 50).map((prop) => (
+                        {malformedAddresses.map((prop) => (
                           <TableRow key={prop.id}>
                             <TableCell className="font-mono text-sm">
                               {prop.address}
@@ -463,16 +535,41 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                             <TableCell className={cn("text-sm", !prop.zip && "text-muted-foreground italic")}>
                               {prop.zip || '(empty)'}
                             </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1 justify-end">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleTryParse(prop)}
+                                  disabled={applyLocalParseMutation.isPending}
+                                  title="Try local parse"
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleSendToGeocodio(prop)}
+                                  disabled={fixSingleMutation.isPending}
+                                  title="Send to Geocodio"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenEdit(prop)}
+                                  title="Edit manually"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                  {malformedAddresses.length > 50 && (
-                    <div className="p-3 text-center text-sm text-muted-foreground border-t">
-                      Showing first 50 of {malformedAddresses.length} properties
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </>
@@ -491,7 +588,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                           {failedAddresses.length} addresses could not be parsed
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Geocodio couldn't determine complete address info - try again or fix manually
+                          Try editing manually or retry with Geocodio
                         </p>
                       </div>
                     </div>
@@ -501,7 +598,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                       disabled={fixAddressesMutation.isPending}
                     >
                       <RefreshCw className="w-4 h-4 mr-1" />
-                      Retry {failedAddresses.length} Failed
+                      Retry All
                     </Button>
                   </div>
                 </CardContent>
@@ -517,6 +614,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                           <TableHead>City</TableHead>
                           <TableHead>State</TableHead>
                           <TableHead>Zip</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -534,6 +632,27 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                             <TableCell className={cn("text-sm", !prop.zip && "text-muted-foreground italic")}>
                               {prop.zip || '(empty)'}
                             </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1 justify-end">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleSendToGeocodio(prop)}
+                                  disabled={fixSingleMutation.isPending}
+                                  title="Retry Geocodio"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenEdit(prop)}
+                                  title="Edit manually"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -545,6 +664,63 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
           )}
         </>
       )}
+
+      {/* Edit Address Modal */}
+      <Dialog open={!!editingProperty} onOpenChange={(open) => !open && setEditingProperty(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Address</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-address">Street Address</Label>
+              <Input
+                id="edit-address"
+                value={editForm.address}
+                onChange={(e) => setEditForm(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="123 Main St"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="edit-city">City</Label>
+                <Input
+                  id="edit-city"
+                  value={editForm.city}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="City"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-state">State</Label>
+                <Input
+                  id="edit-state"
+                  value={editForm.state}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, state: e.target.value }))}
+                  placeholder="FL"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-zip">Zip</Label>
+                <Input
+                  id="edit-zip"
+                  value={editForm.zip}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, zip: e.target.value }))}
+                  placeholder="12345"
+                  maxLength={10}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingProperty(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={updateAddressMutation.isPending}>
+              {updateAddressMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 

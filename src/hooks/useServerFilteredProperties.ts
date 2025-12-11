@@ -306,6 +306,10 @@ export const useServerFilteredProperties = (
                 }
                 return `${f.field}.not.ilike.${f.value}`;
               case 'contains':
+                // Special handling for tags array field
+                if (f.field === 'tags') {
+                  return `tags.ov.{${f.value.trim()}}`;
+                }
                 return `${f.field}.ilike.%${f.value}%`;
               case 'starts_with':
                 return `${f.field}.ilike.${f.value}%`;
@@ -353,7 +357,12 @@ export const useServerFilteredProperties = (
                 }
                 break;
               case 'contains':
-                query = query.ilike(f.field, `%${f.value}%`);
+                // Special handling for tags array field
+                if (f.field === 'tags') {
+                  query = query.overlaps('tags', [f.value.trim()]);
+                } else {
+                  query = query.ilike(f.field, `%${f.value}%`);
+                }
                 break;
               case 'starts_with':
                 query = query.ilike(f.field, `${f.value}%`);

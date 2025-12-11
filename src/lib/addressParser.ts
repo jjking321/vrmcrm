@@ -79,22 +79,71 @@ export function parseFullAddress(fullAddress: string): ParsedAddress {
     return result;
   }
 
-  // If only one part (no commas), try to parse it
+  // If only one part (no commas), try to parse space-delimited address
   if (parts.length === 1) {
-    // Try to find state at the end
     const words = parts[0].split(/\s+/);
-    const lastWord = words[words.length - 1]?.toLowerCase();
     
-    // Check if last word is a state abbreviation
-    if (lastWord && validStateAbbrs.has(lastWord.toUpperCase())) {
-      result.state = lastWord.toUpperCase();
-      result.street = words.slice(0, -1).join(' ');
-      result.isValid = !!result.street;
-    } else if (lastWord && stateAbbreviations[lastWord]) {
-      result.state = stateAbbreviations[lastWord];
-      result.street = words.slice(0, -1).join(' ');
-      result.isValid = !!result.street;
+    // Try to find STATE ZIP pattern at the end
+    // e.g., "15 SUNFLOWER ST UNIT 44 COCOA BEACH FL 32931"
+    let stateIndex = -1;
+    for (let i = words.length - 1; i >= 0; i--) {
+      const word = words[i].toLowerCase();
+      if (validStateAbbrs.has(word.toUpperCase())) {
+        stateIndex = i;
+        result.state = word.toUpperCase();
+        break;
+      } else if (stateAbbreviations[word]) {
+        stateIndex = i;
+        result.state = stateAbbreviations[word];
+        break;
+      }
+    }
+    
+    if (stateIndex > 0) {
+      // Found state - now try to find city boundary
+      // Common city names are 1-3 words before the state
+      // Look for patterns: street indicators, unit numbers, etc.
+      const streetIndicators = ['st', 'street', 'ave', 'avenue', 'rd', 'road', 'dr', 'drive', 
+        'ln', 'lane', 'blvd', 'boulevard', 'ct', 'court', 'cir', 'circle', 'way', 'pl', 'place',
+        'unit', 'apt', 'suite', 'ste', '#'];
+      
+      let streetEndIndex = stateIndex - 1; // Default: everything before state is street+city
+      
+      // Work backwards from state to find where street ends
+      for (let i = stateIndex - 1; i >= 0; i--) {
+        const word = words[i].toLowerCase();
+        // If we find a street indicator, the next word(s) are likely city
+        if (streetIndicators.includes(word)) {
+          // Check if this is a unit indicator with a number after it
+          if (['unit', 'apt', 'suite', 'ste', '#'].includes(word) && i + 1 < stateIndex) {
+            // Skip unit number, continue looking
+            continue;
+          }
+          // Found street suffix - words after this (before state) are city
+          streetEndIndex = i;
+          break;
+        }
+        // If it's a number and previous word is a unit indicator, skip
+        if (/^\d+$/.test(word) && i > 0 && ['unit', 'apt', 'suite', 'ste', '#'].includes(words[i-1].toLowerCase())) {
+          continue;
+        }
+      }
+      
+      // Extract city (words between street end and state)
+      // Try to be smart about city: usually 1-2 words
+      const potentialCityWords = words.slice(streetEndIndex + 1, stateIndex);
+      if (potentialCityWords.length > 0) {
+        result.city = potentialCityWords.join(' ');
+        result.street = words.slice(0, streetEndIndex + 1).join(' ');
+      } else {
+        // Fallback: assume last 2 words before state are city
+        const cityStart = Math.max(0, stateIndex - 2);
+        result.city = words.slice(cityStart, stateIndex).join(' ');
+        result.street = words.slice(0, cityStart).join(' ');
+      }
+      result.isValid = !!result.street && !!result.city;
     } else {
+      // No state found, just use as street
       result.street = parts[0];
     }
     return result;
@@ -229,12 +278,34 @@ export function isFullAddressField(address: string, city: string, state: string)
   
   if (!address) return false;
   
-  // Check if address contains a comma (suggests city/state in it)
-  if (!address.includes(',')) return false;
+  // Check for comma-delimited addresses
+  if (address.includes(',')) {
+    const parsed = parseFullAddress(address);
+    return parsed.isValid && !!parsed.city && !!parsed.state;
+  }
   
-  // Parse and see if we can extract valid components
-  const parsed = parseFullAddress(address);
-  return parsed.isValid && !!parsed.city && !!parsed.state;
+  // Check for space-delimited addresses (e.g., "123 MAIN ST CITY FL 32931")
+  // Look for STATE ZIP pattern at the end
+  const stateZipPattern = /\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\s*$/i;
+  const match = address.match(stateZipPattern);
+  if (match) {
+    const potentialState = match[1].toUpperCase();
+    if (validStateAbbrs.has(potentialState)) {
+      return true;
+    }
+  }
+  
+  // Also check for STATE at end without ZIP (e.g., "123 MAIN ST CITY FL")
+  const stateOnlyPattern = /\b([A-Z]{2})\s*$/i;
+  const stateMatch = address.match(stateOnlyPattern);
+  if (stateMatch) {
+    const potentialState = stateMatch[1].toUpperCase();
+    if (validStateAbbrs.has(potentialState)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**

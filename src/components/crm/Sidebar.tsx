@@ -14,6 +14,7 @@ interface SidebarProps {
   onAddPropertyClick: () => void;
   propertyCount: number;
   totalPropertyCount?: number;
+  ownerCount?: number;
   savedLists: SavedList[];
   onLoadList: (list: SavedList) => void;
   onDeleteList: (id: string) => void;
@@ -26,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onAddPropertyClick,
   propertyCount,
   totalPropertyCount,
+  ownerCount,
   savedLists,
   onLoadList,
   onDeleteList,
@@ -36,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'dashboard' as ViewMode, label: 'Dashboard', icon: BarChart3 },
     { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: totalPropertyCount || propertyCount },
-    { id: 'owners' as ViewMode, label: 'Owners', icon: Users },
+    { id: 'owners' as ViewMode, label: 'Owners', icon: Users, count: ownerCount },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
     { id: 'dataCleanup' as ViewMode, label: 'Data Tools', icon: Wrench },
     { id: 'exclusions' as ViewMode, label: 'Exclusion List', icon: Ban },

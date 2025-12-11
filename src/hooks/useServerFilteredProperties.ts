@@ -218,38 +218,58 @@ export const useServerFilteredProperties = (
       let ownerPropertyIds: string[] | null = null;
       
       if (ownerFilters.length > 0) {
-        let ownerQuery = supabase
-          .from('owners')
-          .select('property_id')
-          .eq('company_id', companyId);
-
-        for (const filter of ownerFilters) {
-          switch (filter.op) {
-            case 'equals':
-              ownerQuery = ownerQuery.ilike(filter.field, filter.value);
-              break;
-            case 'not_equals':
-              ownerQuery = ownerQuery.not(filter.field, 'ilike', filter.value);
-              break;
-            case 'contains':
-              ownerQuery = ownerQuery.ilike(filter.field, `%${filter.value}%`);
-              break;
-            case 'starts_with':
-              ownerQuery = ownerQuery.ilike(filter.field, `${filter.value}%`);
-              break;
-            case 'is_set':
-              ownerQuery = ownerQuery.not(filter.field, 'is', null);
-              break;
-            case 'is_not_set':
-              ownerQuery = ownerQuery.is(filter.field, null);
-              break;
-          }
-        }
-
-        const { data: ownerData, error: ownerError } = await ownerQuery;
-        if (ownerError) throw ownerError;
+        // Check if we're looking for empty/null owner names
+        const isNotSetFilter = ownerFilters.find(f => f.field === 'name' && f.op === 'is_not_set');
+        const isSetFilter = ownerFilters.find(f => f.field === 'name' && f.op === 'is_set');
         
-        ownerPropertyIds = (ownerData || []).map(o => o.property_id);
+        if (isNotSetFilter) {
+          // Query for owners with null OR empty name
+          const { data: ownerData, error: ownerError } = await supabase
+            .from('owners')
+            .select('property_id')
+            .eq('company_id', companyId)
+            .or('name.is.null,name.eq.');
+          
+          if (ownerError) throw ownerError;
+          ownerPropertyIds = (ownerData || []).map(o => o.property_id);
+        } else if (isSetFilter) {
+          // Query for owners with non-null AND non-empty name
+          const { data: ownerData, error: ownerError } = await supabase
+            .from('owners')
+            .select('property_id')
+            .eq('company_id', companyId)
+            .not('name', 'is', null)
+            .neq('name', '');
+          
+          if (ownerError) throw ownerError;
+          ownerPropertyIds = (ownerData || []).map(o => o.property_id);
+        } else {
+          let ownerQuery = supabase
+            .from('owners')
+            .select('property_id')
+            .eq('company_id', companyId);
+
+          for (const filter of ownerFilters) {
+            switch (filter.op) {
+              case 'equals':
+                ownerQuery = ownerQuery.ilike(filter.field, filter.value);
+                break;
+              case 'not_equals':
+                ownerQuery = ownerQuery.not(filter.field, 'ilike', filter.value);
+                break;
+              case 'contains':
+                ownerQuery = ownerQuery.ilike(filter.field, `%${filter.value}%`);
+                break;
+              case 'starts_with':
+                ownerQuery = ownerQuery.ilike(filter.field, `${filter.value}%`);
+                break;
+            }
+          }
+
+          const { data: ownerData, error: ownerError } = await ownerQuery;
+          if (ownerError) throw ownerError;
+          ownerPropertyIds = (ownerData || []).map(o => o.property_id);
+        }
         
         if (ownerPropertyIds.length === 0 && matchType === 'and') {
           return [];

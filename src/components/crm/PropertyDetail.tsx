@@ -13,8 +13,19 @@ import {
   MapPin, BedDouble, Bath, User, Mail, Phone, 
   ArrowLeft, Save, X, Plus, ExternalLink, Star, 
   TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2,
-  AlertTriangle, PhoneOff, Clock, Link, DollarSign
+  AlertTriangle, PhoneOff, Clock, Link, DollarSign, Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -24,6 +35,7 @@ interface PropertyDetailProps {
   fields: FieldDefinition[];
   onBack: () => void;
   onUpdateProperty: (id: string, updates: Partial<Property>) => void;
+  onDeleteProperty?: (id: string) => void;
   onSelectOwner?: (ownerName: string) => void;
 }
 
@@ -33,6 +45,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   fields,
   onBack,
   onUpdateProperty,
+  onDeleteProperty,
   onSelectOwner,
 }) => {
   const [isEditingOwner, setIsEditingOwner] = useState(false);
@@ -314,6 +327,35 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
           </div>
         )}
         {currentStage && <Badge label={currentStage.name} color={currentStage.color} className="text-sm" />}
+        {onDeleteProperty && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                className="p-2 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-colors"
+                title="Delete property"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Property</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{property.address}"? This action cannot be undone and will also delete all associated activity logs.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDeleteProperty(property.id)}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

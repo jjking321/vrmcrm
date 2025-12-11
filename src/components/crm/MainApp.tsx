@@ -298,6 +298,17 @@ const MainApp: React.FC = () => {
           fields={fields}
           onBack={() => setSelectedPropertyId(null)}
           onUpdateProperty={handleUpdateProperty}
+          onDeleteProperty={(id) => {
+            deletePropertiesMutation.mutate([id], {
+              onSuccess: () => {
+                toast.success('Property deleted');
+                setSelectedPropertyId(null);
+              },
+              onError: () => {
+                toast.error('Failed to delete property');
+              }
+            });
+          }}
           onSelectOwner={handleSelectOwner}
         />
       );

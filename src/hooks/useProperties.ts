@@ -349,7 +349,7 @@ export const useUpdateProperty = () => {
       if (updates.lotSize !== undefined) propUpdates.lot_size = updates.lotSize;
       if (updates.propertyType !== undefined) propUpdates.property_type = updates.propertyType;
       if (updates.image !== undefined) propUpdates.image = updates.image;
-      if (updates.stageId !== undefined) propUpdates.stage_id = updates.stageId === 'lead-list' ? null : updates.stageId;
+      if (updates.stageId !== undefined) propUpdates.stage_id = updates.stageId || null;
       if (updates.tags !== undefined) propUpdates.tags = updates.tags;
       if (updates.airbnbUrl !== undefined) propUpdates.airbnb_url = updates.airbnbUrl;
       if (updates.zillowUrl !== undefined) propUpdates.zillow_url = updates.zillowUrl;

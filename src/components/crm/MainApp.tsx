@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { DEFAULT_STAGES, DEFAULT_COLUMNS } from '@/data/mockData';
+import { DEFAULT_COLUMNS } from '@/data/mockData';
 import { useProperties, useTotalPropertyCount, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
 import { useSavedLists, useAddSavedList, useDeleteSavedList } from '@/hooks/useSavedLists';
 import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipelineStages';
@@ -36,7 +36,7 @@ const MainApp: React.FC = () => {
   const { data: allProperties = [], isLoading: propertiesLoading, hasMore, loadMore, isFetchingMore } = useProperties();
   const { data: totalPropertyCount = 0 } = useTotalPropertyCount();
   const { data: savedLists = [] } = useSavedLists();
-  const { data: stages = DEFAULT_STAGES } = usePipelineStages();
+  const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
   const { mutate: initStages } = useInitializePipelineStages();
   const { mutate: initFields } = useInitializeFieldDefinitions();
@@ -202,7 +202,7 @@ const MainApp: React.FC = () => {
   const selectedProperty = selectedPropertyId ? allProperties.find(p => p.id === selectedPropertyId) : null;
 
   // Loading state
-  if (propertiesLoading || fieldsLoading) {
+  if (propertiesLoading || fieldsLoading || stagesLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="flex flex-col items-center gap-4">

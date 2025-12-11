@@ -1,16 +1,17 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Property, FilterRule, SortConfig } from '@/types';
+import { usePersistedState } from './usePersistedState';
 
 export const usePropertyFiltering = (
   allProperties: Property[], 
   searchResults?: Property[] | null, 
   debouncedSearchTerm?: string
 ) => {
-  // State
-  const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
-  const [matchType, setMatchType] = useState<'and' | 'or'>('and');
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'address', direction: 'asc' });
-  const [deduplicateByOwner, setDeduplicateByOwner] = useState(false);
+  // Persisted state using sessionStorage
+  const [filterRules, setFilterRules] = usePersistedState<FilterRule[]>('crm-filter-rules', []);
+  const [matchType, setMatchType] = usePersistedState<'and' | 'or'>('crm-match-type', 'and');
+  const [sortConfig, setSortConfig] = usePersistedState<SortConfig>('crm-sort-config', { field: 'address', direction: 'asc' });
+  const [deduplicateByOwner, setDeduplicateByOwner] = usePersistedState<boolean>('crm-deduplicate', false);
 
   // Determine which properties to use as base
   // When searching with 2+ chars and have results, use search results from DB

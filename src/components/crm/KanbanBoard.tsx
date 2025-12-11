@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage } from '@/types';
-import { MapPin, DollarSign, User, Ban, Plus } from 'lucide-react';
+import { MapPin, DollarSign, User, Ban, Plus, Phone } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';
@@ -146,15 +146,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
-                          <User className="w-3 h-3" />
-                          <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
+                            <User className="w-3 h-3" />
+                            <span className="truncate">{getPrimaryOwnerName(property.owner).split(' ')[0]}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
+                            <DollarSign className="w-3 h-3" />
+                            <span>{(property.marketData.projectedRevenue / 1000).toFixed(0)}k</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-1.5 rounded">
-                          <DollarSign className="w-3 h-3" />
-                          <span>{(property.marketData.projectedRevenue / 1000).toFixed(0)}k</span>
-                        </div>
+                        {(property.owner?.phone || property.owner?.phones?.[0]?.number) && (
+                          <a
+                            href={`tel:${property.owner?.phones?.[0]?.number || property.owner?.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>

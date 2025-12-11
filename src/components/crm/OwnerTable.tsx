@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Property } from '@/types';
-import { ChevronRight, Phone, Mail, Building, DollarSign } from 'lucide-react';
+import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface OwnerTableProps {
   properties: Property[];
@@ -8,6 +8,11 @@ interface OwnerTableProps {
 }
 
 export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwner }) => {
+  const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' }>({
+    field: 'totalRevenue',
+    direction: 'desc'
+  });
+
   // Aggregate owners
   const ownersMap = new Map<string, { 
     propertyCount: number;
@@ -37,8 +42,38 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
   });
 
   const owners = Array.from(ownersMap.entries())
-    .map(([name, data]) => ({ name, ...data }))
-    .sort((a, b) => b.totalRevenue - a.totalRevenue);
+    .map(([name, data]) => ({ name, ...data }));
+
+  const handleSort = (field: string) => {
+    setSortConfig(prev => ({
+      field,
+      direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const sortedOwners = [...owners].sort((a, b) => {
+    const { field, direction } = sortConfig;
+    let comparison = 0;
+    
+    if (field === 'name') {
+      comparison = a.name.localeCompare(b.name);
+    } else if (field === 'propertyCount') {
+      comparison = a.propertyCount - b.propertyCount;
+    } else if (field === 'totalRevenue') {
+      comparison = a.totalRevenue - b.totalRevenue;
+    }
+    
+    return direction === 'asc' ? comparison : -comparison;
+  });
+
+  const getSortIcon = (field: string) => {
+    if (sortConfig.field !== field) {
+      return <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-60" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="w-3 h-3 text-brand" />
+      : <ArrowDown className="w-3 h-3 text-brand" />
+  };
 
   return (
     <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
@@ -46,15 +81,39 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
         <table className="w-full">
           <thead>
             <tr className="bg-muted/30 border-b border-border">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Owner</th>
+              <th 
+                onClick={() => handleSort('name')}
+                className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+              >
+                <div className="flex items-center gap-1.5">
+                  Owner
+                  {getSortIcon('name')}
+                </div>
+              </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">Properties</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Revenue</th>
+              <th 
+                onClick={() => handleSort('propertyCount')}
+                className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  Properties
+                  {getSortIcon('propertyCount')}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('totalRevenue')}
+                className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+              >
+                <div className="flex items-center justify-end gap-1.5">
+                  Total Revenue
+                  {getSortIcon('totalRevenue')}
+                </div>
+              </th>
               <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {owners.map((owner) => (
+            {sortedOwners.map((owner) => (
               <tr
                 key={owner.name}
                 onClick={() => onSelectOwner(owner.name)}
@@ -105,7 +164,7 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
         </table>
       </div>
 
-      {owners.length === 0 && (
+      {sortedOwners.length === 0 && (
         <div className="p-12 text-center text-muted-foreground">
           <p>No owners found.</p>
         </div>

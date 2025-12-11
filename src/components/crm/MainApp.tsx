@@ -256,6 +256,19 @@ const MainApp: React.FC = () => {
   };
 
   const handleSelectOwner = (ownerName: string) => {
+    // Handle special case for properties without owner names
+    if (ownerName === '__NO_OWNER__') {
+      setFilterRules([{
+        id: 'no-owner-filter',
+        field: 'owner.name',
+        operator: 'is_not_set',
+        value: ''
+      }]);
+      setView('properties');
+      setSelectedOwnerName(null);
+      setSelectedPropertyId(null);
+      return;
+    }
     setSelectedOwnerName(ownerName);
     setSelectedPropertyId(null);
   };

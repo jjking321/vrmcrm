@@ -82,9 +82,13 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
   return (
     <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
       {propertiesWithoutOwner.length > 0 && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+        <div 
+          onClick={() => onSelectOwner('__NO_OWNER__')}
+          className="p-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+        >
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>{propertiesWithoutOwner.length} properties have no owner name assigned</span>
+          <ChevronRight className="w-4 h-4 ml-auto" />
         </div>
       )}
       <div className="overflow-x-auto">

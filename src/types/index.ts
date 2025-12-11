@@ -196,8 +196,39 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
-export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions';
+export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer';
 export type ListViewMode = 'table' | 'kanban';
+
+export type CallOutcome = 'answered' | 'voicemail' | 'no_answer' | 'wrong_number' | 'callback' | 'dnc_skipped';
+export type CallItemStatus = 'pending' | 'completed' | 'skipped';
+
+export interface CallList {
+  id: string;
+  companyId: string;
+  name: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CallListItem {
+  id: string;
+  callListId: string;
+  propertyId: string;
+  companyId: string;
+  ownerIndex: number | null;
+  phoneIndex: number | null;
+  status: CallItemStatus;
+  callOutcome: CallOutcome | null;
+  notes: string | null;
+  lastCalledAt: string | null;
+  callCount: number;
+  callbackDate: string | null;
+  sortOrder: number;
+  createdAt: string;
+  // Joined data
+  property?: Property;
+}
 
 export interface ExclusionEntry {
   id: string;

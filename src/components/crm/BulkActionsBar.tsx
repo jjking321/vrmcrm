@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage, FilterRule } from '@/types';
-import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter } from 'lucide-react';
+import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
+import { AddToCallListModal } from './AddToCallListModal';
 
 interface BulkActionsBarProps {
   selectedIds: Set<string>;
@@ -32,6 +33,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const [enrichProgress, setEnrichProgress] = useState(0);
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [isCallListModalOpen, setIsCallListModalOpen] = useState(false);
 
   const selectedCount = selectedIds.size;
   const selectedProperties = properties.filter(p => selectedIds.has(p.id));
@@ -332,6 +334,17 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           )}
         </div>
 
+        {/* Call List */}
+        <div className="border-l border-border pl-3">
+          <button
+            onClick={() => setIsCallListModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            <Phone className="w-4 h-4" />
+            Call List
+          </button>
+        </div>
+
         {/* Delete */}
         <button
           onClick={handleDelete}
@@ -341,6 +354,13 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           Delete
         </button>
       </div>
+      
+      {/* Call List Modal */}
+      <AddToCallListModal
+        isOpen={isCallListModalOpen}
+        onClose={() => setIsCallListModalOpen(false)}
+        selectedProperties={selectedProperties}
+      />
     </div>
   );
 };

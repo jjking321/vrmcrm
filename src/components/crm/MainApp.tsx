@@ -218,8 +218,8 @@ const MainApp: React.FC = () => {
     standardize: boolean;
     globalTags?: string[];
     listName?: string;
-    duplicateStrategy?: 'skip' | 'update' | 'merge' | 'review';
-    duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+    duplicateDecisions?: Map<string, { mergeMode: 'stack' | 'replace' }>;
+    contactMergeMode?: 'stack' | 'override';
   }) => {
     importPropertiesMutation.mutate({
       data,

@@ -8,12 +8,15 @@ import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
 import { normalizeAddressForMatch, namesMatch, emailsMatch, phonesMatch } from '@/lib/exclusionUtils';
 import { parseFullAddress, isFullAddressField } from '@/lib/addressParser';
 
+interface DuplicateDecision {
+  mergeMode: 'stack' | 'replace';
+}
+
 interface ImportOptions {
   standardize: boolean;
   globalTags?: string[];
   listName?: string;
-  duplicateStrategy?: 'skip' | 'update' | 'merge' | 'review';
-  duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+  duplicateDecisions?: Map<string, DuplicateDecision>;
   contactMergeMode?: 'stack' | 'override';
 }
 
@@ -161,7 +164,7 @@ export const useImportProperties = () => {
       toast.loading(`Processing ${data.length} properties...`, { id: toastId });
 
       const newProperties: any[] = [];
-      const updatedProperties: { id: string; normalizedAddr: string; row: any; mergeOnly: boolean }[] = [];
+      const updatedProperties: { id: string; normalizedAddr: string; row: any; mergeOnly: boolean; contactMergeMode: 'stack' | 'replace' }[] = [];
       let skippedCount = 0;
       let excludedCount = 0;
 
@@ -260,27 +263,20 @@ export const useImportProperties = () => {
         const existingProp = existingAddressMap.get(normalizedAddr);
 
         if (existingProp) {
-          const strategy = options.duplicateStrategy || 'skip';
-          let decision: 'keep_existing' | 'use_import' | 'merge' = 'keep_existing';
+          // Get the decision for this duplicate - default to stack mode
+          const decision = options.duplicateDecisions?.get(normalizedAddr);
+          // Map 'override' from global setting to 'replace' for per-record setting
+          const globalMode = options.contactMergeMode === 'override' ? 'replace' : (options.contactMergeMode || 'stack');
+          const mergeMode = decision?.mergeMode || globalMode;
 
-          if (strategy === 'review' && options.duplicateDecisions) {
-            decision = options.duplicateDecisions.get(normalizedAddr) || 'keep_existing';
-          } else if (strategy === 'update') {
-            decision = 'use_import';
-          } else if (strategy === 'merge') {
-            decision = 'merge';
-          }
-
-          if (decision !== 'keep_existing') {
-            updatedProperties.push({
-              id: existingProp.id,
-              normalizedAddr,
-              row: { ...row, address, city, state, zip, _latitude: latitude, _longitude: longitude },
-              mergeOnly: decision === 'merge',
-            });
-          } else {
-            skippedCount++;
-          }
+          // All duplicates will be updated - no skipping
+          updatedProperties.push({
+            id: existingProp.id,
+            normalizedAddr,
+            row: { ...row, address, city, state, zip, _latitude: latitude, _longitude: longitude },
+            mergeOnly: false, // Always update all fields from import
+            contactMergeMode: mergeMode as 'stack' | 'replace', // Stack or replace contacts per-duplicate
+          });
         } else {
           const owner = transformImportToOwner(row);
           newProperties.push({
@@ -380,7 +376,6 @@ export const useImportProperties = () => {
         // Process updates in parallel chunks
         const UPDATE_CHUNK_SIZE = 50;
         const updateChunks = chunkArray(updatedProperties, UPDATE_CHUNK_SIZE);
-        const contactMode = options.contactMergeMode || 'stack';
 
         for (const chunk of updateChunks) {
           await Promise.all(chunk.map(async (update) => {
@@ -406,8 +401,9 @@ export const useImportProperties = () => {
               host: row.host || null,
             };
 
-            // Build owner updates based on contact merge mode
+            // Build owner updates based on contact merge mode (per-duplicate setting)
             let ownerUpdates: Record<string, any>;
+            const contactMode = update.contactMergeMode || 'stack';
             
             if (contactMode === 'stack' && existingOwner) {
               // STACK: Add new contacts to existing ones (deduplicated)

@@ -3,8 +3,37 @@ import { FieldDefinition, Property } from '@/types';
 import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { transformImportToOwner } from '@/lib/ownerUtils';
-import { DuplicateReviewModal, DuplicateStrategy, normalizeAddress } from './DuplicateReviewModal';
+import { DuplicateMergeReview, DuplicateMatch, DuplicateDecision } from './DuplicateMergeReview';
 
+// Normalize address for comparison
+function normalizeAddress(address: string, city: string, state: string): string {
+  const streetSuffixes: Record<string, string> = {
+    'street': 'st', 'st': 'st',
+    'avenue': 'ave', 'ave': 'ave',
+    'drive': 'dr', 'dr': 'dr',
+    'road': 'rd', 'rd': 'rd',
+    'lane': 'ln', 'ln': 'ln',
+    'boulevard': 'blvd', 'blvd': 'blvd',
+    'court': 'ct', 'ct': 'ct',
+    'circle': 'cir', 'cir': 'cir',
+    'place': 'pl', 'pl': 'pl',
+    'way': 'way',
+    'trail': 'trl', 'trl': 'trl',
+  };
+  
+  let normalized = `${address} ${city} ${state}`
+    .toLowerCase()
+    .replace(/[.,#\-']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Normalize street suffixes
+  for (const [full, abbr] of Object.entries(streetSuffixes)) {
+    normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
+  }
+  
+  return normalized;
+}
 interface ImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,8 +41,7 @@ interface ImportWizardProps {
     standardize: boolean; 
     globalTags?: string[]; 
     listName?: string;
-    duplicateStrategy?: DuplicateStrategy;
-    duplicateDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>;
+    duplicateDecisions?: Map<string, DuplicateDecision>;
     contactMergeMode?: 'stack' | 'override';
   }) => void;
   fields: FieldDefinition[];
@@ -129,7 +157,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   
   // Duplicate detection state
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [duplicates, setDuplicates] = useState<{ importRow: Record<string, any>; existingProperty: Property; normalizedAddress: string }[]>([]);
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
   const [nonDuplicates, setNonDuplicates] = useState<Record<string, any>[]>([]);
   const [parsedImportData, setParsedImportData] = useState<Record<string, any>[]>([]);
 
@@ -326,16 +354,12 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     reader.readAsText(file);
   };
 
-  const handleDuplicateConfirm = (
-    strategy: DuplicateStrategy,
-    reviewDecisions?: Map<string, 'keep_existing' | 'use_import' | 'merge'>
-  ) => {
+  const handleDuplicateConfirm = (decisions: Map<string, DuplicateDecision>) => {
     onImport(parsedImportData, {
       standardize: standardizeAddresses,
       globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
       listName: createList && listName ? listName : undefined,
-      duplicateStrategy: strategy,
-      duplicateDecisions: reviewDecisions,
+      duplicateDecisions: decisions,
       contactMergeMode,
     });
     setShowDuplicateModal(false);
@@ -666,12 +690,13 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
       </div>
 
       {/* Duplicate Review Modal */}
-      <DuplicateReviewModal
+      <DuplicateMergeReview
         isOpen={showDuplicateModal}
         onClose={() => setShowDuplicateModal(false)}
         duplicates={duplicates}
-        nonDuplicates={nonDuplicates}
+        nonDuplicatesCount={nonDuplicates.length}
         onConfirm={handleDuplicateConfirm}
+        globalContactMergeMode={contactMergeMode}
       />
     </div>
   );

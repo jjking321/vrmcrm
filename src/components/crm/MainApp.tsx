@@ -76,7 +76,7 @@ const MainApp: React.FC = () => {
 
   // Server-side filtering when rules are active
   const hasFilterRules = filterRules.length > 0;
-  const { data: serverFilteredProperties = [], isFetching: isFiltering } = useServerFilteredProperties(
+  const { data: serverFilteredProperties = [], isFetching: isFiltering, isLoading: isInitialFilterLoad } = useServerFilteredProperties(
     filterRules,
     matchType,
     hasFilterRules && !isServerSearch // Only use server filtering when not already doing server search
@@ -90,8 +90,9 @@ const MainApp: React.FC = () => {
     }
     // If filter rules are active, always use server results
     if (hasFilterRules) {
-      // If still loading, return empty to show loading state
-      if (isFiltering) {
+      // Only show empty during INITIAL load (no cached data yet)
+      // Keep showing cached data during background refetches
+      if (isInitialFilterLoad) {
         return [];
       }
       // Apply client-side sorting and deduplication to server results

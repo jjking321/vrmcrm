@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FilterRule, FilterOperator, FieldDefinition, PipelineStage } from '@/types';
-import { X, ChevronDown, Check } from 'lucide-react';
+import { X, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
+import { TagBadge } from './Badge';
 interface FilterRuleRowProps {
   rule: FilterRule;
   fields: FieldDefinition[];
@@ -74,51 +74,51 @@ export const FilterRuleRow: React.FC<FilterRuleRowProps> = ({
   const renderValueInput = () => {
     if (!showValueInput) return null;
 
-    // Tags multi-select dropdown
+    // Tags multi-select with chips
     if (rule.field === 'tags' && (rule.operator === 'any_of' || rule.operator === 'not_any_of' || rule.operator === 'equals' || rule.operator === 'not_equals' || rule.operator === 'contains')) {
       const selectedTags = getSelectedTags();
+      const unselectedTags = availableTags.filter(t => !selectedTags.includes(t));
       
       return (
         <div className="relative flex-1" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => setShowTagDropdown(!showTagDropdown)}
-            className="w-full flex items-center justify-between px-3 py-1.5 border border-input rounded-md text-sm bg-card focus:ring-1 focus:ring-brand focus:border-brand outline-none min-h-[34px]"
-          >
-            <span className={cn("truncate", selectedTags.length === 0 && "text-muted-foreground")}>
-              {selectedTags.length === 0 
-                ? 'Select tags...' 
-                : selectedTags.length === 1 
-                  ? selectedTags[0]
-                  : `${selectedTags.length} tags selected`}
-            </span>
-            <ChevronDown className="w-4 h-4 text-muted-foreground ml-2 flex-shrink-0" />
-          </button>
-          
-          {showTagDropdown && (
-            <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
-              {availableTags.length === 0 ? (
-                <p className="p-3 text-sm text-muted-foreground text-center">No tags available</p>
-              ) : (
-                availableTags.map(tag => (
-                  <label
-                    key={tag}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm"
-                  >
-                    <div className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center",
-                      selectedTags.includes(tag) 
-                        ? "bg-brand border-brand" 
-                        : "border-input"
-                    )}>
-                      {selectedTags.includes(tag) && (
-                        <Check className="w-3 h-3 text-brand-foreground" />
-                      )}
-                    </div>
-                    <span>{tag}</span>
-                  </label>
-                ))
+          <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border border-input rounded-md bg-card min-h-[34px]">
+            {/* Selected tags as chips */}
+            {selectedTags.map(tag => (
+              <TagBadge key={tag} tag={tag} onRemove={() => toggleTag(tag)} />
+            ))}
+            
+            {/* Add tag button */}
+            <button
+              type="button"
+              onClick={() => setShowTagDropdown(!showTagDropdown)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-brand hover:text-brand transition-colors",
+                selectedTags.length === 0 && "text-muted-foreground"
               )}
+            >
+              <Plus className="w-3 h-3" />
+              {selectedTags.length === 0 ? 'Select tags' : 'Add'}
+            </button>
+          </div>
+          
+          {showTagDropdown && unselectedTags.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+              {unselectedTags.map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/50 text-sm"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {showTagDropdown && unselectedTags.length === 0 && (
+            <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-md shadow-lg p-3">
+              <p className="text-sm text-muted-foreground text-center">No more tags to add</p>
             </div>
           )}
         </div>

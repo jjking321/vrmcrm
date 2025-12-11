@@ -9,6 +9,7 @@ import { useImportProperties } from '@/hooks/useImportProperties';
 import { useFieldDefinitions, useInitializeFieldDefinitions, useAddFieldDefinition, useDeleteFieldDefinition, useUpdateFieldDefinition } from '@/hooks/useFieldDefinitions';
 import { usePropertyFiltering } from '@/hooks/usePropertyFiltering';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
+import { useAllOwners } from '@/hooks/useAllOwners';
 import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
@@ -39,6 +40,7 @@ const MainApp: React.FC = () => {
   const { data: savedLists = [] } = useSavedLists();
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
+  const { data: ownersData, isLoading: ownersLoading } = useAllOwners();
   const { mutate: initStages } = useInitializePipelineStages();
   const { mutate: initFields } = useInitializeFieldDefinitions();
 
@@ -371,9 +373,10 @@ const MainApp: React.FC = () => {
     if (view === 'owners') {
       return (
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-6">Owners</h1>
           <OwnerTable
-            properties={allProperties}
+            owners={ownersData?.owners || []}
+            propertiesWithoutOwner={ownersData?.propertiesWithoutOwner || 0}
+            isLoading={ownersLoading}
             onSelectOwner={handleSelectOwner}
           />
         </div>

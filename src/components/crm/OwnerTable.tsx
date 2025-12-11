@@ -1,52 +1,24 @@
 import React, { useState } from 'react';
-import { Property } from '@/types';
-import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Phone, Mail, Building, DollarSign, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Users, Loader2 } from 'lucide-react';
+import { AggregatedOwner } from '@/hooks/useAllOwners';
 
 interface OwnerTableProps {
-  properties: Property[];
+  owners: AggregatedOwner[];
+  propertiesWithoutOwner: number;
+  isLoading?: boolean;
   onSelectOwner: (ownerName: string) => void;
 }
 
-export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwner }) => {
+export const OwnerTable: React.FC<OwnerTableProps> = ({ 
+  owners, 
+  propertiesWithoutOwner, 
+  isLoading,
+  onSelectOwner 
+}) => {
   const [sortConfig, setSortConfig] = useState<{ field: string; direction: 'asc' | 'desc' }>({
     field: 'totalRevenue',
     direction: 'desc'
   });
-
-  // Filter out properties with empty owner names
-  const propertiesWithOwner = properties.filter(p => p.owner?.name && p.owner.name.trim() !== '');
-  const propertiesWithoutOwner = properties.filter(p => !p.owner?.name || p.owner.name.trim() === '');
-
-  // Aggregate owners
-  const ownersMap = new Map<string, { 
-    propertyCount: number;
-    email: string;
-    phone: string;
-    lastVerified?: string;
-    totalRevenue: number;
-  }>();
-
-  propertiesWithOwner.forEach(p => {
-    const existing = ownersMap.get(p.owner.name);
-    if (existing) {
-      ownersMap.set(p.owner.name, {
-        ...existing,
-        propertyCount: existing.propertyCount + 1,
-        totalRevenue: existing.totalRevenue + (p.marketData.projectedRevenue || 0),
-      });
-    } else {
-      ownersMap.set(p.owner.name, {
-        propertyCount: 1,
-        email: p.owner.email,
-        phone: p.owner.phone,
-        lastVerified: p.owner.lastVerifiedDate,
-        totalRevenue: p.marketData.projectedRevenue || 0,
-      });
-    }
-  });
-
-  const owners = Array.from(ownersMap.entries())
-    .map(([name, data]) => ({ name, ...data }));
 
   const handleSort = (field: string) => {
     setSortConfig(prev => ({
@@ -76,21 +48,39 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
     }
     return sortConfig.direction === 'asc' 
       ? <ArrowUp className="w-3 h-3 text-brand" />
-      : <ArrowDown className="w-3 h-3 text-brand" />
+      : <ArrowDown className="w-3 h-3 text-brand" />;
   };
 
   return (
     <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
-      {propertiesWithoutOwner.length > 0 && (
+      {/* Header with total count */}
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-muted-foreground" />
+          <h2 className="font-semibold text-foreground">
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading owners...
+              </span>
+            ) : (
+              <span>{owners.length.toLocaleString()} Owners</span>
+            )}
+          </h2>
+        </div>
+      </div>
+
+      {propertiesWithoutOwner > 0 && (
         <div 
           onClick={() => onSelectOwner('__NO_OWNER__')}
           className="p-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
         >
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span>{propertiesWithoutOwner.length} properties have no owner name assigned</span>
+          <span>{propertiesWithoutOwner} properties have no owner name assigned</span>
           <ChevronRight className="w-4 h-4 ml-auto" />
         </div>
       )}
+      
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -178,7 +168,7 @@ export const OwnerTable: React.FC<OwnerTableProps> = ({ properties, onSelectOwne
         </table>
       </div>
 
-      {sortedOwners.length === 0 && (
+      {!isLoading && sortedOwners.length === 0 && (
         <div className="p-12 text-center text-muted-foreground">
           <p>No owners found.</p>
         </div>

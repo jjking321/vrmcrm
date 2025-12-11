@@ -95,11 +95,22 @@ export const useImportProperties = () => {
         const addressesToVerify: BatchAddressInput[] = [];
         data.forEach((row, idx) => {
           if (row.address && row.city && row.state) {
+            // Separated address fields - send components
             addressesToVerify.push({
               address: row.address,
               city: row.city,
               state: row.state,
               zip: row.zip || '',
+              index: idx,
+            });
+          } else if (row.address && row.address.includes(',')) {
+            // Full address string (e.g., "115 Chipola Rd, Cocoa Beach, FL 32931, USA")
+            // Send entire string to Geocodio - it can parse full addresses
+            addressesToVerify.push({
+              address: row.address,
+              city: '',
+              state: '',
+              zip: '',
               index: idx,
             });
           }

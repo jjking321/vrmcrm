@@ -273,8 +273,10 @@ const MainApp: React.FC = () => {
     setSelectedPropertyId(null);
   };
 
-  // Render selected property detail
-  const selectedProperty = selectedPropertyId ? allProperties.find(p => p.id === selectedPropertyId) : null;
+  // Render selected property detail - check both loaded properties and server-filtered results
+  const selectedProperty = selectedPropertyId 
+    ? (allProperties.find(p => p.id === selectedPropertyId) || displayProperties.find(p => p.id === selectedPropertyId)) 
+    : null;
 
   // Loading state
   if (propertiesLoading || fieldsLoading || stagesLoading) {

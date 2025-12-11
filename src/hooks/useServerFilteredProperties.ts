@@ -24,6 +24,7 @@ interface DbProperty {
   airbnb_url: string | null;
   zillow_url: string | null;
   property_url: string | null;
+  booking_link: string | null;
   listing_title: string | null;
   room_type: string | null;
   property_manager: string | null;
@@ -95,6 +96,7 @@ const toProperty = (
   airbnbUrl: dbProp.airbnb_url || undefined,
   zillowUrl: dbProp.zillow_url || undefined,
   propertyUrl: dbProp.property_url || undefined,
+  bookingLink: dbProp.booking_link || undefined,
   listingTitle: dbProp.listing_title || undefined,
   roomType: dbProp.room_type || undefined,
   propertyManager: dbProp.property_manager || undefined,

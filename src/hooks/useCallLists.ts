@@ -157,6 +157,7 @@ export const useCallListItems = (listId: string | null) => {
           airbnbUrl: prop.airbnb_url,
           zillowUrl: prop.zillow_url,
           propertyUrl: prop.property_url,
+          bookingLink: prop.booking_link,
           listingTitle: prop.listing_title,
           roomType: prop.room_type,
           propertyManager: prop.property_manager,

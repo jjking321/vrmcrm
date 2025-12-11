@@ -26,6 +26,7 @@ interface DbProperty {
   airbnb_url: string | null;
   zillow_url: string | null;
   property_url: string | null;
+  booking_link: string | null;
   listing_title: string | null;
   room_type: string | null;
   property_manager: string | null;
@@ -97,6 +98,7 @@ const toProperty = (
   airbnbUrl: dbProp.airbnb_url || undefined,
   zillowUrl: dbProp.zillow_url || undefined,
   propertyUrl: dbProp.property_url || undefined,
+  bookingLink: dbProp.booking_link || undefined,
   listingTitle: dbProp.listing_title || undefined,
   roomType: dbProp.room_type || undefined,
   propertyManager: dbProp.property_manager || undefined,
@@ -354,6 +356,7 @@ export const useUpdateProperty = () => {
       if (updates.airbnbUrl !== undefined) propUpdates.airbnb_url = updates.airbnbUrl;
       if (updates.zillowUrl !== undefined) propUpdates.zillow_url = updates.zillowUrl;
       if (updates.propertyUrl !== undefined) propUpdates.property_url = updates.propertyUrl;
+      if (updates.bookingLink !== undefined) propUpdates.booking_link = updates.bookingLink;
       if (updates.listingTitle !== undefined) propUpdates.listing_title = updates.listingTitle;
       if (updates.roomType !== undefined) propUpdates.room_type = updates.roomType;
       if (updates.propertyManager !== undefined) propUpdates.property_manager = updates.propertyManager;

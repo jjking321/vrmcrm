@@ -43,6 +43,7 @@ const MERGE_FIELDS: MergeField[] = [
   { key: 'airbnbUrl', label: 'Airbnb URL', getValue: p => p.airbnbUrl, display: v => v ? 'Set' : '-' },
   { key: 'zillowUrl', label: 'Zillow URL', getValue: p => p.zillowUrl, display: v => v ? 'Set' : '-' },
   { key: 'propertyUrl', label: 'Property URL', getValue: p => p.propertyUrl, display: v => v ? 'Set' : '-' },
+  { key: 'bookingLink', label: 'Booking Link', getValue: p => p.bookingLink, display: v => v ? 'Set' : '-' },
   { key: 'adr', label: 'ADR', getValue: p => p.marketData?.adr, display: v => v ? `$${v}` : '-' },
   { key: 'projectedRevenue', label: 'Revenue', getValue: p => p.marketData?.projectedRevenue, display: v => v ? `$${v.toLocaleString()}` : '-' },
   { key: 'propertyValue', label: 'Property Value', getValue: p => p.marketData?.propertyValue, display: v => v ? `$${v.toLocaleString()}` : '-' },

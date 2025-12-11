@@ -66,6 +66,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
     airbnbUrl: property.airbnbUrl || '',
     zillowUrl: property.zillowUrl || '',
     propertyUrl: property.propertyUrl || '',
+    bookingLink: property.bookingLink || '',
   });
   const [editedMarket, setEditedMarket] = useState({
     projectedRevenue: property.marketData.projectedRevenue,
@@ -94,6 +95,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
       airbnbUrl: property.airbnbUrl || '',
       zillowUrl: property.zillowUrl || '',
       propertyUrl: property.propertyUrl || '',
+      bookingLink: property.bookingLink || '',
     });
     setEditedMarket({
       projectedRevenue: property.marketData.projectedRevenue,
@@ -147,6 +149,16 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   };
 
   const handleSaveProperty = () => {
+    // Smart detection: if bookingLink contains airbnb, move to airbnbUrl
+    let finalAirbnbUrl = editedProperty.airbnbUrl;
+    let finalBookingLink = editedProperty.bookingLink;
+    
+    if (finalBookingLink && finalBookingLink.toLowerCase().includes('airbnb')) {
+      finalAirbnbUrl = finalBookingLink;
+      finalBookingLink = '';
+      toast.info('Airbnb URL detected and moved to Airbnb field');
+    }
+    
     onUpdateProperty(property.id, {
       address: editedProperty.address,
       city: editedProperty.city,
@@ -158,9 +170,10 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
       squareFeet: editedProperty.squareFeet || undefined,
       yearBuilt: editedProperty.yearBuilt || undefined,
       propertyType: editedProperty.propertyType || undefined,
-      airbnbUrl: editedProperty.airbnbUrl || undefined,
+      airbnbUrl: finalAirbnbUrl || undefined,
       zillowUrl: editedProperty.zillowUrl || undefined,
       propertyUrl: editedProperty.propertyUrl || undefined,
+      bookingLink: finalBookingLink || undefined,
     });
     setIsEditingProperty(false);
     toast.success('Property details updated');
@@ -312,6 +325,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                   airbnbUrl: property.airbnbUrl || '',
                   zillowUrl: property.zillowUrl || '',
                   propertyUrl: property.propertyUrl || '',
+                  bookingLink: property.bookingLink || '',
                 });
               }}
               className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
@@ -470,7 +484,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             {isEditingProperty && (
               <div className="p-4 border-t border-border space-y-3">
                 <h4 className="text-sm font-medium text-muted-foreground">External Links</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Airbnb URL</label>
                     <input
@@ -499,6 +513,16 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                       onChange={(e) => setEditedProperty({ ...editedProperty, propertyUrl: e.target.value })}
                       className={inputClass}
                       placeholder="https://..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground block mb-1">Booking Link (VRBO, etc.)</label>
+                    <input
+                      type="url"
+                      value={editedProperty.bookingLink}
+                      onChange={(e) => setEditedProperty({ ...editedProperty, bookingLink: e.target.value })}
+                      className={inputClass}
+                      placeholder="https://vrbo.com/... (Airbnb URLs auto-moved)"
                     />
                   </div>
                 </div>

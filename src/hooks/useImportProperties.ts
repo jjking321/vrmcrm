@@ -274,6 +274,16 @@ export const useImportProperties = () => {
             skippedCount++;
           } else {
             const owner = transformImportToOwner(row);
+            
+            // Smart booking link detection - move Airbnb URLs to airbnbUrl field
+            let airbnbUrl = row.airbnbUrl || null;
+            let bookingLink = row.bookingLink || null;
+            
+            if (bookingLink && bookingLink.toLowerCase().includes('airbnb')) {
+              airbnbUrl = bookingLink;
+              bookingLink = null;
+            }
+            
             newProperties.push({
               property: {
                 company_id: company.id,
@@ -287,7 +297,8 @@ export const useImportProperties = () => {
                 bathrooms: parseFloat(row.bathrooms) || 0,
                 tags: options.globalTags || [],
                 property_url: row.propertyUrl || null,
-                airbnb_url: row.airbnbUrl || null,
+                airbnb_url: airbnbUrl,
+                booking_link: bookingLink,
                 listing_title: row.listingTitle || null,
                 room_type: row.roomType || null,
                 property_manager: row.propertyManager || null,
@@ -390,12 +401,23 @@ export const useImportProperties = () => {
               bathrooms: parseFloat(row.bathrooms) || 0,
               tags: [...new Set([...(existingAddressMap.get(update.normalizedAddr)?.tags || []), ...(options.globalTags || [])])],
               property_url: row.propertyUrl || null,
-              airbnb_url: row.airbnbUrl || null,
               listing_title: row.listingTitle || null,
               room_type: row.roomType || null,
               property_manager: row.propertyManager || null,
               host: row.host || null,
             };
+            
+            // Smart booking link detection for updates - move Airbnb URLs to airbnbUrl field
+            let airbnbUrl = row.airbnbUrl || null;
+            let bookingLink = row.bookingLink || null;
+            
+            if (bookingLink && bookingLink.toLowerCase().includes('airbnb')) {
+              airbnbUrl = bookingLink;
+              bookingLink = null;
+            }
+            
+            if (airbnbUrl) propUpdates.airbnb_url = airbnbUrl;
+            if (bookingLink) propUpdates.booking_link = bookingLink;
 
             // Build owner updates based on contact merge mode (per-duplicate setting)
             let ownerUpdates: Record<string, any>;

@@ -505,6 +505,7 @@ const MainApp: React.FC = () => {
         onAddPropertyClick={() => setIsAddPropertyOpen(true)}
         propertyCount={allProperties.length}
         totalPropertyCount={totalPropertyCount}
+        ownerCount={ownersData?.owners.length}
         savedLists={savedLists}
         onLoadList={handleLoadList}
         onDeleteList={handleDeleteList}

@@ -131,7 +131,12 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ activities, onAddActivity }) 
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-foreground capitalize">{activity.type}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground capitalize">{activity.type}</span>
+                      {activity.createdByName && (
+                        <span className="text-xs text-muted-foreground">by {activity.createdByName}</span>
+                      )}
+                    </div>
                     <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">{activity.content}</p>

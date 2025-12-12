@@ -65,6 +65,7 @@ interface DbActivity {
   id: string;
   property_id: string;
   company_id: string;
+  created_by: string | null;
   type: string;
   content: string;
   outcome: string | null;
@@ -75,7 +76,8 @@ interface DbActivity {
 const toProperty = (
   dbProp: DbProperty,
   dbOwner: DbOwner | null,
-  dbActivities: DbActivity[]
+  dbActivities: DbActivity[],
+  profilesMap?: Map<string, string>
 ): Property => ({
   id: dbProp.id,
   companyId: dbProp.company_id,
@@ -139,6 +141,8 @@ const toProperty = (
     date: a.date,
     content: a.content,
     outcome: a.outcome || undefined,
+    createdBy: a.created_by || undefined,
+    createdByName: a.created_by && profilesMap ? profilesMap.get(a.created_by) : undefined,
   })),
 });
 
@@ -189,8 +193,8 @@ export const useProperties = () => {
 
     const propertyIds = properties.map(p => p.id);
 
-    // Fetch owners and activities in parallel
-    const [ownersRes, activitiesRes] = await Promise.all([
+    // Fetch owners, activities, and profiles in parallel
+    const [ownersRes, activitiesRes, profilesRes] = await Promise.all([
       supabase
         .from('owners')
         .select('*')
@@ -200,10 +204,20 @@ export const useProperties = () => {
         .select('*')
         .in('property_id', propertyIds)
         .order('date', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('company_id', companyId),
     ]);
 
     if (ownersRes.error) throw ownersRes.error;
     if (activitiesRes.error) throw activitiesRes.error;
+
+    // Create profiles lookup map
+    const profilesMap = new Map<string, string>();
+    (profilesRes.data || []).forEach(p => {
+      profilesMap.set(p.id, p.name);
+    });
 
     // Group by property_id
     const ownersByProp = new Map<string, DbOwner>();
@@ -222,7 +236,8 @@ export const useProperties = () => {
       toProperty(
         p as unknown as DbProperty,
         ownersByProp.get(p.id) || null,
-        activitiesByProp.get(p.id) || []
+        activitiesByProp.get(p.id) || [],
+        profilesMap
       )
     );
   };

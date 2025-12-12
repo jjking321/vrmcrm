@@ -123,43 +123,26 @@ serve(async (req) => {
 
     console.log('User created:', newUser.user.id);
 
-    // Create profile for the new user linked to admin's company
-    const { error: insertProfileError } = await supabaseAdmin
+    // Update the profile created by the trigger to link to admin's company
+    // The handle_new_user trigger already created the profile, so we update it
+    const { error: updateProfileError } = await supabaseAdmin
       .from('profiles')
-      .insert({
-        id: newUser.user.id,
-        name: name.trim(),
+      .update({
         company_id: adminProfile.company_id,
-      });
+      })
+      .eq('id', newUser.user.id);
 
-    if (insertProfileError) {
-      console.error('Error creating profile:', insertProfileError);
+    if (updateProfileError) {
+      console.error('Error updating profile:', updateProfileError);
       // Clean up: delete the created user
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       return new Response(
-        JSON.stringify({ error: 'Failed to create user profile' }),
+        JSON.stringify({ error: 'Failed to link user to company' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Assign 'member' role to the new user
-    const { error: insertRoleError } = await supabaseAdmin
-      .from('user_roles')
-      .insert({
-        user_id: newUser.user.id,
-        role: 'member',
-      });
-
-    if (insertRoleError) {
-      console.error('Error creating user role:', insertRoleError);
-      // Clean up
-      await supabaseAdmin.from('profiles').delete().eq('id', newUser.user.id);
-      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-      return new Response(
-        JSON.stringify({ error: 'Failed to assign user role' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // The trigger already created the 'member' role, so no need to insert it
 
     console.log('Team member created successfully');
 

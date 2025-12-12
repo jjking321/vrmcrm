@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useCallListItems, useUpdateCallListItem, useLogCallActivity, useCallLists } from '@/hooks/useCallLists';
-import { CallListItem, CallOutcome, PhoneContact } from '@/types';
+import { CallListItem, CallOutcome, PhoneContact, ActivityType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { 
   ArrowLeft, ArrowRight, Phone, PhoneOff, Voicemail, PhoneMissed, 
   XCircle, Calendar, SkipForward, Loader2, ExternalLink, AlertTriangle,
-  CheckCircle, Bed, Bath
+  CheckCircle, Bed, Bath, Mail, FileText, MessageSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -32,8 +32,35 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [showCallbackPicker, setShowCallbackPicker] = useState(false);
   const [callbackDate, setCallbackDate] = useState('');
+  const [showAllActivities, setShowAllActivities] = useState(false);
   
   const currentList = lists.find((l: any) => l.id === listId);
+  
+  // Activity helpers
+  const formatActivityDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+  
+  const activityIcons: Record<string, React.ReactNode> = {
+    call: <Phone className="w-3.5 h-3.5" />,
+    email: <Mail className="w-3.5 h-3.5" />,
+    note: <FileText className="w-3.5 h-3.5" />,
+    sms: <MessageSquare className="w-3.5 h-3.5" />,
+  };
+  
+  const activityColors: Record<string, string> = {
+    call: 'bg-blue-100 text-blue-700',
+    email: 'bg-purple-100 text-purple-700',
+    note: 'bg-gray-100 text-gray-700',
+    sms: 'bg-green-100 text-green-700',
+  };
   
   // Get pending items
   const pendingItems = useMemo(() => 
@@ -48,6 +75,16 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
   const currentItem = pendingItems[currentIndex];
   const property = currentItem?.property;
   const owner = property?.owner;
+  
+  // Activity timeline (after property is defined)
+  const sortedActivities = useMemo(() => {
+    if (!property?.activities) return [];
+    return [...property.activities].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [property?.activities]);
+  
+  const visibleActivities = showAllActivities ? sortedActivities : sortedActivities.slice(0, 1);
   
   // Get current phone info
   const getCurrentPhone = (): { number: string; type: string; doNotCall: boolean } | null => {
@@ -362,6 +399,58 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
             </a>
           )}
         </div>
+        
+        {/* Activity Timeline */}
+        {sortedActivities.length > 0 && (
+          <div className="px-6 py-4 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-muted-foreground">Recent Activity</p>
+              {sortedActivities.length > 1 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 text-xs"
+                  onClick={() => setShowAllActivities(!showAllActivities)}
+                >
+                  {showAllActivities ? (
+                    <>Show less <ChevronUp className="w-3 h-3 ml-1" /></>
+                  ) : (
+                    <>Show all ({sortedActivities.length}) <ChevronDown className="w-3 h-3 ml-1" /></>
+                  )}
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {visibleActivities.map((activity) => (
+                <div 
+                  key={activity.id} 
+                  className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg"
+                >
+                  <div className={cn(
+                    "p-1.5 rounded-full flex-shrink-0",
+                    activityColors[activity.type] || 'bg-muted text-muted-foreground'
+                  )}>
+                    {activityIcons[activity.type] || <FileText className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium capitalize">{activity.type}</span>
+                      <span className="text-xs text-muted-foreground">{formatActivityDate(activity.date)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
+                      {activity.content}
+                    </p>
+                    {activity.outcome && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] bg-muted rounded">
+                        {activity.outcome.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Notes */}
         <div className="px-6 py-4 border-t border-border">

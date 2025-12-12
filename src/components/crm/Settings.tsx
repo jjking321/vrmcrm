@@ -1,10 +1,24 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SettingsProps {
   fields: (FieldDefinition & { isHidden?: boolean })[];
@@ -20,12 +34,14 @@ export const Settings: React.FC<SettingsProps> = ({
   onToggleFieldVisibility,
 }) => {
   const { role, profile } = useAuth();
-  const { teamMembers, isLoading: isLoadingTeam, createTeamMember, deleteTeamMember } = useTeamMembers();
+  const { teamMembers, isLoading: isLoadingTeam, createTeamMember, deleteTeamMember, updateMemberRole, resetMemberPassword } = useTeamMembers();
   const [activeTab, setActiveTab] = useState<'fields' | 'integrations' | 'team'>('fields');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text' as CustomFieldType });
   const [newMember, setNewMember] = useState({ name: '', email: '', password: '' });
+  const [passwordResetModal, setPasswordResetModal] = useState<{ open: boolean; userId: string; userName: string }>({ open: false, userId: '', userName: '' });
+  const [newPassword, setNewPassword] = useState('');
 
   const isAdmin = role === 'admin';
 
@@ -54,6 +70,21 @@ export const Settings: React.FC<SettingsProps> = ({
       setNewMember({ name: '', email: '', password: '' });
       setIsAddingMember(false);
     }
+  };
+
+  const handlePasswordReset = async () => {
+    if (newPassword.length >= 6) {
+      await resetMemberPassword.mutateAsync({
+        userId: passwordResetModal.userId,
+        password: newPassword,
+      });
+      setPasswordResetModal({ open: false, userId: '', userName: '' });
+      setNewPassword('');
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: 'admin' | 'member') => {
+    await updateMemberRole.mutateAsync({ userId, role: newRole });
   };
 
   const integrations = [
@@ -321,7 +352,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Name</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Role</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Joined</th>
-                  {isAdmin && <th className="px-4 py-3 w-16"></th>}
+                  {isAdmin && <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -358,31 +389,56 @@ export const Settings: React.FC<SettingsProps> = ({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={cn(
-                          "text-xs px-2 py-0.5 rounded-full capitalize",
-                          member.role === 'admin' ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
-                        )}>
-                          {member.role}
-                        </span>
+                        {isAdmin && member.id !== profile?.id ? (
+                          <Select
+                            value={member.role}
+                            onValueChange={(value: 'admin' | 'member') => handleRoleChange(member.id, value)}
+                            disabled={updateMemberRole.isPending}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="member">Member</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className={cn(
+                            "text-xs px-2 py-0.5 rounded-full capitalize",
+                            member.role === 'admin' ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+                          )}>
+                            {member.role}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {member.created_at ? format(new Date(member.created_at), 'MMM d, yyyy') : '-'}
                       </td>
                       {isAdmin && (
                         <td className="px-4 py-3">
-                          {member.id !== profile?.id && member.role !== 'admin' && (
+                          <div className="flex items-center gap-1">
                             <button
-                              onClick={() => {
-                                if (confirm(`Remove ${member.name} from your team?`)) {
-                                  deleteTeamMember.mutate(member.id);
-                                }
-                              }}
-                              className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
-                              title="Remove team member"
+                              onClick={() => setPasswordResetModal({ open: true, userId: member.id, userName: member.name })}
+                              className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                              title="Reset password"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Key className="w-4 h-4" />
                             </button>
-                          )}
+                            {member.id !== profile?.id && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Remove ${member.name} from your team?`)) {
+                                    deleteTeamMember.mutate(member.id);
+                                  }
+                                }}
+                                className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
+                                title="Remove team member"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -397,6 +453,50 @@ export const Settings: React.FC<SettingsProps> = ({
               Contact your admin to add or remove team members.
             </p>
           )}
+
+          {/* Password Reset Modal */}
+          <Dialog open={passwordResetModal.open} onOpenChange={(open) => {
+            if (!open) {
+              setPasswordResetModal({ open: false, userId: '', userName: '' });
+              setNewPassword('');
+            }
+          }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reset Password for {passwordResetModal.userName}</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                  placeholder="Min 6 characters"
+                  autoFocus
+                />
+              </div>
+              <DialogFooter>
+                <button
+                  onClick={() => {
+                    setPasswordResetModal({ open: false, userId: '', userName: '' });
+                    setNewPassword('');
+                  }}
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordReset}
+                  disabled={newPassword.length < 6 || resetMemberPassword.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {resetMemberPassword.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Reset Password
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
 

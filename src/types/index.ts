@@ -93,6 +93,9 @@ export interface Activity {
   outcome?: string;
   createdBy?: string;
   createdByName?: string;
+  ownerName?: string;       // The owner this activity is associated with
+  propertyId?: string;      // The property this activity was regarding
+  propertyAddress?: string; // Display-friendly property address
 }
 
 export interface MarketData {

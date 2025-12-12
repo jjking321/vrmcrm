@@ -23,6 +23,7 @@ export type Database = {
           date: string
           id: string
           outcome: string | null
+          owner_name: string | null
           property_id: string
           type: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           date?: string
           id?: string
           outcome?: string | null
+          owner_name?: string | null
           property_id: string
           type: string
         }
@@ -45,6 +47,7 @@ export type Database = {
           date?: string
           id?: string
           outcome?: string | null
+          owner_name?: string | null
           property_id?: string
           type?: string
         }

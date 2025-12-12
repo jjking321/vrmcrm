@@ -210,9 +210,11 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const addActivityMutation = useAddActivity();
 
   const handleAddActivity = (activity: Omit<Activity, 'id'>) => {
+    // Activities are now owner-centric - pass the primary owner name
     addActivityMutation.mutate({
       propertyId: property.id,
-      activity
+      activity,
+      ownerName: primaryName || undefined,
     });
   };
 

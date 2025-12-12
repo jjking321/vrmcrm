@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
+import { useAddActivity } from '@/hooks/useProperties';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
@@ -206,12 +207,13 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
     onUpdateProperty(property.id, { tags: property.tags.filter(t => t !== tag) });
   };
 
+  const addActivityMutation = useAddActivity();
+
   const handleAddActivity = (activity: Omit<Activity, 'id'>) => {
-    const newActivity: Activity = {
-      ...activity,
-      id: `act_${Date.now()}`,
-    };
-    onUpdateProperty(property.id, { activities: [...property.activities, newActivity] });
+    addActivityMutation.mutate({
+      propertyId: property.id,
+      activity
+    });
   };
 
   const handleStageChange = (stageId: string) => {

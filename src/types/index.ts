@@ -91,6 +91,8 @@ export interface Activity {
   date: string;
   content: string;
   outcome?: string;
+  createdBy?: string;
+  createdByName?: string;
 }
 
 export interface MarketData {

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 interface SidebarProps {
   view: ViewMode;
-  onViewChange: (view: ViewMode) => void;
+  onViewChange: (view: ViewMode, options?: { preserveFilters?: boolean }) => void;
   onImportClick: () => void;
   onAddPropertyClick: () => void;
   propertyCount: number;
@@ -144,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       onClick={() => {
                         onLoadList(list);
-                        onViewChange('properties');
+                        onViewChange('properties', { preserveFilters: true });
                       }}
                       className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate"
                     >

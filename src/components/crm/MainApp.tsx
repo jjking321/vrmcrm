@@ -159,8 +159,8 @@ const MainApp: React.FC = () => {
   const [view, setViewInternal] = useState<ViewMode>('dashboard');
   
   // Handler that clears filters when navigating to properties view
-  const handleViewChange = (newView: ViewMode) => {
-    if (newView === 'properties') {
+  const handleViewChange = (newView: ViewMode, options?: { preserveFilters?: boolean }) => {
+    if (newView === 'properties' && !options?.preserveFilters) {
       setFilterRules([]);
       setSearchTerm('');
       setDebouncedSearchTerm('');

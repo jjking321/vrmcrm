@@ -62,6 +62,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
 
   // Aggregate stats
   const totalRevenue = ownerProperties.reduce((sum, p) => sum + (p.marketData.projectedRevenue || 0), 0);
+  const portfolioValue = ownerProperties.reduce((sum, p) => sum + (p.marketData.propertyValue || 0), 0);
 
   // Check compliance flags across all properties
   const anyLitigator = ownerProperties.some(p => isLitigator(p.owner));
@@ -362,6 +363,13 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                   <span className="text-sm">Properties</span>
                 </div>
                 <span className="font-semibold text-foreground">{ownerProperties.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <DollarSign className="w-4 h-4" />
+                  <span className="text-sm">Portfolio Value</span>
+                </div>
+                <span className="font-semibold text-foreground">${portfolioValue.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-muted-foreground">

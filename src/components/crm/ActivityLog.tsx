@@ -139,7 +139,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ activities, onAddActivity }) 
                     </div>
                     <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">{activity.content}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">{activity.content}</p>
                   {activity.outcome && (
                     <p className="text-xs text-brand mt-1 font-medium">Outcome: {activity.outcome}</p>
                   )}

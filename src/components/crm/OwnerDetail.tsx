@@ -14,6 +14,7 @@ import {
   getPhoneTypeBadgeClass, getOwnerTypeBadgeClass
 } from '@/lib/ownerUtils';
 import { useOwnerProperties } from '@/hooks/useOwnerProperties';
+import { useOwnerActivities } from '@/hooks/useOwnerActivities';
 
 interface OwnerDetailProps {
   ownerName: string;
@@ -33,11 +34,14 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   onSelectOwner,
 }) => {
   // Fetch ALL properties for this owner from database
-  const { data: ownerProperties = [], isLoading } = useOwnerProperties(ownerName);
+  const { data: ownerProperties = [], isLoading: isLoadingProperties } = useOwnerProperties(ownerName);
+  
+  // Fetch activities directly by owner name (owner-centric)
+  const { data: ownerActivities = [], isLoading: isLoadingActivities } = useOwnerActivities(ownerName);
   
   const owner = ownerProperties[0]?.owner;
 
-  if (isLoading) {
+  if (isLoadingProperties || isLoadingActivities) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -63,14 +67,8 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
   const anyLitigator = ownerProperties.some(p => isLitigator(p.owner));
   const anyDNC = ownerProperties.some(p => hasDoNotCall(p.owner));
 
-  // Combine all activities
-  const allActivities: (Activity & { propertyAddress: string; propertyId: string })[] = [];
-  ownerProperties.forEach(p => {
-    p.activities.forEach(a => {
-      allActivities.push({ ...a, propertyAddress: p.address, propertyId: p.id });
-    });
-  });
-  const sortedActivities = allActivities.sort(
+  // Sort activities by date (already sorted from hook, but ensuring)
+  const sortedActivities = [...ownerActivities].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 

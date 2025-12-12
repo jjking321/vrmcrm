@@ -70,6 +70,7 @@ interface DbActivity {
   content: string;
   outcome: string | null;
   date: string;
+  owner_name: string | null;
 }
 
 // Convert DB property to app Property type
@@ -143,6 +144,8 @@ const toProperty = (
     outcome: a.outcome || undefined,
     createdBy: a.created_by || undefined,
     createdByName: a.created_by && profilesMap ? profilesMap.get(a.created_by) : undefined,
+    ownerName: a.owner_name || undefined,
+    propertyId: a.property_id,
   })),
 });
 
@@ -479,7 +482,11 @@ export const useAddActivity = () => {
   const { company, user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ propertyId, activity }: { propertyId: string; activity: Omit<Activity, 'id'> }) => {
+    mutationFn: async ({ propertyId, activity, ownerName }: { 
+      propertyId: string; 
+      activity: Omit<Activity, 'id'>; 
+      ownerName?: string;
+    }) => {
       if (!company?.id) throw new Error('No company');
 
       const { data, error } = await supabase
@@ -492,6 +499,7 @@ export const useAddActivity = () => {
           content: activity.content,
           outcome: activity.outcome,
           date: activity.date,
+          owner_name: ownerName || null,
         })
         .select()
         .single();
@@ -501,6 +509,8 @@ export const useAddActivity = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['ownerActivities'] });
+      queryClient.invalidateQueries({ queryKey: ['propertyOwnerActivities'] });
       toast.success('Activity added');
     },
     onError: (error) => {

@@ -156,6 +156,8 @@ export const useCallListItems = (listId: string | null) => {
           outcome: activity.outcome || undefined,
           createdBy: activity.created_by || undefined,
           createdByName: activity.created_by ? profilesMap.get(activity.created_by) : undefined,
+          ownerName: (activity as any).owner_name || undefined,
+          propertyId: activity.property_id,
         });
         activityMap.set(activity.property_id, existing);
       });
@@ -450,13 +452,16 @@ export const useLogCallActivity = () => {
           type: 'call',
           content: notes ? `${content}\n\nNotes: ${notes}` : content,
           outcome: outcomeLabels[outcome],
+          owner_name: ownerName,
         });
       
       if (error) throw error;
     },
     onSuccess: () => {
-      // Invalidate properties to refresh activity timelines
+      // Invalidate properties and owner activities to refresh timelines
       queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['ownerActivities'] });
+      queryClient.invalidateQueries({ queryKey: ['propertyOwnerActivities'] });
     },
   });
 };

@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { Activity, ActivityType } from '@/types';
-import { Phone, Mail, MessageSquare, Calendar, FileText, Plus } from 'lucide-react';
+import { Phone, Mail, MessageSquare, Calendar, FileText, Plus, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ActivityLogProps {
   activities: Activity[];
   onAddActivity: (activity: Omit<Activity, 'id'>) => void;
+  showPropertyContext?: boolean; // Show which property the activity was regarding
+  currentPropertyId?: string;    // If provided, only show "Re: property" when it's a different property
 }
 
-const ActivityLog: React.FC<ActivityLogProps> = ({ activities, onAddActivity }) => {
+const ActivityLog: React.FC<ActivityLogProps> = ({ 
+  activities, 
+  onAddActivity,
+  showPropertyContext = false,
+  currentPropertyId,
+}) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newType, setNewType] = useState<ActivityType>('note');
   const [newContent, setNewContent] = useState('');
@@ -123,30 +130,46 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ activities, onAddActivity }) 
             No activities yet. Start logging interactions!
           </div>
         ) : (
-          sortedActivities.map((activity) => (
-            <div key={activity.id} className="p-4 hover:bg-muted/30 transition-colors">
-              <div className="flex items-start gap-3">
-                <div className={cn("p-2 rounded-lg border", typeColors[activity.type])}>
-                  {icons[activity.type]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground capitalize">{activity.type}</span>
-                      {activity.createdByName && (
-                        <span className="text-xs text-muted-foreground">by {activity.createdByName}</span>
-                      )}
-                    </div>
-                    <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
+          sortedActivities.map((activity) => {
+            // Determine if we should show property context
+            const showPropertyRef = showPropertyContext && 
+              activity.propertyAddress && 
+              (!currentPropertyId || activity.propertyId !== currentPropertyId);
+            
+            return (
+              <div key={activity.id} className="p-4 hover:bg-muted/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className={cn("p-2 rounded-lg border", typeColors[activity.type])}>
+                    {icons[activity.type]}
                   </div>
-                  <p className="text-sm text-muted-foreground whitespace-pre-line">{activity.content}</p>
-                  {activity.outcome && (
-                    <p className="text-xs text-brand mt-1 font-medium">Outcome: {activity.outcome}</p>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground capitalize">{activity.type}</span>
+                        {activity.ownerName && (
+                          <span className="text-xs text-muted-foreground">with {activity.ownerName}</span>
+                        )}
+                        {activity.createdByName && (
+                          <span className="text-xs text-muted-foreground">by {activity.createdByName}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{activity.content}</p>
+                    {showPropertyRef && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        Re: {activity.propertyAddress}
+                      </p>
+                    )}
+                    {activity.outcome && (
+                      <p className="text-xs text-brand mt-1 font-medium">Outcome: {activity.outcome}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

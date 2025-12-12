@@ -101,7 +101,7 @@ export const Settings: React.FC<SettingsProps> = ({
       configured: true,
     },
     {
-      name: 'AirROI',
+      name: 'Airbnb',
       description: 'Airbnb revenue estimates and analytics',
       color: 'violet',
       configured: true,

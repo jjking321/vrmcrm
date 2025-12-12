@@ -1,6 +1,46 @@
 import { Owner, PhoneContact, OwnerContact, EmailContact } from '@/types';
 
 /**
+ * Convert a string to Title Case
+ */
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Normalize owner name to Title Case with special handling for Mc/Mac surnames
+ */
+export function normalizeOwnerName(name: string): string {
+  if (!name || !name.trim()) return '';
+  
+  let result = toTitleCase(name.trim());
+  
+  // Handle Mc/Mac surnames (McDonald, McAuliff, MacArthur, etc.)
+  result = result.replace(/\bMc([a-z])/g, (_, letter) => `Mc${letter.toUpperCase()}`);
+  result = result.replace(/\bMac([a-z])/g, (_, letter) => `Mac${letter.toUpperCase()}`);
+  
+  // Handle O' surnames (O'Brien, O'Connor)
+  result = result.replace(/\bO'([a-z])/g, (_, letter) => `O'${letter.toUpperCase()}`);
+  
+  return result;
+}
+
+/**
+ * Check if a name is in Title Case format (better formatted than ALL CAPS or all lowercase)
+ */
+export function isProperlyFormatted(name: string): boolean {
+  if (!name) return false;
+  // A properly formatted name has mixed case (not all upper, not all lower)
+  const hasUpper = /[A-Z]/.test(name);
+  const hasLower = /[a-z]/.test(name);
+  return hasUpper && hasLower;
+}
+
+/**
  * Get the primary display name for an owner
  * Uses the first owner in the owners array, or falls back to the legacy name field
  */
@@ -198,18 +238,38 @@ export function dedupeEmails(emails: EmailContact[]): EmailContact[] {
 }
 
 /**
- * Merge owner contacts (dedupe by name similarity)
+ * Merge owner contacts (dedupe by name similarity, normalize to Title Case)
  */
 export function mergeOwnerContacts(existing: OwnerContact[], incoming: OwnerContact[]): OwnerContact[] {
-  const result = [...existing];
+  const result: OwnerContact[] = [];
+  
+  // First, add existing with normalized names
+  for (const owner of existing) {
+    result.push({
+      firstName: normalizeOwnerName(owner.firstName || ''),
+      lastName: normalizeOwnerName(owner.lastName || ''),
+    });
+  }
+  
+  // Then add incoming if not duplicate (case-insensitive check)
   for (const newOwner of incoming) {
     if (!newOwner.firstName && !newOwner.lastName) continue;
+    const normalizedFirst = normalizeOwnerName(newOwner.firstName || '');
+    const normalizedLast = normalizeOwnerName(newOwner.lastName || '');
+    
     const exists = result.some(e => 
-      (e.firstName?.toLowerCase() || '') === (newOwner.firstName?.toLowerCase() || '') &&
-      (e.lastName?.toLowerCase() || '') === (newOwner.lastName?.toLowerCase() || '')
+      (e.firstName?.toLowerCase() || '') === (normalizedFirst.toLowerCase()) &&
+      (e.lastName?.toLowerCase() || '') === (normalizedLast.toLowerCase())
     );
-    if (!exists) result.push(newOwner);
+    
+    if (!exists) {
+      result.push({
+        firstName: normalizedFirst,
+        lastName: normalizedLast,
+      });
+    }
   }
+  
   return result;
 }
 
@@ -258,10 +318,17 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
     }
   }
   
-  // Determine primary name for legacy field
-  const primaryName = owners.length > 0 
-    ? `${owners[0].firstName} ${owners[0].lastName}`.trim()
+  // Normalize owner names to Title Case
+  const normalizedOwners: OwnerContact[] = owners.map(o => ({
+    firstName: normalizeOwnerName(o.firstName),
+    lastName: normalizeOwnerName(o.lastName),
+  }));
+  
+  // Determine primary name for legacy field (normalized)
+  const rawPrimaryName = normalizedOwners.length > 0 
+    ? `${normalizedOwners[0].firstName} ${normalizedOwners[0].lastName}`.trim()
     : data.ownerName || data.contactName || '';
+  const primaryName = normalizeOwnerName(rawPrimaryName);
   
   // Parse boolean fields
   const ownerOccupiedRaw = data.ownerOccupied || '';
@@ -274,7 +341,7 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
   
   return {
     name: primaryName,
-    owners: owners.length > 0 ? owners : undefined,
+    owners: normalizedOwners.length > 0 ? normalizedOwners : undefined,
     phones: phones.length > 0 ? phones : undefined,
     emails: emails.length > 0 ? emails : undefined,
     email: emails.length > 0 ? emails[0].address : (data.email || data.ownerEmail || ''),

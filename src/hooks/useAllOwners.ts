@@ -78,25 +78,32 @@ export const useAllOwners = () => {
       // Count properties without owners
       const propertiesWithoutOwner = allProperties.filter(p => !propertyIdsWithOwners.has(p.id)).length;
 
-      // Aggregate owners by name
+      // Aggregate owners by name (case-insensitive to match dashboard)
       const ownersMap = new Map<string, AggregatedOwner>();
 
       allOwners.forEach(owner => {
-        const ownerName = owner.name?.trim();
-        if (!ownerName) return; // Skip empty owner names
+        const rawName = owner.name?.trim();
+        if (!rawName) return; // Skip empty owner names
 
-        const existing = ownersMap.get(ownerName);
+        // Use case-insensitive key for aggregation (matches useDashboardStats)
+        const normalizedKey = rawName.toLowerCase();
+        const existing = ownersMap.get(normalizedKey);
         const revenue = propertyRevenueMap.get(owner.property_id) || 0;
 
         if (existing) {
-          ownersMap.set(ownerName, {
+          // Keep the better formatted name (prefer Title Case over ALL CAPS)
+          const hasProperCase = (n: string) => /[A-Z]/.test(n) && /[a-z]/.test(n);
+          const displayName = hasProperCase(rawName) ? rawName : existing.name;
+          
+          ownersMap.set(normalizedKey, {
             ...existing,
+            name: displayName,
             propertyCount: existing.propertyCount + 1,
             totalRevenue: existing.totalRevenue + revenue,
           });
         } else {
-          ownersMap.set(ownerName, {
-            name: ownerName,
+          ownersMap.set(normalizedKey, {
+            name: rawName,
             propertyCount: 1,
             email: owner.email || '',
             phone: owner.phone || '',

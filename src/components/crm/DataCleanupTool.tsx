@@ -23,7 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy, User
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,7 @@ import { useMalformedAddresses, useFixAddresses, useFixSingleAddress, useUpdateP
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
 import { DuplicateMergeModal } from './DuplicateMergeModal';
+import { useOwnerNameVariations, useNormalizeOwnerNames, useNormalizeSingleGroup, OwnerNameVariation } from '@/hooks/useOwnerNameFixer';
 
 interface DataCleanupToolProps {
   onSendToImport?: (data: any[], headers: string[]) => void;
@@ -44,7 +45,7 @@ type TransformAction = {
 };
 
 export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport }) => {
-  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates'>('duplicates');
+  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates' | 'fix-owner-names'>('duplicates');
   const [step, setStep] = useState<'upload' | 'transform' | 'preview'>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -82,6 +83,11 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   const autoMergeMutation = useAutoMergeDuplicates();
   const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
+
+  // Owner name normalization hooks
+  const { data: ownerNameVariations = [], isLoading: isLoadingOwnerNames, refetch: refetchOwnerNames } = useOwnerNameVariations();
+  const normalizeAllMutation = useNormalizeOwnerNames();
+  const normalizeSingleMutation = useNormalizeSingleGroup();
 
   const totalDuplicateProperties = duplicateGroups.reduce((sum, g) => sum + g.properties.length, 0);
 
@@ -993,6 +999,126 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     </div>
   );
 
+  // Render Owner Name Fixer Tab
+  const renderOwnerNameFixer = () => {
+    const totalAffected = ownerNameVariations.reduce((sum, g) => sum + g.variations.length, 0);
+    
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Fix Owner Names</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Normalize owner names to Title Case (e.g., "JOHN SMITH" → "John Smith")
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetchOwnerNames()}>
+            <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+          </Button>
+        </div>
+
+        {isLoadingOwnerNames ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Scanning for owner name variations...
+            </CardContent>
+          </Card>
+        ) : ownerNameVariations.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-4" />
+              <p className="text-lg font-medium text-foreground">All owner names are properly formatted!</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                No case variations or improperly formatted names found.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {ownerNameVariations.length} name variation groups found ({totalAffected} total records)
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        These names have inconsistent casing or formatting
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => normalizeAllMutation.mutate(ownerNameVariations)}
+                    disabled={normalizeAllMutation.isPending}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                    Normalize All to Title Case
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-3">
+              {ownerNameVariations.slice(0, 50).map((group) => (
+                <Card key={group.normalizedKey} className="overflow-hidden">
+                  <CardContent className="py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {group.variations.length} record{group.variations.length > 1 ? 's' : ''}
+                          </span>
+                          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                          <span className="font-semibold text-foreground">{group.suggestedName}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {[...new Set(group.variations.map(v => v.name))].map((name) => {
+                            const count = group.variations.filter(v => v.name === name).length;
+                            const isTarget = name === group.suggestedName;
+                            return (
+                              <span 
+                                key={name} 
+                                className={cn(
+                                  "px-2 py-1 rounded text-sm",
+                                  isTarget 
+                                    ? "bg-green-500/10 text-green-700 border border-green-500/20" 
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                "{name}" ({count})
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => normalizeSingleMutation.mutate({ group })}
+                        disabled={normalizeSingleMutation.isPending}
+                      >
+                        <Check className="w-4 h-4 mr-1" />
+                        Fix
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {ownerNameVariations.length > 50 && (
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                Showing first 50 of {ownerNameVariations.length} groups. Use "Normalize All" to fix everything.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Main render with tabs
   return (
     <div>
@@ -1001,13 +1127,21 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
         Clean CSV data before import or fix existing database records
       </p>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates')} className="space-y-6">
-        <TabsList>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates' | 'fix-owner-names')} className="space-y-6">
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="duplicates" className="gap-2">
             <Copy className="w-4 h-4" /> Find Duplicates
             {duplicateGroups.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
                 {duplicateGroups.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="fix-owner-names" className="gap-2">
+            <User className="w-4 h-4" /> Fix Owner Names
+            {ownerNameVariations.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
+                {ownerNameVariations.length}
               </span>
             )}
           </TabsTrigger>
@@ -1034,6 +1168,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
 
         <TabsContent value="duplicates">
           {renderDuplicateFinder()}
+        </TabsContent>
+
+        <TabsContent value="fix-owner-names">
+          {renderOwnerNameFixer()}
         </TabsContent>
 
         <TabsContent value="fix-addresses">

@@ -66,6 +66,18 @@ export function getAllOwnerNames(owner: Owner): string {
 }
 
 /**
+ * Get all owner names as an array
+ */
+export function getAllOwnerNamesArray(owner: Owner): string[] {
+  if (owner.owners && owner.owners.length > 0) {
+    return owner.owners
+      .map(o => `${o.firstName} ${o.lastName}`.trim())
+      .filter(n => n.length > 0);
+  }
+  return owner.name ? [owner.name] : [];
+}
+
+/**
  * Get owner count
  */
 export function getOwnerCount(owner: Owner): number {

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
 import { useAddActivity } from '@/hooks/useProperties';
+import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { 
-  getPrimaryOwnerName, getAllOwnerNames, getOwnerCount, getPrimaryPhone, 
+  getPrimaryOwnerName, getAllOwnerNames, getAllOwnerNamesArray, getOwnerCount, getPrimaryPhone, 
   getCallablePhones, hasDoNotCall, isLitigator, formatMailingAddress,
   formatOwnershipLength, getPhoneTypeBadgeClass, getOwnerTypeBadgeClass
 } from '@/lib/ownerUtils';
@@ -228,6 +229,10 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const ownerCount = getOwnerCount(property.owner);
   const primaryName = getPrimaryOwnerName(property.owner);
   const allNames = getAllOwnerNames(property.owner);
+  const allNamesArray = getAllOwnerNamesArray(property.owner);
+  
+  // Fetch all activities for this property's owners (across all their properties)
+  const { data: ownerActivities, isLoading: isLoadingActivities } = usePropertyOwnerActivities(allNamesArray);
   const primaryPhone = getPrimaryPhone(property.owner);
   const callablePhones = getCallablePhones(property.owner);
   const hasDNC = hasDoNotCall(property.owner);
@@ -761,8 +766,13 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             </div>
           </div>
 
-          {/* Activity Log */}
-          <ActivityLog activities={property.activities} onAddActivity={handleAddActivity} />
+          {/* Activity Log - Shows all activities for property's owners across all their properties */}
+          <ActivityLog 
+            activities={ownerActivities || []} 
+            onAddActivity={handleAddActivity}
+            showPropertyContext={true}
+            currentPropertyId={property.id}
+          />
         </div>
 
         {/* Right Column - Owner & Market Data */}

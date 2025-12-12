@@ -373,6 +373,7 @@ export const useDeleteCallList = () => {
 // Log a call as an activity
 export const useLogCallActivity = () => {
   const { company, user } = useAuth();
+  const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async ({
@@ -415,6 +416,10 @@ export const useLogCallActivity = () => {
         });
       
       if (error) throw error;
+    },
+    onSuccess: () => {
+      // Invalidate properties to refresh activity timelines
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
     },
   });
 };

@@ -155,7 +155,23 @@ const MainApp: React.FC = () => {
   }, [isServerSearch, hasFilterRules, isFiltering, isInitialFilterLoad, serverFilteredProperties, clientSortedProperties, deduplicateByOwner, sortConfig]);
 
   // State
-  const [view, setView] = useState<ViewMode>('dashboard');
+  const [view, setViewInternal] = useState<ViewMode>('dashboard');
+  
+  // Handler that clears filters when navigating to properties view
+  const handleViewChange = (newView: ViewMode) => {
+    if (newView === 'properties') {
+      setFilterRules([]);
+      setSearchTerm('');
+      setDebouncedSearchTerm('');
+      setDeduplicateByOwner(false);
+    }
+    setViewInternal(newView);
+    setSelectedPropertyId(null);
+    setSelectedOwnerName(null);
+  };
+  
+  // Alias for internal use
+  const setView = setViewInternal;
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
@@ -536,7 +552,7 @@ const MainApp: React.FC = () => {
     <div className="flex min-h-screen bg-background">
       <Sidebar
         view={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         onImportClick={() => setIsImportOpen(true)}
         onAddPropertyClick={() => setIsAddPropertyOpen(true)}
         propertyCount={allProperties.length}

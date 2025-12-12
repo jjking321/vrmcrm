@@ -220,12 +220,19 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
         <div className="bg-muted/50 px-6 py-4 border-b border-border">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">
-                {property?.address || 'Unknown Address'}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {property?.city}, {property?.state} {property?.zip}
-              </p>
+              <a
+                href={`/property/${property?.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group"
+              >
+                <h2 className="text-lg font-semibold text-foreground group-hover:text-primary group-hover:underline transition-colors">
+                  {property?.address || 'Unknown Address'}
+                </h2>
+                <p className="text-sm text-muted-foreground group-hover:text-primary/80 transition-colors">
+                  {property?.city}, {property?.state} {property?.zip}
+                </p>
+              </a>
               {(property?.bedrooms || property?.bathrooms) && (
                 <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
                   {property?.bedrooms && (

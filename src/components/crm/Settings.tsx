@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { format } from 'date-fns';
 
 interface SettingsProps {
   fields: (FieldDefinition & { isHidden?: boolean })[];
@@ -16,9 +19,15 @@ export const Settings: React.FC<SettingsProps> = ({
   onDeleteField,
   onToggleFieldVisibility,
 }) => {
-  const [activeTab, setActiveTab] = useState<'fields' | 'integrations'>('fields');
+  const { role, profile } = useAuth();
+  const { teamMembers, isLoading: isLoadingTeam, createTeamMember, deleteTeamMember } = useTeamMembers();
+  const [activeTab, setActiveTab] = useState<'fields' | 'integrations' | 'team'>('fields');
   const [isAdding, setIsAdding] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text' as CustomFieldType });
+  const [newMember, setNewMember] = useState({ name: '', email: '', password: '' });
+
+  const isAdmin = role === 'admin';
 
   const handleAddField = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +40,19 @@ export const Settings: React.FC<SettingsProps> = ({
       });
       setNewField({ label: '', type: 'text' });
       setIsAdding(false);
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMember.name.trim() && newMember.email.trim() && newMember.password) {
+      await createTeamMember.mutateAsync({
+        name: newMember.name.trim(),
+        email: newMember.email.trim(),
+        password: newMember.password,
+      });
+      setNewMember({ name: '', email: '', password: '' });
+      setIsAddingMember(false);
     }
   };
 
@@ -76,6 +98,16 @@ export const Settings: React.FC<SettingsProps> = ({
         >
           <Database className="w-4 h-4" />
           Custom Fields
+        </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeTab === 'team' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Users className="w-4 h-4" />
+          Team
         </button>
         <button
           onClick={() => setActiveTab('integrations')}
@@ -205,6 +237,166 @@ export const Settings: React.FC<SettingsProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'team' && (
+        <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="font-semibold text-foreground">Team Members</h2>
+              <p className="text-sm text-muted-foreground">Manage users who can access your account</p>
+            </div>
+            {isAdmin && !isAddingMember && (
+              <button
+                onClick={() => setIsAddingMember(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Team Member
+              </button>
+            )}
+          </div>
+
+          {isAddingMember && (
+            <form onSubmit={handleAddMember} className="mb-6 p-4 bg-muted/30 rounded-lg border border-border">
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Name</label>
+                  <input
+                    type="text"
+                    value={newMember.name}
+                    onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                    className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                    placeholder="John Smith"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={newMember.email}
+                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                    className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                    placeholder="john@company.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    value={newMember.password}
+                    onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                    className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                    placeholder="Min 6 characters"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddingMember(false); setNewMember({ name: '', email: '', password: '' }); }}
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newMember.name.trim() || !newMember.email.trim() || newMember.password.length < 6 || createTeamMember.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {createTeamMember.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Add Member
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Team Members Table */}
+          <div className="border border-border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Joined</th>
+                  {isAdmin && <th className="px-4 py-3 w-16"></th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {isLoadingTeam ? (
+                  <tr>
+                    <td colSpan={isAdmin ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                    </td>
+                  </tr>
+                ) : teamMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={isAdmin ? 4 : 3} className="px-4 py-8 text-center text-muted-foreground">
+                      No team members yet
+                    </td>
+                  </tr>
+                ) : (
+                  teamMembers.map((member) => (
+                    <tr key={member.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
+                            <span className="text-brand-700 text-sm font-medium">
+                              {member.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-foreground">
+                              {member.name}
+                              {member.id === profile?.id && (
+                                <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "text-xs px-2 py-0.5 rounded-full capitalize",
+                          member.role === 'admin' ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+                        )}>
+                          {member.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {member.created_at ? format(new Date(member.created_at), 'MMM d, yyyy') : '-'}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          {member.id !== profile?.id && member.role !== 'admin' && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Remove ${member.name} from your team?`)) {
+                                  deleteTeamMember.mutate(member.id);
+                                }
+                              }}
+                              className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
+                              title="Remove team member"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!isAdmin && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Contact your admin to add or remove team members.
+            </p>
+          )}
         </div>
       )}
 

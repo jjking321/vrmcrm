@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_COLUMNS } from '@/data/mockData';
-import { useProperties, useTotalPropertyCount, useUpdateProperty, useDeleteProperties, useAddProperty } from '@/hooks/useProperties';
+import { useProperties, useTotalPropertyCount, useUpdateProperty, useDeleteProperties, useAddProperty, usePropertyById } from '@/hooks/useProperties';
 import { useSavedLists, useAddSavedList, useDeleteSavedList } from '@/hooks/useSavedLists';
 import { usePipelineStages, useInitializePipelineStages } from '@/hooks/usePipelineStages';
 import { useImportProperties } from '@/hooks/useImportProperties';
@@ -312,10 +312,17 @@ const MainApp: React.FC = () => {
     setSelectedPropertyId(null);
   };
 
-  // Render selected property detail - check both loaded properties and server-filtered results
-  const selectedProperty = selectedPropertyId 
+  // Find property in local arrays first
+  const localProperty = selectedPropertyId 
     ? (allProperties.find(p => p.id === selectedPropertyId) || displayProperties.find(p => p.id === selectedPropertyId)) 
     : null;
+
+  // Fetch from server if not found locally
+  const { data: fetchedProperty, isLoading: isLoadingProperty } = usePropertyById(
+    localProperty ? null : selectedPropertyId
+  );
+
+  const selectedProperty = localProperty || fetchedProperty;
 
   // Loading state
   if (propertiesLoading || fieldsLoading || stagesLoading) {
@@ -324,6 +331,18 @@ const MainApp: React.FC = () => {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-muted-foreground">Loading your properties...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state for single property fetch
+  if (selectedPropertyId && isLoadingProperty && !selectedProperty) {
+    return (
+      <div className="flex min-h-screen bg-background items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading property...</p>
         </div>
       </div>
     );

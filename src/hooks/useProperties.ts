@@ -151,6 +151,65 @@ const toProperty = (
 
 const PAGE_SIZE = 500;
 
+// Fetch a single property by ID (used when property isn't in loaded batch)
+export const usePropertyById = (propertyId: string | null) => {
+  const { company } = useAuth();
+  const companyId = company?.id;
+
+  return useQuery({
+    queryKey: ['property', propertyId],
+    queryFn: async (): Promise<Property | null> => {
+      if (!propertyId || !companyId) return null;
+
+      // Fetch property
+      const { data: prop, error: propError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', propertyId)
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      if (propError) throw propError;
+      if (!prop) return null;
+
+      // Fetch owner, activities, and profiles in parallel
+      const [ownerRes, activitiesRes, profilesRes] = await Promise.all([
+        supabase
+          .from('owners')
+          .select('*')
+          .eq('property_id', propertyId)
+          .maybeSingle(),
+        supabase
+          .from('activity_logs')
+          .select('*')
+          .eq('property_id', propertyId)
+          .order('date', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id, name')
+          .eq('company_id', companyId),
+      ]);
+
+      if (ownerRes.error) throw ownerRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+
+      // Create profiles lookup map
+      const profilesMap = new Map<string, string>();
+      (profilesRes.data || []).forEach(p => {
+        profilesMap.set(p.id, p.name);
+      });
+
+      return toProperty(
+        prop as unknown as DbProperty,
+        ownerRes.data as unknown as DbOwner | null,
+        (activitiesRes.data || []) as unknown as DbActivity[],
+        profilesMap
+      );
+    },
+    enabled: !!propertyId && !!companyId,
+  });
+};
+
 export const useTotalPropertyCount = () => {
   const { company } = useAuth();
   const companyId = company?.id;

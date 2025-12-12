@@ -20,6 +20,7 @@ import { NewDealModal } from './NewDealModal';
 import { ImportWizard } from './ImportWizard';
 import { Settings } from './Settings';
 import { OwnerTable } from './OwnerTable';
+import { OwnersView } from './OwnersView';
 import { OwnerDetail } from './OwnerDetail';
 import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -424,14 +425,11 @@ const MainApp: React.FC = () => {
 
     if (view === 'owners') {
       return (
-        <div>
-          <OwnerTable
-            owners={ownersData?.owners || []}
-            propertiesWithoutOwner={ownersData?.propertiesWithoutOwner || 0}
-            isLoading={ownersLoading}
-            onSelectOwner={handleSelectOwner}
-          />
-        </div>
+        <OwnersView
+          ownersData={ownersData}
+          ownersLoading={ownersLoading}
+          onSelectOwner={handleSelectOwner}
+        />
       );
     }
 

@@ -123,7 +123,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
     }
 
     setIsLoadingAirROI(false);
-    toast.success(`Enriched ${successCount} of ${selectedCount} properties with AirROI data`);
+    toast.success(`Enriched ${successCount} of ${selectedCount} properties with Airbnb data`);
   };
 
   // Get common tags across selected properties
@@ -298,7 +298,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
             ) : (
               <>
                 <RefreshCw className="w-4 h-4" />
-                AirROI
+                Airbnb
               </>
             )}
           </button>

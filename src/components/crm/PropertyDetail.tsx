@@ -133,7 +133,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
       if (result.success && result.data) {
         const updates = applyAirROIData(property, result.data);
         onUpdateProperty(property.id, updates);
-        toast.success('Revenue data enriched from AirROI');
+        toast.success('Revenue data enriched from Airbnb');
       } else {
         toast.error(result.error || 'Failed to fetch revenue data');
       }
@@ -645,10 +645,10 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                       onClick={handleFetchAirROI}
                       disabled={isLoadingAirROI}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                      title="Fetch from AirROI"
+                      title="Fetch from Airbnb"
                     >
                       {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      AirROI
+                      Airbnb
                     </button>
                   </>
                 )}

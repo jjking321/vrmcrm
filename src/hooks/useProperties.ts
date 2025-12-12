@@ -518,3 +518,57 @@ export const useAddActivity = () => {
     },
   });
 };
+
+export const useUpdateActivity = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }: { 
+      id: string; 
+      updates: { type?: string; content?: string; outcome?: string };
+    }) => {
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['ownerActivities'] });
+      queryClient.invalidateQueries({ queryKey: ['propertyOwnerActivities'] });
+      toast.success('Activity updated');
+    },
+    onError: (error) => {
+      toast.error(`Failed to update activity: ${error.message}`);
+    },
+  });
+};
+
+export const useDeleteActivity = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('activity_logs')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['ownerActivities'] });
+      queryClient.invalidateQueries({ queryKey: ['propertyOwnerActivities'] });
+      toast.success('Activity deleted');
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete activity: ${error.message}`);
+    },
+  });
+};

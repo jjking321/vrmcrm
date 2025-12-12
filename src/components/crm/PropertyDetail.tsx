@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
-import { useAddActivity } from '@/hooks/useProperties';
+import { useAddActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useProperties';
 import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
@@ -209,6 +209,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   };
 
   const addActivityMutation = useAddActivity();
+  const updateActivity = useUpdateActivity();
+  const deleteActivity = useDeleteActivity();
 
   const handleAddActivity = (activity: Omit<Activity, 'id'>) => {
     // Activities are now owner-centric - pass the primary owner name
@@ -770,6 +772,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
           <ActivityLog 
             activities={ownerActivities || []} 
             onAddActivity={handleAddActivity}
+            onEditActivity={(id, updates) => updateActivity.mutate({ id, updates })}
+            onDeleteActivity={(id) => deleteActivity.mutate(id)}
             showPropertyContext={true}
             currentPropertyId={property.id}
           />

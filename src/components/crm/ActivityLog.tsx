@@ -1,24 +1,42 @@
 import React, { useState } from 'react';
 import { Activity, ActivityType } from '@/types';
-import { Phone, Mail, MessageSquare, Calendar, FileText, Plus, MapPin } from 'lucide-react';
+import { Phone, Mail, MessageSquare, Calendar, FileText, Plus, MapPin, Pencil, Trash2, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ActivityLogProps {
   activities: Activity[];
   onAddActivity: (activity: Omit<Activity, 'id'>) => void;
-  showPropertyContext?: boolean; // Show which property the activity was regarding
-  currentPropertyId?: string;    // If provided, only show "Re: property" when it's a different property
+  onEditActivity?: (id: string, updates: { type?: string; content?: string; outcome?: string }) => void;
+  onDeleteActivity?: (id: string) => void;
+  showPropertyContext?: boolean;
+  currentPropertyId?: string;
 }
 
 const ActivityLog: React.FC<ActivityLogProps> = ({ 
   activities, 
   onAddActivity,
+  onEditActivity,
+  onDeleteActivity,
   showPropertyContext = false,
   currentPropertyId,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newType, setNewType] = useState<ActivityType>('note');
   const [newContent, setNewContent] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editType, setEditType] = useState<ActivityType>('note');
+  const [editContent, setEditContent] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const icons: Record<ActivityType, React.ReactNode> = {
     call: <Phone className="w-4 h-4" />,
@@ -131,13 +149,70 @@ const ActivityLog: React.FC<ActivityLogProps> = ({
           </div>
         ) : (
           sortedActivities.map((activity) => {
-            // Determine if we should show property context
             const showPropertyRef = showPropertyContext && 
               activity.propertyAddress && 
               (!currentPropertyId || activity.propertyId !== currentPropertyId);
             
+            const isEditing = editingId === activity.id;
+
+            if (isEditing) {
+              return (
+                <div key={activity.id} className="p-4 bg-muted/30">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {(Object.keys(icons) as ActivityType[]).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setEditType(type)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-all",
+                          editType === type
+                            ? 'ring-2 ring-brand ring-offset-1 ' + typeColors[type]
+                            : 'bg-card border-border text-muted-foreground hover:border-brand'
+                        )}
+                      >
+                        {icons[type]}
+                        <span className="capitalize">{type}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full p-3 border border-input rounded-lg text-sm resize-none focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none bg-card"
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onEditActivity && editContent.trim()) {
+                          onEditActivity(activity.id, { type: editType, content: editContent.trim() });
+                          setEditingId(null);
+                        }
+                      }}
+                      disabled={!editContent.trim()}
+                      className="px-3 py-1.5 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                    >
+                      <Check className="w-4 h-4" />
+                      Save
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
             return (
-              <div key={activity.id} className="p-4 hover:bg-muted/30 transition-colors">
+              <div key={activity.id} className="p-4 hover:bg-muted/30 transition-colors group">
                 <div className="flex items-start gap-3">
                   <div className={cn("p-2 rounded-lg border", typeColors[activity.type])}>
                     {icons[activity.type]}
@@ -153,7 +228,35 @@ const ActivityLog: React.FC<ActivityLogProps> = ({
                           <span className="text-xs text-muted-foreground">by {activity.createdByName}</span>
                         )}
                       </div>
-                      <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
+                      <div className="flex items-center gap-2">
+                        {(onEditActivity || onDeleteActivity) && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {onEditActivity && (
+                              <button
+                                onClick={() => {
+                                  setEditingId(activity.id);
+                                  setEditType(activity.type);
+                                  setEditContent(activity.content);
+                                }}
+                                className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Edit activity"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {onDeleteActivity && (
+                              <button
+                                onClick={() => setDeleteId(activity.id)}
+                                className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                                title="Delete activity"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <span className="text-xs text-muted-foreground">{formatDate(activity.date)}</span>
+                      </div>
                     </div>
                     <p className="text-sm text-muted-foreground whitespace-pre-line">{activity.content}</p>
                     {showPropertyRef && (
@@ -172,6 +275,32 @@ const ActivityLog: React.FC<ActivityLogProps> = ({
           })
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Activity</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this activity? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteId && onDeleteActivity) {
+                  onDeleteActivity(deleteId);
+                  setDeleteId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

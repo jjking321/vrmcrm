@@ -123,6 +123,43 @@ export const useCallListItems = (listId: string | null) => {
       
       if (ownerError) throw ownerError;
       
+      // Fetch activities for these properties
+      const { data: activities, error: activityError } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .in('property_id', propertyIds)
+        .order('date', { ascending: false });
+      
+      if (activityError) throw activityError;
+      
+      // Fetch profiles for activity attribution
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('company_id', company.id);
+      
+      if (profilesError) throw profilesError;
+      
+      // Create profiles map
+      const profilesMap = new Map<string, string>();
+      profiles?.forEach(p => profilesMap.set(p.id, p.name));
+      
+      // Group activities by property
+      const activityMap = new Map<string, any[]>();
+      activities?.forEach(activity => {
+        const existing = activityMap.get(activity.property_id) || [];
+        existing.push({
+          id: activity.id,
+          type: activity.type,
+          date: activity.date,
+          content: activity.content,
+          outcome: activity.outcome || undefined,
+          createdBy: activity.created_by || undefined,
+          createdByName: activity.created_by ? profilesMap.get(activity.created_by) : undefined,
+        });
+        activityMap.set(activity.property_id, existing);
+      });
+      
       // Map owners to properties
       const ownerMap = new Map();
       owners?.forEach(owner => {
@@ -162,7 +199,7 @@ export const useCallListItems = (listId: string | null) => {
           roomType: prop.room_type,
           propertyManager: prop.property_manager,
           host: prop.host,
-          activities: [],
+          activities: activityMap.get(prop.id) || [],
           owner: owner ? {
             name: owner.name || '',
             email: owner.email || '',

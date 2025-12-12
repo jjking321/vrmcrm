@@ -110,10 +110,63 @@ export const useTeamMembers = () => {
     },
   });
 
+  // Update team member role mutation
+  const updateMemberRole = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'member' }) => {
+      const { data, error } = await supabase.functions.invoke('update-team-member', {
+        body: { userId, role },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to update role');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      toast.success('Role updated successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update role');
+    },
+  });
+
+  // Reset password mutation
+  const resetMemberPassword = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data, error } = await supabase.functions.invoke('update-team-member', {
+        body: { userId, password },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to reset password');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Password updated successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to reset password');
+    },
+  });
+
   return {
     teamMembers,
     isLoading,
     createTeamMember,
     deleteTeamMember,
+    updateMemberRole,
+    resetMemberPassword,
   };
 };

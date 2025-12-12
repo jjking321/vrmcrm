@@ -1,5 +1,8 @@
 project_id = "csizkmiplkjyawbscrlx"
 
+[functions.update-team-member]
+verify_jwt = false
+
 [functions.generate-marketing]
 verify_jwt = false
 

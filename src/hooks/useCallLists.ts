@@ -402,7 +402,7 @@ export const useLogCallActivity = () => {
         dnc_skipped: 'DNC - Skipped',
       };
       
-      const content = `Called ${ownerName} at ${phoneNumber} (${phoneType})`;
+      const content = `Called ${ownerName} at ${phoneNumber}`;
       
       const { error } = await supabase
         .from('activity_logs')

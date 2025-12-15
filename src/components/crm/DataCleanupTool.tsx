@@ -31,6 +31,7 @@ import { useMalformedAddresses, useFixAddresses, useFixSingleAddress, useUpdateP
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
 import { DuplicateMergeModal } from './DuplicateMergeModal';
+import { DuplicateWizard } from './DuplicateWizard';
 import { useOwnerNameVariations, useNormalizeOwnerNames, useNormalizeSingleGroup, OwnerNameVariation } from '@/hooks/useOwnerNameFixer';
 
 interface DataCleanupToolProps {
@@ -83,6 +84,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   const autoMergeMutation = useAutoMergeDuplicates();
   const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Owner name normalization hooks
   const { data: ownerNameVariations = [], isLoading: isLoadingOwnerNames, refetch: refetchOwnerNames } = useOwnerNameVariations();
@@ -935,6 +937,12 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                 </div>
                 <div className="flex gap-2">
                   <Button 
+                    onClick={() => setWizardOpen(true)}
+                  >
+                    <Merge className="w-4 h-4 mr-1" />
+                    Start Wizard
+                  </Button>
+                  <Button 
                     variant="outline"
                     onClick={() => autoMergeMutation.mutate({ groups: duplicateGroups, strategy: 'oldest' })}
                     disabled={autoMergeMutation.isPending}
@@ -995,6 +1003,13 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
           setSelectedDuplicateGroup(null);
           refetchDuplicates();
         }}
+      />
+
+      <DuplicateWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        groups={duplicateGroups}
+        onComplete={() => refetchDuplicates()}
       />
     </div>
   );

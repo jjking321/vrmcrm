@@ -19,74 +19,59 @@ serve(async (req) => {
       );
     }
 
-    const { address, city, state, zip, bedrooms, bathrooms } = await req.json();
+    const { lat, lng, bedrooms, baths, guests } = await req.json();
 
-    if (!address || !city || !state) {
+    if (!lat || !lng) {
       return new Response(
-        JSON.stringify({ error: "Address, city, and state are required" }),
+        JSON.stringify({ error: "Latitude and longitude are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Fetching AirROI data for:", address);
+    console.log("Fetching AirROI data for coordinates:", lat, lng, "bedrooms:", bedrooms, "baths:", baths, "guests:", guests);
 
-    // AirROI API endpoint for revenue estimates
-    const apiUrl = "https://api.airroi.com/v1/estimate";
+    // Build query parameters for GET request
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      bedrooms: String(bedrooms || 2),
+      baths: String(baths || 1),
+      guests: String(guests || 4),
+      currency: 'native',
+    });
+
+    const apiUrl = `https://api.airroi.com/calculator/estimate?${params}`;
+    console.log("AirROI API URL:", apiUrl);
     
     const response = await fetch(apiUrl, {
-      method: "POST",
+      method: "GET",
       headers: {
-        "Authorization": `Bearer ${AIRROI_API_KEY}`,
-        "Content-Type": "application/json",
+        "x-api-key": AIRROI_API_KEY,
       },
-      body: JSON.stringify({
-        address: address,
-        city: city,
-        state: state,
-        zip: zip,
-        bedrooms: bedrooms || 2,
-        bathrooms: bathrooms || 1,
-      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AirROI API error:", response.status, errorText);
-      
-      // Return mock data if API fails (for demo purposes)
-      // In production, you'd want to handle this differently
-      console.log("Returning estimated data based on property attributes");
-      
-      const baseDailyRate = 150 + (bedrooms || 2) * 50;
-      const baseOccupancy = 0.65;
-      const estimatedAnnualRevenue = Math.round(baseDailyRate * 365 * baseOccupancy);
-      
       return new Response(
-        JSON.stringify({
-          average_daily_rate: baseDailyRate,
-          occupancy: baseOccupancy,
-          estimated_annual_revenue: estimatedAnnualRevenue,
-          monthly_revenue_distributions: [6, 7, 8, 9, 10, 12, 14, 13, 10, 8, 6, 7],
-          data_source: "estimated",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
+    console.log("AirROI raw response:", JSON.stringify(data));
     
+    // Map AirROI response fields to our format
     const result = {
       average_daily_rate: data.adr || data.average_daily_rate,
       occupancy: data.occupancy_rate || data.occupancy,
       estimated_annual_revenue: data.annual_revenue || data.estimated_annual_revenue,
       monthly_revenue_distributions: data.monthly_distribution || data.seasonality,
-      airbnb_rating: data.average_rating,
-      review_count: data.review_count,
-      comparable_properties: data.comparables?.length || 0,
       data_source: "airroi",
     };
 
-    console.log("Successfully fetched AirROI data for:", address);
+    console.log("Successfully fetched AirROI data:", JSON.stringify(result));
 
     return new Response(
       JSON.stringify(result),

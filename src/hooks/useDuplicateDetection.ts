@@ -303,21 +303,22 @@ export function useMergeDuplicates() {
       if (mergedOwnerData?.mailingZip !== undefined) ownerUpdate.mailing_zip = mergedOwnerData.mailingZip;
       if (mergedOwnerData?.notes !== undefined) ownerUpdate.notes = mergedOwnerData.notes;
 
-      // Handle contacts based on merge mode
+      // ALWAYS stack owner contacts (second owners) from all properties to avoid data loss
+      const allOwners = allProperties.flatMap(p => p.owner?.owners || []);
+      ownerUpdate.owners = mergeOwnerContacts([], allOwners);
+
+      // Handle phones and emails based on merge mode
       if (contactMergeMode === 'stack') {
-        // Combine all phones, emails, and owners from all properties
+        // Combine all phones and emails from all properties
         const allPhones = allProperties.flatMap(p => p.owner?.phones || []);
         const allEmails = allProperties.flatMap(p => p.owner?.emails || []);
-        const allOwners = allProperties.flatMap(p => p.owner?.owners || []);
         
         ownerUpdate.phones = dedupePhones(allPhones);
         ownerUpdate.emails = dedupeEmails(allEmails);
-        ownerUpdate.owners = mergeOwnerContacts([], allOwners);
       } else {
-        // Override mode - use selected values from primary record
+        // Override mode - use selected values from primary record for phones/emails only
         if (mergedOwnerData?.phones !== undefined) ownerUpdate.phones = mergedOwnerData.phones;
         if (mergedOwnerData?.emails !== undefined) ownerUpdate.emails = mergedOwnerData.emails;
-        if (mergedOwnerData?.owners !== undefined) ownerUpdate.owners = mergedOwnerData.owners;
       }
 
       if (Object.keys(ownerUpdate).length > 0) {

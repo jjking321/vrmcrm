@@ -21,8 +21,8 @@ export const usePropertySearch = (searchTerm: string, enabled: boolean = true) =
           owners (*)
         `)
         .eq('company_id', company.id)
-        .or(`address.ilike.${term},city.ilike.${term},state.ilike.${term},zip.ilike.${term}`)
-        .limit(100);
+      .or(`address.ilike.${term},city.ilike.${term},state.ilike.${term},zip.ilike.${term}`)
+        .range(0, 9999);
 
       if (propertiesError) throw propertiesError;
 
@@ -38,7 +38,7 @@ export const usePropertySearch = (searchTerm: string, enabled: boolean = true) =
         `)
         .eq('company_id', company.id)
         .ilike('name', term)
-        .limit(100);
+        .range(0, 9999);
 
       if (ownerError) throw ownerError;
 

@@ -149,7 +149,38 @@ const toProperty = (
   })),
 });
 
-const PAGE_SIZE = 500;
+const BATCH_SIZE = 100;
+
+// Helper to fetch owners in batches to avoid URL length issues
+async function fetchAllOwners(propertyIds: string[], companyId: string): Promise<DbOwner[]> {
+  const allOwners: DbOwner[] = [];
+  for (let i = 0; i < propertyIds.length; i += BATCH_SIZE) {
+    const batch = propertyIds.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from('owners')
+      .select('*')
+      .in('property_id', batch);
+    if (error) throw error;
+    allOwners.push(...((data || []) as unknown as DbOwner[]));
+  }
+  return allOwners;
+}
+
+// Helper to fetch activities in batches
+async function fetchAllActivities(propertyIds: string[], companyId: string): Promise<DbActivity[]> {
+  const allActivities: DbActivity[] = [];
+  for (let i = 0; i < propertyIds.length; i += BATCH_SIZE) {
+    const batch = propertyIds.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .in('property_id', batch)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    allActivities.push(...((data || []) as unknown as DbActivity[]));
+  }
+  return allActivities;
+}
 
 // Fetch a single property by ID (used when property isn't in loaded batch)
 export const usePropertyById = (propertyId: string | null) => {
@@ -234,113 +265,65 @@ export const useTotalPropertyCount = () => {
 export const useProperties = () => {
   const { company } = useAuth();
   const companyId = company?.id;
-  const [offset, setOffset] = useState(0);
-  const [allLoadedProperties, setAllLoadedProperties] = useState<Property[]>([]);
-  const [hasMore, setHasMore] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
-  const fetchBatch = async (currentOffset: number): Promise<Property[]> => {
-    if (!companyId) return [];
-
-    // Fetch properties with limit and offset
-    const { data: properties, error: propError } = await supabase
-      .from('properties')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .range(currentOffset, currentOffset + PAGE_SIZE - 1);
-
-    if (propError) throw propError;
-    if (!properties?.length) return [];
-
-    const propertyIds = properties.map(p => p.id);
-
-    // Fetch owners, activities, and profiles in parallel
-    const [ownersRes, activitiesRes, profilesRes] = await Promise.all([
-      supabase
-        .from('owners')
-        .select('*')
-        .in('property_id', propertyIds),
-      supabase
-        .from('activity_logs')
-        .select('*')
-        .in('property_id', propertyIds)
-        .order('date', { ascending: false }),
-      supabase
-        .from('profiles')
-        .select('id, name')
-        .eq('company_id', companyId),
-    ]);
-
-    if (ownersRes.error) throw ownersRes.error;
-    if (activitiesRes.error) throw activitiesRes.error;
-
-    // Create profiles lookup map
-    const profilesMap = new Map<string, string>();
-    (profilesRes.data || []).forEach(p => {
-      profilesMap.set(p.id, p.name);
-    });
-
-    // Group by property_id
-    const ownersByProp = new Map<string, DbOwner>();
-    (ownersRes.data || []).forEach(o => {
-      ownersByProp.set(o.property_id, o as unknown as DbOwner);
-    });
-
-    const activitiesByProp = new Map<string, DbActivity[]>();
-    (activitiesRes.data || []).forEach(a => {
-      const list = activitiesByProp.get(a.property_id) || [];
-      list.push(a as unknown as DbActivity);
-      activitiesByProp.set(a.property_id, list);
-    });
-
-    return properties.map(p =>
-      toProperty(
-        p as unknown as DbProperty,
-        ownersByProp.get(p.id) || null,
-        activitiesByProp.get(p.id) || [],
-        profilesMap
-      )
-    );
-  };
-
-  const query = useQuery({
+  return useQuery({
     queryKey: ['properties', companyId],
     queryFn: async (): Promise<Property[]> => {
-      const initialBatch = await fetchBatch(0);
-      setHasMore(initialBatch.length === PAGE_SIZE);
-      setOffset(PAGE_SIZE);
-      setAllLoadedProperties(initialBatch);
-      return initialBatch;
+      if (!companyId) return [];
+
+      // Fetch ALL properties (use range to override default 1000 limit)
+      const { data: properties, error: propError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .range(0, 99999);
+
+      if (propError) throw propError;
+      if (!properties?.length) return [];
+
+      const propertyIds = properties.map(p => p.id);
+
+      // Fetch owners, activities, and profiles in parallel (with batching for large datasets)
+      const [owners, activities, profilesRes] = await Promise.all([
+        fetchAllOwners(propertyIds, companyId),
+        fetchAllActivities(propertyIds, companyId),
+        supabase
+          .from('profiles')
+          .select('id, name')
+          .eq('company_id', companyId),
+      ]);
+
+      // Create profiles lookup map
+      const profilesMap = new Map<string, string>();
+      (profilesRes.data || []).forEach(p => {
+        profilesMap.set(p.id, p.name);
+      });
+
+      // Group by property_id
+      const ownersByProp = new Map<string, DbOwner>();
+      owners.forEach(o => {
+        ownersByProp.set(o.property_id, o);
+      });
+
+      const activitiesByProp = new Map<string, DbActivity[]>();
+      activities.forEach(a => {
+        const list = activitiesByProp.get(a.property_id) || [];
+        list.push(a);
+        activitiesByProp.set(a.property_id, list);
+      });
+
+      return properties.map(p =>
+        toProperty(
+          p as unknown as DbProperty,
+          ownersByProp.get(p.id) || null,
+          activitiesByProp.get(p.id) || [],
+          profilesMap
+        )
+      );
     },
     enabled: !!companyId,
   });
-
-  const loadMore = useCallback(async () => {
-    if (!hasMore || isFetchingMore || !companyId) return;
-    
-    setIsFetchingMore(true);
-    try {
-      const nextBatch = await fetchBatch(offset);
-      setHasMore(nextBatch.length === PAGE_SIZE);
-      setOffset(prev => prev + PAGE_SIZE);
-      setAllLoadedProperties(prev => [...prev, ...nextBatch]);
-    } catch (error) {
-      console.error('Failed to load more properties:', error);
-      toast.error('Failed to load more properties');
-    } finally {
-      setIsFetchingMore(false);
-    }
-  }, [hasMore, isFetchingMore, companyId, offset]);
-
-  // Return combined data from initial query + loaded more
-  return {
-    ...query,
-    data: allLoadedProperties.length > 0 ? allLoadedProperties : (query.data || []),
-    hasMore,
-    loadMore,
-    isFetchingMore,
-  };
 };
 
 export const useAddProperty = () => {

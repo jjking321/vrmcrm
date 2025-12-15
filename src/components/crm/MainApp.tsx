@@ -11,6 +11,7 @@ import { usePropertyFiltering } from '@/hooks/usePropertyFiltering';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
 import { useAllOwners } from '@/hooks/useAllOwners';
 import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
+import { usePagination } from '@/hooks/usePagination';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
 import { PropertyTable } from './PropertyTable';
@@ -29,16 +30,107 @@ import { DataCleanupTool } from './DataCleanupTool';
 import { ExclusionListManager } from './ExclusionListManager';
 import { CallListsView } from './CallListsView';
 import { CallDialer } from './CallDialer';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
-import { Loader2, ChevronDown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+
+// Separate component for property table with pagination to manage its own state
+const PropertyTableWithPagination: React.FC<{
+  displayProperties: Property[];
+  isFiltering: boolean;
+  listViewMode: ListViewMode;
+  handleSelectProperty: (id: string) => void;
+  sortConfig: { field: string; direction: 'asc' | 'desc' };
+  handleSort: (field: string) => void;
+  visibleColumns: string[];
+  stages: any[];
+  fields: FieldDefinition[];
+  selectedIds: Set<string>;
+  setSelectedIds: (ids: Set<string>) => void;
+  handleSelectOwner: (ownerName: string) => void;
+  handleUpdateProperty: (id: string, updates: Partial<Property>) => void;
+}> = ({
+  displayProperties,
+  isFiltering,
+  listViewMode,
+  handleSelectProperty,
+  sortConfig,
+  handleSort,
+  visibleColumns,
+  stages,
+  fields,
+  selectedIds,
+  setSelectedIds,
+  handleSelectOwner,
+  handleUpdateProperty,
+}) => {
+  const pagination = usePagination(displayProperties, 100);
+  
+  return (
+    <div className="mt-4">
+      {isFiltering && (
+        <div className="h-1 w-full bg-muted overflow-hidden rounded-full mb-4">
+          <div 
+            className="h-full bg-primary w-1/3 animate-pulse"
+            style={{ 
+              animation: 'indeterminate 1.5s infinite ease-in-out',
+            }}
+          />
+        </div>
+      )}
+      {listViewMode === 'table' ? (
+        <>
+          <PropertyTable
+            properties={pagination.paginatedItems}
+            onSelectProperty={handleSelectProperty}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+            visibleColumns={visibleColumns}
+            stages={stages}
+            fields={fields}
+            selectedIds={selectedIds}
+            onToggleSelection={(id) => {
+              const newSelection = new Set(selectedIds);
+              if (newSelection.has(id)) newSelection.delete(id);
+              else newSelection.add(id);
+              setSelectedIds(newSelection);
+            }}
+            onSelectAll={(ids) => setSelectedIds(new Set(ids))}
+            onSelectOwner={handleSelectOwner}
+          />
+          <PaginationControls
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            onPageChange={pagination.setCurrentPage}
+            onNextPage={pagination.goToNextPage}
+            onPrevPage={pagination.goToPrevPage}
+            hasNextPage={pagination.hasNextPage}
+            hasPrevPage={pagination.hasPrevPage}
+          />
+        </>
+      ) : (
+        <div className="h-[calc(100vh-280px)]">
+          <KanbanBoard
+            properties={displayProperties}
+            stages={stages}
+            onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
+            onSelectProperty={handleSelectProperty}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MainApp: React.FC = () => {
   const { company } = useAuth();
   const companyId = company?.id;
 
   // Data hooks
-  const { data: allProperties = [], isLoading: propertiesLoading, hasMore, loadMore, isFetchingMore } = useProperties();
+  const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
   const { data: totalPropertyCount = 0 } = useTotalPropertyCount();
   const { data: savedLists = [] } = useSavedLists();
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
@@ -499,68 +591,21 @@ const MainApp: React.FC = () => {
           isFiltering={isFiltering}
         />
 
-        <div className="mt-4">
-          {isFiltering && (
-            <div className="h-1 w-full bg-muted overflow-hidden rounded-full mb-4">
-              <div 
-                className="h-full bg-primary w-1/3 animate-pulse"
-                style={{ 
-                  animation: 'indeterminate 1.5s infinite ease-in-out',
-                }}
-              />
-            </div>
-          )}
-          {listViewMode === 'table' ? (
-            <>
-              <PropertyTable
-                properties={displayProperties}
-                onSelectProperty={handleSelectProperty}
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                visibleColumns={visibleColumns}
-                stages={stages}
-                fields={fields}
-                selectedIds={selectedIds}
-                onToggleSelection={(id) => {
-                  const newSelection = new Set(selectedIds);
-                  if (newSelection.has(id)) newSelection.delete(id);
-                  else newSelection.add(id);
-                  setSelectedIds(newSelection);
-                }}
-                onSelectAll={(ids) => setSelectedIds(new Set(ids))}
-                onSelectOwner={handleSelectOwner}
-              />
-              {hasMore && !isServerSearch && !hasFilterRules && (
-                <div className="flex justify-center py-6">
-                  <Button
-                    variant="outline"
-                    onClick={loadMore}
-                    disabled={isFetchingMore}
-                    className="gap-2"
-                  >
-                    {isFetchingMore ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                    {isFetchingMore 
-                      ? 'Loading...' 
-                      : `Load more (${totalPropertyCount - allProperties.length} remaining)`}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="h-[calc(100vh-280px)]">
-              <KanbanBoard
-                properties={displayProperties}
-                stages={stages}
-                onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
-                onSelectProperty={handleSelectProperty}
-              />
-            </div>
-          )}
-        </div>
+        <PropertyTableWithPagination 
+          displayProperties={displayProperties}
+          isFiltering={isFiltering}
+          listViewMode={listViewMode}
+          handleSelectProperty={handleSelectProperty}
+          sortConfig={sortConfig}
+          handleSort={handleSort}
+          visibleColumns={visibleColumns}
+          stages={stages}
+          fields={fields}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
+          handleSelectOwner={handleSelectOwner}
+          handleUpdateProperty={handleUpdateProperty}
+        />
       </div>
     );
   };

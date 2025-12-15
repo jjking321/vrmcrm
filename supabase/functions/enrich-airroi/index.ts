@@ -5,6 +5,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const BATCH_SIZE = 25; // AirROI batch limit
+
+// Normalize listing endpoint response to common format
+function normalizeListingResponse(data: any) {
+  const performanceMetrics = data.performance_metrics || {};
+  const ratings = data.ratings || {};
+  const listingInfo = data.listing_info || {};
+  const hostInfo = data.host_info || {};
+  
+  return {
+    average_daily_rate: performanceMetrics.ttm_avg_rate || performanceMetrics.l90d_avg_rate,
+    occupancy: performanceMetrics.ttm_occupancy || performanceMetrics.l90d_occupancy,
+    estimated_annual_revenue: performanceMetrics.ttm_revenue,
+    airbnb_rating: ratings.rating_overall,
+    review_count: ratings.num_reviews,
+    data_source: "airroi_listing",
+    // Extended fields from listing endpoint
+    listing_name: listingInfo.listing_name,
+    cover_photo_url: listingInfo.cover_photo_url,
+    host_name: hostInfo.host_name,
+    superhost: hostInfo.superhost,
+    ttm_revpar: performanceMetrics.ttm_revpar,
+    l90d_revenue: performanceMetrics.l90d_revenue,
+    l90d_avg_rate: performanceMetrics.l90d_avg_rate,
+    l90d_occupancy: performanceMetrics.l90d_occupancy,
+    monthly_revenue_distributions: data.monthly_revenue_distributions,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,16 +48,120 @@ serve(async (req) => {
       );
     }
 
-    const { lat, lng, bedrooms, baths, guests } = await req.json();
+    const body = await req.json();
+    const { airbnbListingId, airbnbListingIds, lat, lng, bedrooms, baths, guests } = body;
 
+    // Mode 1: Single listing by ID
+    if (airbnbListingId) {
+      console.log("Fetching AirROI listing data for ID:", airbnbListingId);
+      
+      const params = new URLSearchParams({
+        id: airbnbListingId,
+        currency: 'native',
+      });
+
+      const apiUrl = `https://api.airroi.com/listings?${params}`;
+      console.log("AirROI API URL:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "x-api-key": AIRROI_API_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("AirROI API error:", response.status, errorText);
+        return new Response(
+          JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
+          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await response.json();
+      console.log("AirROI listing raw response:", JSON.stringify(data));
+      
+      const result = normalizeListingResponse(data);
+      console.log("Normalized listing data:", JSON.stringify(result));
+
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Mode 2: Batch listings by IDs
+    if (airbnbListingIds && Array.isArray(airbnbListingIds) && airbnbListingIds.length > 0) {
+      console.log("Fetching AirROI batch data for", airbnbListingIds.length, "listings");
+      
+      const allResults: Record<string, any> = {};
+      
+      // Process in chunks of BATCH_SIZE
+      for (let i = 0; i < airbnbListingIds.length; i += BATCH_SIZE) {
+        const chunk = airbnbListingIds.slice(i, i + BATCH_SIZE);
+        console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, IDs:`, chunk);
+        
+        const response = await fetch("https://api.airroi.com/listings/batch", {
+          method: "POST",
+          headers: {
+            "x-api-key": AIRROI_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ids: chunk,
+            currency: "native",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("AirROI batch API error:", response.status, errorText);
+          // Continue processing other batches, mark failed ones
+          chunk.forEach(id => {
+            allResults[id] = { error: `API error: ${response.status}` };
+          });
+          continue;
+        }
+
+        const data = await response.json();
+        console.log("AirROI batch raw response:", JSON.stringify(data));
+        
+        // Process each listing in the response
+        if (data.listings && Array.isArray(data.listings)) {
+          data.listings.forEach((listing: any) => {
+            const listingId = listing.listing_info?.listing_id || listing.id;
+            if (listingId) {
+              allResults[listingId] = normalizeListingResponse(listing);
+            }
+          });
+        }
+        
+        // Also handle if response is an object keyed by ID
+        if (typeof data === 'object' && !Array.isArray(data) && !data.listings) {
+          Object.entries(data).forEach(([id, listingData]: [string, any]) => {
+            allResults[id] = normalizeListingResponse(listingData);
+          });
+        }
+      }
+
+      console.log("Batch results:", JSON.stringify(allResults));
+
+      return new Response(
+        JSON.stringify({ results: allResults }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Mode 3: Calculator fallback (existing behavior)
     if (!lat || !lng) {
       return new Response(
-        JSON.stringify({ error: "Latitude and longitude are required" }),
+        JSON.stringify({ error: "Latitude and longitude are required for calculator estimates, or provide airbnbListingId for listing data" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Fetching AirROI data for coordinates:", lat, lng, "bedrooms:", bedrooms, "baths:", baths, "guests:", guests);
+    console.log("Fetching AirROI calculator data for coordinates:", lat, lng, "bedrooms:", bedrooms, "baths:", baths, "guests:", guests);
 
     // Build query parameters for GET request
     const params = new URLSearchParams({
@@ -75,10 +208,10 @@ serve(async (req) => {
       occupancy: occupancy,
       estimated_annual_revenue: annualRevenue,
       monthly_revenue_distributions: data.monthly_revenue_distributions,
-      data_source: "airroi",
+      data_source: "airroi_calculator",
     };
 
-    console.log("Successfully fetched AirROI data:", JSON.stringify(result));
+    console.log("Successfully fetched AirROI calculator data:", JSON.stringify(result));
 
     return new Response(
       JSON.stringify(result),

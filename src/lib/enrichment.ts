@@ -28,6 +28,15 @@ export interface AirROIData {
   airbnb_rating?: number;
   review_count?: number;
   data_source: string;
+  // Extended fields from listing endpoint
+  listing_name?: string;
+  cover_photo_url?: string;
+  host_name?: string;
+  superhost?: boolean;
+  ttm_revpar?: number;
+  l90d_revenue?: number;
+  l90d_avg_rate?: number;
+  l90d_occupancy?: number;
 }
 
 export interface AddressVerification {
@@ -106,13 +115,37 @@ export async function captureStreetView(
 
 export async function fetchAirbnbEstimate(property: Property): Promise<{ success: boolean; data?: AirROIData; error?: string }> {
   try {
-    // Validate that we have coordinates - required for AirROI API
+    // If property has Airbnb listing ID, use the listing endpoint
+    if (property.airbnbListingId) {
+      console.log('Using listing endpoint for property:', property.id, 'listingId:', property.airbnbListingId);
+      
+      const { data, error } = await supabase.functions.invoke('enrich-airroi', {
+        body: {
+          airbnbListingId: property.airbnbListingId,
+        },
+      });
+
+      if (error) {
+        console.error('AirROI listing enrichment error:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (data?.error) {
+        return { success: false, error: data.error };
+      }
+
+      return { success: true, data };
+    }
+
+    // Fallback: Validate that we have coordinates - required for calculator API
     if (!property.latitude || !property.longitude) {
       return { 
         success: false, 
-        error: 'Property must have coordinates (latitude/longitude) to fetch revenue estimates. Please verify the address first.' 
+        error: 'Property must have coordinates (latitude/longitude) or an Airbnb listing ID to fetch revenue estimates.' 
       };
     }
+
+    console.log('Using calculator endpoint for property:', property.id);
 
     const { data, error } = await supabase.functions.invoke('enrich-airroi', {
       body: {
@@ -138,6 +171,98 @@ export async function fetchAirbnbEstimate(property: Property): Promise<{ success
     console.error('Error fetching AirROI data:', err);
     return { success: false, error: 'Failed to fetch revenue estimates' };
   }
+}
+
+// Batch enrichment for multiple properties
+export async function fetchAirbnbEstimateBatch(
+  properties: Property[],
+  onProgress?: (progress: number) => void
+): Promise<Map<string, { success: boolean; data?: AirROIData; error?: string }>> {
+  const resultMap = new Map<string, { success: boolean; data?: AirROIData; error?: string }>();
+  
+  if (properties.length === 0) return resultMap;
+
+  // Separate properties with and without listing IDs
+  const withIds = properties.filter(p => p.airbnbListingId);
+  const withoutIds = properties.filter(p => !p.airbnbListingId);
+  
+  let processed = 0;
+  const total = properties.length;
+
+  // Process properties with listing IDs via batch endpoint
+  if (withIds.length > 0) {
+    const listingIds = withIds.map(p => p.airbnbListingId!);
+    const propertyIdToListingId = new Map(withIds.map(p => [p.airbnbListingId!, p.id]));
+    
+    console.log(`Batch fetching ${listingIds.length} listings via batch endpoint`);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-airroi', {
+        body: {
+          airbnbListingIds: listingIds,
+        },
+      });
+
+      if (error) {
+        console.error('AirROI batch error:', error);
+        withIds.forEach(p => {
+          resultMap.set(p.id, { success: false, error: error.message });
+        });
+      } else if (data?.results) {
+        // Map results back to property IDs
+        withIds.forEach(p => {
+          const listingResult = data.results[p.airbnbListingId!];
+          if (listingResult && !listingResult.error) {
+            resultMap.set(p.id, { success: true, data: listingResult });
+          } else {
+            resultMap.set(p.id, { 
+              success: false, 
+              error: listingResult?.error || 'No data returned for listing' 
+            });
+          }
+        });
+      } else {
+        withIds.forEach(p => {
+          resultMap.set(p.id, { success: false, error: 'No results in batch response' });
+        });
+      }
+    } catch (err) {
+      console.error('Batch enrichment error:', err);
+      withIds.forEach(p => {
+        resultMap.set(p.id, { success: false, error: 'Batch request failed' });
+      });
+    }
+    
+    processed += withIds.length;
+    onProgress?.(Math.round((processed / total) * 100));
+  }
+
+  // Process properties without IDs via calculator (parallel with throttling)
+  if (withoutIds.length > 0) {
+    console.log(`Processing ${withoutIds.length} properties via calculator endpoint`);
+    
+    // Process in parallel batches of 10 to avoid overwhelming the API
+    const PARALLEL_LIMIT = 10;
+    for (let i = 0; i < withoutIds.length; i += PARALLEL_LIMIT) {
+      const batch = withoutIds.slice(i, i + PARALLEL_LIMIT);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (property) => {
+          const result = await fetchAirbnbEstimate(property);
+          return { propertyId: property.id, result };
+        })
+      );
+      
+      batchResults.forEach(({ propertyId, result }) => {
+        resultMap.set(propertyId, result);
+      });
+      
+      processed += batch.length;
+      onProgress?.(Math.round((processed / total) * 100));
+    }
+  }
+
+  return resultMap;
 }
 
 export async function verifyAddress(

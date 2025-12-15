@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Property, PipelineStage, FilterRule } from '@/types';
 import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
+import { fetchZillowData, fetchAirbnbEstimateBatch, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
 import { AddToCallListModal } from './AddToCallListModal';
 
@@ -107,20 +107,23 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
     setEnrichProgress(0);
     let successCount = 0;
 
-    for (let i = 0; i < selectedProperties.length; i++) {
-      const property = selectedProperties[i];
-      try {
-        const result = await fetchAirbnbEstimate(property);
-        if (result.success && result.data) {
+    // Use batch enrichment which handles listing IDs vs calculator intelligently
+    const results = await fetchAirbnbEstimateBatch(
+      selectedProperties,
+      (progress) => setEnrichProgress(progress)
+    );
+
+    // Apply results to properties
+    results.forEach((result, propertyId) => {
+      if (result.success && result.data) {
+        const property = selectedProperties.find(p => p.id === propertyId);
+        if (property) {
           const updates = applyAirROIData(property, result.data);
-          onUpdateProperty(property.id, updates);
+          onUpdateProperty(propertyId, updates);
           successCount++;
         }
-      } catch (err) {
-        console.error(`Failed to enrich ${property.address}:`, err);
       }
-      setEnrichProgress(((i + 1) / selectedProperties.length) * 100);
-    }
+    });
 
     setIsLoadingAirROI(false);
     toast.success(`Enriched ${successCount} of ${selectedCount} properties with Airbnb data`);

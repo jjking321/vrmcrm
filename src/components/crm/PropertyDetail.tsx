@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Property, PipelineStage, FieldDefinition, Activity } from '@/types';
+import { Property, PipelineStage, FieldDefinition, Activity, CallOutcome } from '@/types';
 import { useAddActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useProperties';
 import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
+import { useLogCallActivity } from '@/hooks/useCallLists';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
@@ -15,8 +16,10 @@ import {
   MapPin, BedDouble, Bath, User, Mail, Phone, 
   ArrowLeft, Save, X, Plus, ExternalLink, Star, 
   TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2,
-  AlertTriangle, PhoneOff, Clock, Link, DollarSign, Trash2
+  AlertTriangle, PhoneOff, Clock, Link, DollarSign, Trash2,
+  CheckCircle, Voicemail, PhoneMissed, XCircle
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +82,12 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [isLoadingZillow, setIsLoadingZillow] = useState(false);
+  
+  // Quick Call Log state
+  const [callNotes, setCallNotes] = useState('');
+  const [selectedPhoneIndex, setSelectedPhoneIndex] = useState(0);
+  const [showCallbackPicker, setShowCallbackPicker] = useState(false);
+  const [callbackDate, setCallbackDate] = useState('');
   const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
 
   // Reset edited values when property changes
@@ -211,6 +220,33 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const addActivityMutation = useAddActivity();
   const updateActivity = useUpdateActivity();
   const deleteActivity = useDeleteActivity();
+  const logCallActivity = useLogCallActivity();
+
+  const handleCallOutcome = async (outcome: CallOutcome) => {
+    const phones = callablePhones;
+    const selectedPhone = phones[selectedPhoneIndex];
+    const phoneNumber = selectedPhone?.number || primaryPhone?.number || '';
+    const phoneType = selectedPhone?.type || primaryPhone?.type || 'unknown';
+    
+    if (!phoneNumber) {
+      toast.error('No phone number available');
+      return;
+    }
+    
+    await logCallActivity.mutateAsync({
+      propertyId: property.id,
+      ownerName: primaryName || 'Unknown',
+      phoneNumber,
+      phoneType,
+      outcome,
+      notes: callNotes || undefined,
+    });
+    
+    setCallNotes('');
+    setShowCallbackPicker(false);
+    setCallbackDate('');
+    toast.success('Call logged');
+  };
 
   const handleAddActivity = (activity: Omit<Activity, 'id'>) => {
     // Activities are now owner-centric - pass the primary owner name
@@ -777,6 +813,135 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             showPropertyContext={true}
             currentPropertyId={property.id}
           />
+
+          {/* Quick Call Log Section */}
+          {callablePhones.length > 0 && (
+            <div className="bg-card rounded-xl shadow-soft border border-border p-5">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+                <Phone className="w-4 h-4 text-brand" />
+                Quick Call Log
+              </h3>
+              
+              {/* Compliance Warnings */}
+              {(ownerIsLitigator || hasDNC) && (
+                <div className="mb-4 space-y-2">
+                  {ownerIsLitigator && (
+                    <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-medium">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                      <span>LITIGATOR - Exercise caution when contacting</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Phone Selector (if multiple phones) */}
+              {callablePhones.length > 1 && (
+                <div className="mb-4">
+                  <label className="text-xs text-muted-foreground mb-1 block">Select Phone</label>
+                  <select 
+                    value={selectedPhoneIndex}
+                    onChange={(e) => setSelectedPhoneIndex(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-card"
+                  >
+                    {callablePhones.map((phone, idx) => (
+                      <option key={idx} value={idx}>
+                        {phone.number} ({phone.type}) {phone.doNotCall && '⚠️ DNC'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {/* Current Phone Display (single phone) */}
+              {callablePhones.length === 1 && (
+                <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="w-4 h-4" />
+                  <span>{callablePhones[0].number}</span>
+                  {callablePhones[0].type !== 'unknown' && (
+                    <span className="text-xs px-1.5 py-0.5 bg-muted rounded">{callablePhones[0].type}</span>
+                  )}
+                </div>
+              )}
+              
+              {/* Call Notes */}
+              <div className="mb-4">
+                <textarea
+                  value={callNotes}
+                  onChange={(e) => setCallNotes(e.target.value)}
+                  placeholder="Call notes (optional)..."
+                  className="w-full p-3 border border-input rounded-lg text-sm resize-none bg-card"
+                  rows={2}
+                />
+              </div>
+              
+              {/* Outcome Buttons */}
+              <div className="grid grid-cols-5 gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-col h-auto py-3 hover:bg-green-50 hover:border-green-500 hover:text-green-700" 
+                  onClick={() => handleCallOutcome('answered')}
+                  disabled={logCallActivity.isPending}
+                >
+                  <CheckCircle className="w-5 h-5 mb-1" />
+                  <span className="text-xs">Answered</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col h-auto py-3 hover:bg-blue-50 hover:border-blue-500 hover:text-blue-700" 
+                  onClick={() => handleCallOutcome('voicemail')}
+                  disabled={logCallActivity.isPending}
+                >
+                  <Voicemail className="w-5 h-5 mb-1" />
+                  <span className="text-xs">Voicemail</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col h-auto py-3 hover:bg-amber-50 hover:border-amber-500 hover:text-amber-700" 
+                  onClick={() => handleCallOutcome('no_answer')}
+                  disabled={logCallActivity.isPending}
+                >
+                  <PhoneMissed className="w-5 h-5 mb-1" />
+                  <span className="text-xs">No Answer</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col h-auto py-3 hover:bg-red-50 hover:border-red-500 hover:text-red-700" 
+                  onClick={() => handleCallOutcome('wrong_number')}
+                  disabled={logCallActivity.isPending}
+                >
+                  <XCircle className="w-5 h-5 mb-1" />
+                  <span className="text-xs">Wrong #</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col h-auto py-3 hover:bg-purple-50 hover:border-purple-500 hover:text-purple-700" 
+                  onClick={() => setShowCallbackPicker(true)}
+                  disabled={logCallActivity.isPending}
+                >
+                  <Calendar className="w-5 h-5 mb-1" />
+                  <span className="text-xs">Callback</span>
+                </Button>
+              </div>
+              
+              {/* Callback Date Picker */}
+              {showCallbackPicker && (
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={callbackDate}
+                    onChange={(e) => setCallbackDate(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-input rounded-md text-sm bg-card"
+                  />
+                  <Button size="sm" onClick={() => handleCallOutcome('callback')} disabled={!callbackDate || logCallActivity.isPending}>
+                    Schedule
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowCallbackPicker(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column - Owner & Market Data */}

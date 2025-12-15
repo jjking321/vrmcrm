@@ -131,6 +131,7 @@ export interface Property {
   tags: string[];
   marketData: MarketData;
   airbnbUrl?: string;
+  airbnbListingId?: string;
   zillowUrl?: string;
   propertyUrl?: string; // PropWire or other external link
   bookingLink?: string; // Generic booking link (VRBO, etc.)

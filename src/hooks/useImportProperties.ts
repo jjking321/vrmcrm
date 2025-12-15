@@ -8,6 +8,12 @@ import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
 import { normalizeAddressForMatch, namesMatch, emailsMatch, phonesMatch } from '@/lib/exclusionUtils';
 import { parseFullAddress, isFullAddressField } from '@/lib/addressParser';
 
+// Extract Airbnb listing ID from URL
+const extractAirbnbListingId = (url: string): string | null => {
+  const match = url.match(/\/rooms\/(\d+)/);
+  return match ? match[1] : null;
+};
+
 interface DuplicateDecision {
   mergeMode: 'stack' | 'replace';
 }
@@ -298,6 +304,7 @@ export const useImportProperties = () => {
                 tags: options.globalTags || [],
                 property_url: row.propertyUrl || null,
                 airbnb_url: airbnbUrl,
+                airbnb_listing_id: airbnbUrl ? extractAirbnbListingId(airbnbUrl) : null,
                 booking_link: bookingLink,
                 listing_title: row.listingTitle || null,
                 room_type: row.roomType || null,
@@ -416,7 +423,10 @@ export const useImportProperties = () => {
               bookingLink = null;
             }
             
-            if (airbnbUrl) propUpdates.airbnb_url = airbnbUrl;
+            if (airbnbUrl) {
+              propUpdates.airbnb_url = airbnbUrl;
+              propUpdates.airbnb_listing_id = extractAirbnbListingId(airbnbUrl);
+            }
             if (bookingLink) propUpdates.booking_link = bookingLink;
 
             // Build owner updates based on contact merge mode (per-duplicate setting)

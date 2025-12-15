@@ -34,6 +34,12 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+// Extract Airbnb listing ID from URL
+const extractAirbnbListingId = (url: string): string | null => {
+  const match = url.match(/\/rooms\/(\d+)/);
+  return match ? match[1] : null;
+};
+
 interface PropertyDetailProps {
   property: Property;
   stages: PipelineStage[];
@@ -170,6 +176,9 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
       toast.info('Airbnb URL detected and moved to Airbnb field');
     }
     
+    // Extract Airbnb listing ID if URL is present
+    const airbnbListingId = finalAirbnbUrl ? extractAirbnbListingId(finalAirbnbUrl) : undefined;
+    
     onUpdateProperty(property.id, {
       address: editedProperty.address,
       city: editedProperty.city,
@@ -182,6 +191,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
       yearBuilt: editedProperty.yearBuilt || undefined,
       propertyType: editedProperty.propertyType || undefined,
       airbnbUrl: finalAirbnbUrl || undefined,
+      airbnbListingId: airbnbListingId || undefined,
       zillowUrl: editedProperty.zillowUrl || undefined,
       propertyUrl: editedProperty.propertyUrl || undefined,
       bookingLink: finalBookingLink || undefined,

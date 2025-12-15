@@ -115,7 +115,7 @@ export function useDuplicates() {
   return useQuery({
     queryKey: ['duplicates'],
     queryFn: async (): Promise<DuplicateGroup[]> => {
-      // Fetch all properties with their owners
+      // Fetch all properties with their owners (use left join to include properties without owners)
       const { data: properties, error } = await supabase
         .from('properties')
         .select(`
@@ -139,7 +139,7 @@ export function useDuplicates() {
           created_at,
           latitude,
           longitude,
-          owners!inner (
+          owners (
             id,
             name,
             email,

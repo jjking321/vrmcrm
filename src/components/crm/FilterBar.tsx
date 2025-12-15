@@ -216,20 +216,23 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
           {showColumnPicker && (
             <div className="absolute right-0 mt-2 w-56 bg-card rounded-lg shadow-medium border border-border z-50 p-2 animate-fade-in">
-              {fields.map(field => (
-                <label
-                  key={field.id}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-md cursor-pointer text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={visibleColumns.includes(field.id)}
-                    onChange={() => toggleColumn(field.id)}
-                    className="w-4 h-4 rounded border-border text-brand focus:ring-brand"
-                  />
-                  {field.label}
-                </label>
-              ))}
+              {fields.map(field => {
+                const fieldKey = (field as any).fieldKey || field.id;
+                return (
+                  <label
+                    key={field.id}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-md cursor-pointer text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns.includes(fieldKey)}
+                      onChange={() => toggleColumn(fieldKey)}
+                      className="w-4 h-4 rounded border-border text-brand focus:ring-brand"
+                    />
+                    {field.label}
+                  </label>
+                );
+              })}
             </div>
           )}
         </div>

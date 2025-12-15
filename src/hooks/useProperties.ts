@@ -24,6 +24,7 @@ interface DbProperty {
   property_type: string | null;
   image: string | null;
   airbnb_url: string | null;
+  airbnb_listing_id: string | null;
   zillow_url: string | null;
   property_url: string | null;
   booking_link: string | null;
@@ -99,6 +100,7 @@ const toProperty = (
   stageId: dbProp.stage_id || undefined,
   tags: dbProp.tags || [],
   airbnbUrl: dbProp.airbnb_url || undefined,
+  airbnbListingId: dbProp.airbnb_listing_id || undefined,
   zillowUrl: dbProp.zillow_url || undefined,
   propertyUrl: dbProp.property_url || undefined,
   bookingLink: dbProp.booking_link || undefined,

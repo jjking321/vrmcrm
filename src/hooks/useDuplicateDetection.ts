@@ -115,49 +115,63 @@ export function useDuplicates() {
   return useQuery({
     queryKey: ['duplicates'],
     queryFn: async (): Promise<DuplicateGroup[]> => {
-      // Fetch all properties with their owners (use left join to include properties without owners)
-      const { data: properties, error } = await supabase
-        .from('properties')
-        .select(`
-          id,
-          address,
-          city,
-          state,
-          zip,
-          bedrooms,
-          bathrooms,
-          guests,
-          square_feet,
-          year_built,
-          property_type,
-          tags,
-          airbnb_url,
-          zillow_url,
-          property_url,
-          booking_link,
-          market_data,
-          created_at,
-          latitude,
-          longitude,
-          owners (
-            id,
-            name,
-            email,
-            phone,
-            mailing_address,
-            mailing_city,
-            mailing_state,
-            mailing_zip,
-            notes,
-            owners,
-            phones,
-            emails
-          )
-        `)
-        .order('created_at', { ascending: true })
-        .range(0, 9999);
+      // Fetch ALL properties (in batches) with their owners.
+      // Note: the backend limits responses to ~1000 rows per request, so we page through.
+      const FETCH_BATCH_SIZE = 1000;
+      const allProperties: any[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('properties')
+          .select(`
+            id,
+            address,
+            city,
+            state,
+            zip,
+            bedrooms,
+            bathrooms,
+            guests,
+            square_feet,
+            year_built,
+            property_type,
+            tags,
+            airbnb_url,
+            zillow_url,
+            property_url,
+            booking_link,
+            market_data,
+            created_at,
+            latitude,
+            longitude,
+            owners (
+              id,
+              name,
+              email,
+              phone,
+              mailing_address,
+              mailing_city,
+              mailing_state,
+              mailing_zip,
+              notes,
+              owners,
+              phones,
+              emails
+            )
+          `)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + FETCH_BATCH_SIZE - 1);
+
+        if (error) throw error;
+        allProperties.push(...(data || []));
+
+        hasMore = (data || []).length === FETCH_BATCH_SIZE;
+        offset += FETCH_BATCH_SIZE;
+      }
+
+      const properties = allProperties;
 
       // Group by normalized address
       const groups = new Map<string, DuplicateProperty[]>();

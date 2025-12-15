@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useCallListItems, useUpdateCallListItem, useLogCallActivity, useCallLists } from '@/hooks/useCallLists';
+import { usePipelineStages } from '@/hooks/usePipelineStages';
+import { useUpdateProperty } from '@/hooks/useProperties';
 import { CallListItem, CallOutcome, PhoneContact, ActivityType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { 
   ArrowLeft, ArrowRight, Phone, PhoneOff, Voicemail, PhoneMissed, 
   XCircle, Calendar, SkipForward, Loader2, ExternalLink, AlertTriangle,
-  CheckCircle, Bed, Bath, Mail, FileText, MessageSquare, ChevronDown, ChevronUp
+  CheckCircle, Bed, Bath, Mail, FileText, MessageSquare, ChevronDown, ChevronUp,
+  Layers
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -24,8 +27,10 @@ interface CallDialerProps {
 export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
   const { data: items = [], isLoading } = useCallListItems(listId);
   const { data: lists = [] } = useCallLists();
+  const { data: stages = [] } = usePipelineStages();
   const updateItemMutation = useUpdateCallListItem();
   const logActivityMutation = useLogCallActivity();
+  const updatePropertyMutation = useUpdateProperty();
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [notes, setNotes] = useState('');
@@ -331,6 +336,40 @@ export const CallDialer: React.FC<CallDialerProps> = ({ listId, onBack }) => {
                 </a>
               )}
             </div>
+          </div>
+        </div>
+        
+        {/* Pipeline Stage Selector */}
+        <div className="px-6 py-3 border-b border-border bg-muted/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Layers className="w-4 h-4" />
+              <span>Pipeline Stage</span>
+            </div>
+            <select
+              value={property?.stageId || ''}
+              onChange={async (e) => {
+                if (!property) return;
+                try {
+                  await updatePropertyMutation.mutateAsync({
+                    id: property.id,
+                    updates: { stageId: e.target.value || undefined }
+                  });
+                  toast.success(e.target.value ? 'Pipeline stage updated' : 'Removed from pipeline');
+                } catch (error) {
+                  toast.error('Failed to update pipeline stage');
+                }
+              }}
+              disabled={updatePropertyMutation.isPending}
+              className="px-3 py-1.5 text-sm border border-input rounded-lg bg-card focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-w-[160px]"
+            >
+              <option value="">Unassigned</option>
+              {stages.map(stage => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         

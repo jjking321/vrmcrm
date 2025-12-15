@@ -480,5 +480,10 @@ export function applyAirROIData(property: Property, airroiData: AirROIData): Par
     },
   };
 
+  // Update image with Airbnb cover photo if available
+  if (airroiData.cover_photo_url) {
+    updates.image = airroiData.cover_photo_url;
+  }
+
   return updates;
 }

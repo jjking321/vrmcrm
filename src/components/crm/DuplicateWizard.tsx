@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
-import { DuplicateProperty, DuplicateGroup, useMergeDuplicates } from '@/hooks/useDuplicateDetection';
+import { DuplicateProperty, DuplicateGroup, useMergeDuplicates, useDuplicates } from '@/hooks/useDuplicateDetection';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { 
@@ -116,12 +116,16 @@ const OwnerContactsList: React.FC<{ owners: OwnerContact[] }> = ({ owners }) => 
 export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   open,
   onOpenChange,
-  groups,
+  groups: initialGroups,
   onComplete,
 }) => {
+  // Use live data from the database
+  const { data: liveGroups = [] } = useDuplicates();
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mergedCount, setMergedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [processedAddresses, setProcessedAddresses] = useState<Set<string>>(new Set());
   
   // Per-group state
   const [primaryId, setPrimaryId] = useState<string>('');
@@ -131,10 +135,31 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   
   const mergeMutation = useMergeDuplicates();
 
-  const currentGroup = groups[currentIndex];
+  // Find current group from live data - skip already merged/processed
+  const currentGroup = useMemo(() => {
+    // Find next unprocessed group that still exists in live data
+    for (let i = currentIndex; i < initialGroups.length; i++) {
+      const initialGroup = initialGroups[i];
+      if (processedAddresses.has(initialGroup.normalizedAddress)) continue;
+      
+      // Check if this group still exists in live data (not yet merged)
+      const liveGroup = liveGroups.find(g => g.normalizedAddress === initialGroup.normalizedAddress);
+      if (liveGroup && liveGroup.properties.length > 1) {
+        return liveGroup;
+      }
+    }
+    return null;
+  }, [initialGroups, liveGroups, currentIndex, processedAddresses]);
+
   const properties = currentGroup?.properties || [];
-  const isComplete = currentIndex >= groups.length;
-  const progress = groups.length > 0 ? ((currentIndex) / groups.length) * 100 : 0;
+  
+  // Calculate remaining duplicates from live data
+  const remainingGroups = liveGroups.filter(g => 
+    !processedAddresses.has(g.normalizedAddress) && g.properties.length > 1
+  ).length;
+  
+  const isComplete = !currentGroup && currentIndex >= initialGroups.length;
+  const progress = initialGroups.length > 0 ? ((mergedCount + skippedCount) / initialGroups.length) * 100 : 0;
 
   // Reset per-group state when current group changes
   React.useEffect(() => {
@@ -173,6 +198,7 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
       setCurrentIndex(0);
       setMergedCount(0);
       setSkippedCount(0);
+      setProcessedAddresses(new Set());
     }
   }, [open]);
 
@@ -281,11 +307,16 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
       allProperties: properties,
     });
 
+    // Track this address as processed
+    setProcessedAddresses(prev => new Set([...prev, currentGroup.normalizedAddress]));
     setMergedCount(prev => prev + 1);
     setCurrentIndex(prev => prev + 1);
   };
 
   const handleSkip = () => {
+    if (currentGroup) {
+      setProcessedAddresses(prev => new Set([...prev, currentGroup.normalizedAddress]));
+    }
     setSkippedCount(prev => prev + 1);
     setCurrentIndex(prev => prev + 1);
   };
@@ -311,7 +342,7 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
               Duplicate Merge Wizard
             </DialogTitle>
             <div className="text-sm text-muted-foreground">
-              {!isComplete && `${currentIndex + 1} of ${groups.length}`}
+              {!isComplete && `${mergedCount + skippedCount + 1} of ${initialGroups.length} • ${remainingGroups} remaining`}
             </div>
           </div>
           <Progress value={progress} className="h-2 mt-2" />

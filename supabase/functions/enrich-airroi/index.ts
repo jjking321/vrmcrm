@@ -62,12 +62,19 @@ serve(async (req) => {
     const data = await response.json();
     console.log("AirROI raw response:", JSON.stringify(data));
     
+    // Extract ADR and occupancy from response
+    const adr = data.average_daily_rate || data.adr;
+    const occupancy = data.occupancy || data.occupancy_rate;
+    
+    // Calculate annual revenue: ADR × occupancy × 365
+    const annualRevenue = adr && occupancy ? Math.round(adr * occupancy * 365) : null;
+    
     // Map AirROI response fields to our format
     const result = {
-      average_daily_rate: data.adr || data.average_daily_rate,
-      occupancy: data.occupancy_rate || data.occupancy,
-      estimated_annual_revenue: data.annual_revenue || data.estimated_annual_revenue,
-      monthly_revenue_distributions: data.monthly_distribution || data.seasonality,
+      average_daily_rate: adr,
+      occupancy: occupancy,
+      estimated_annual_revenue: annualRevenue,
+      monthly_revenue_distributions: data.monthly_revenue_distributions,
       data_source: "airroi",
     };
 

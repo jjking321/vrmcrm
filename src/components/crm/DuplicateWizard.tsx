@@ -17,9 +17,14 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { 
   Check, Calendar, Phone, Mail, Users, PhoneOff, ChevronDown, 
-  CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, PartyPopper, Merge
+  CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, PartyPopper, Merge, Tag
 } from 'lucide-react';
 import { PhoneContact, EmailContact, OwnerContact } from '@/types';
+
+// Extract meaningful source tags (filter out internal list- prefixed tags)
+const getSourceTags = (tags: string[]): string[] => {
+  return (tags || []).filter(t => !t.startsWith('list-'));
+};
 
 interface DuplicateWizardProps {
   open: boolean;
@@ -331,31 +336,51 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
             {/* Address header */}
             <div className="text-center py-2 border-b">
               <p className="text-lg font-semibold">{currentGroup.displayAddress}</p>
-              <p className="text-sm text-muted-foreground">{properties.length} duplicate records</p>
+              <p className="text-sm text-muted-foreground">
+                {properties.length} duplicate records
+                {(() => {
+                  const allSources = new Set<string>();
+                  properties.forEach(p => getSourceTags(p.tags).forEach(t => allSources.add(t)));
+                  return allSources.size > 0 ? ` • Sources: ${Array.from(allSources).join(', ')}` : '';
+                })()}
+              </p>
             </div>
 
             {/* Primary Record Selection */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Keep this record:</Label>
-              <RadioGroup value={primaryId} onValueChange={setPrimaryId} className="flex flex-wrap gap-3">
-                {properties.map((prop, idx) => (
-                  <div key={prop.id} className="flex items-center space-x-2">
-                    <RadioGroupItem value={prop.id} id={`wizard-${prop.id}`} />
-                    <Label htmlFor={`wizard-${prop.id}`} className="cursor-pointer flex items-center gap-2">
-                      <span className="font-medium">Record {String.fromCharCode(65 + idx)}</span>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {format(new Date(prop.createdAt), 'MMM d, yyyy')}
-                      </span>
-                    </Label>
-                  </div>
-                ))}
+              <RadioGroup value={primaryId} onValueChange={setPrimaryId} className="space-y-2">
+                {properties.map((prop, idx) => {
+                  const sourceTags = getSourceTags(prop.tags);
+                  return (
+                    <div key={prop.id} className="flex items-center space-x-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <RadioGroupItem value={prop.id} id={`wizard-${prop.id}`} />
+                      <Label htmlFor={`wizard-${prop.id}`} className="cursor-pointer flex-1 flex items-center gap-3">
+                        <span className="font-medium">Record {String.fromCharCode(65 + idx)}</span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {format(new Date(prop.createdAt), 'MMM d, yyyy')}
+                        </span>
+                        {sourceTags.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {sourceTags.map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0">
+                                <Tag className="w-3 h-3 mr-1" />
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </Label>
+                    </div>
+                  );
+                })}
               </RadioGroup>
             </div>
 
             {/* Contact Merge Mode */}
             <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-              <Label className="text-sm font-medium mb-2 block">Contact handling:</Label>
+              <Label className="text-sm font-medium mb-2 block">Phone & email handling:</Label>
               <RadioGroup 
                 value={contactMergeMode} 
                 onValueChange={(v) => setContactMergeMode(v as 'stack' | 'override')}
@@ -363,20 +388,23 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="stack" id="wizard-stack" />
-                  <Label htmlFor="wizard-stack" className="cursor-pointer text-sm">Combine all</Label>
+                  <Label htmlFor="wizard-stack" className="cursor-pointer text-sm">Stack all phones & emails</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="override" id="wizard-override" />
-                  <Label htmlFor="wizard-override" className="cursor-pointer text-sm">Use primary only</Label>
+                  <Label htmlFor="wizard-override" className="cursor-pointer text-sm">Keep primary's phones & emails only</Label>
                 </div>
               </RadioGroup>
-              {contactMergeMode === 'stack' && (
-                <div className="mt-2 text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{combinedCounts.phones} phones</Badge>
-                  <Badge variant="secondary" className="text-xs">{combinedCounts.emails} emails</Badge>
-                  <Badge variant="secondary" className="text-xs">{combinedCounts.owners} owners</Badge>
-                </div>
-              )}
+              <div className="mt-2 text-xs text-purple-700 dark:text-purple-300">
+                {contactMergeMode === 'stack' ? (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">{combinedCounts.phones} phones</Badge>
+                    <Badge variant="secondary" className="text-xs">{combinedCounts.emails} emails</Badge>
+                  </div>
+                ) : (
+                  <span>Owner contacts ({combinedCounts.owners}) are always preserved from all records</span>
+                )}
+              </div>
             </div>
 
             {/* Smart Resolution Summary */}
@@ -408,11 +436,21 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
                       <thead className="bg-amber-500/10 border-b border-amber-500/20">
                         <tr>
                           <th className="text-left p-2 font-medium w-32">Field</th>
-                          {properties.map((prop, idx) => (
-                            <th key={prop.id} className="text-left p-2 font-medium">
-                              Record {String.fromCharCode(65 + idx)}
-                            </th>
-                          ))}
+                          {properties.map((prop, idx) => {
+                            const sourceTags = getSourceTags(prop.tags);
+                            return (
+                              <th key={prop.id} className="text-left p-2 font-medium">
+                                <div className="flex flex-col">
+                                  <span>Record {String.fromCharCode(65 + idx)}</span>
+                                  {sourceTags.length > 0 && (
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                      ({sourceTags.slice(0, 2).join(', ')})
+                                    </span>
+                                  )}
+                                </div>
+                              </th>
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody>

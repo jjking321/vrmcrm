@@ -433,6 +433,7 @@ export type Database = {
       properties: {
         Row: {
           address: string
+          airbnb_listing_id: string | null
           airbnb_url: string | null
           bathrooms: number
           bedrooms: number
@@ -465,6 +466,7 @@ export type Database = {
         }
         Insert: {
           address: string
+          airbnb_listing_id?: string | null
           airbnb_url?: string | null
           bathrooms?: number
           bedrooms?: number
@@ -497,6 +499,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          airbnb_listing_id?: string | null
           airbnb_url?: string | null
           bathrooms?: number
           bedrooms?: number

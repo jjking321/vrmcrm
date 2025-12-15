@@ -106,14 +106,21 @@ export async function captureStreetView(
 
 export async function fetchAirbnbEstimate(property: Property): Promise<{ success: boolean; data?: AirROIData; error?: string }> {
   try {
+    // Validate that we have coordinates - required for AirROI API
+    if (!property.latitude || !property.longitude) {
+      return { 
+        success: false, 
+        error: 'Property must have coordinates (latitude/longitude) to fetch revenue estimates. Please verify the address first.' 
+      };
+    }
+
     const { data, error } = await supabase.functions.invoke('enrich-airroi', {
       body: {
-        address: property.address,
-        city: property.city,
-        state: property.state,
-        zip: property.zip,
-        bedrooms: property.bedrooms,
-        bathrooms: property.bathrooms,
+        lat: property.latitude,
+        lng: property.longitude,
+        bedrooms: property.bedrooms || 2,
+        baths: property.bathrooms || 1,
+        guests: property.guests || (property.bedrooms || 2) * 2, // Default: 2 guests per bedroom
       },
     });
 

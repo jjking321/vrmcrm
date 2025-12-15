@@ -36,7 +36,6 @@ export const usePipelineStages = () => {
 
       if (error) throw error;
 
-      // Return empty array if no stages (initialization will create them)
       if (!data?.length) {
         return [];
       }
@@ -55,7 +54,6 @@ export const useInitializePipelineStages = () => {
     mutationFn: async () => {
       if (!company?.id) throw new Error('No company');
 
-      // Check if stages already exist
       const { data: existing } = await supabase
         .from('pipeline_stages')
         .select('id')
@@ -64,7 +62,6 @@ export const useInitializePipelineStages = () => {
 
       if (existing?.length) return existing;
 
-      // Insert default stages (let database generate UUIDs)
       const stagesToInsert = DEFAULT_STAGES.map((stage, index) => ({
         company_id: company.id,
         name: stage.name,
@@ -83,5 +80,136 @@ export const useInitializePipelineStages = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pipeline_stages'] });
     },
+  });
+};
+
+export const useAddPipelineStage = () => {
+  const queryClient = useQueryClient();
+  const { company } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      if (!company?.id) throw new Error('No company');
+
+      // Get current max sort_order
+      const { data: existing } = await supabase
+        .from('pipeline_stages')
+        .select('sort_order')
+        .eq('company_id', company.id)
+        .order('sort_order', { ascending: false })
+        .limit(1);
+
+      const nextOrder = existing?.length ? (existing[0].sort_order + 1) : 0;
+
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .insert({
+          company_id: company.id,
+          name,
+          color,
+          sort_order: nextOrder,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline_stages'] });
+    },
+  });
+};
+
+export const useUpdatePipelineStage = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, name, color }: { id: string; name?: string; color?: string }) => {
+      const updates: { name?: string; color?: string } = {};
+      if (name !== undefined) updates.name = name;
+      if (color !== undefined) updates.color = color;
+
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline_stages'] });
+    },
+  });
+};
+
+export const useDeletePipelineStage = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (stageId: string) => {
+      // First, unassign all properties from this stage
+      await supabase
+        .from('properties')
+        .update({ stage_id: null })
+        .eq('stage_id', stageId);
+
+      // Then delete the stage
+      const { error } = await supabase
+        .from('pipeline_stages')
+        .delete()
+        .eq('id', stageId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline_stages'] });
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
+    },
+  });
+};
+
+export const useReorderPipelineStages = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (stages: { id: string; sort_order: number }[]) => {
+      // Update each stage's sort_order
+      const updates = stages.map(stage =>
+        supabase
+          .from('pipeline_stages')
+          .update({ sort_order: stage.sort_order })
+          .eq('id', stage.id)
+      );
+
+      await Promise.all(updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline_stages'] });
+    },
+  });
+};
+
+export const usePropertiesInStage = (stageId: string) => {
+  const { company } = useAuth();
+
+  return useQuery({
+    queryKey: ['properties_in_stage', stageId],
+    queryFn: async () => {
+      if (!company?.id || !stageId) return 0;
+
+      const { count, error } = await supabase
+        .from('properties')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', company.id)
+        .eq('stage_id', stageId);
+
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!company?.id && !!stageId,
   });
 };

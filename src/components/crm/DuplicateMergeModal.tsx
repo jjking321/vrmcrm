@@ -11,10 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DuplicateProperty, DuplicateGroup, useMergeDuplicates } from '@/hooks/useDuplicateDetection';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { Check, Calendar, Phone, Mail, Users, PhoneOff } from 'lucide-react';
+import { Check, Calendar, Phone, Mail, Users, PhoneOff, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PhoneContact, EmailContact, OwnerContact } from '@/types';
 
 interface DuplicateMergeModalProps {
@@ -118,7 +119,60 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
   const [primaryId, setPrimaryId] = useState<string>('');
   const [fieldSelections, setFieldSelections] = useState<Record<string, string>>({});
   const [contactMergeMode, setContactMergeMode] = useState<'stack' | 'override'>('stack');
+  const [autoResolvedExpanded, setAutoResolvedExpanded] = useState(false);
   const mergeMutation = useMergeDuplicates();
+
+  const properties = group?.properties || [];
+
+  // Categorize fields into autoResolved, conflicting, and empty
+  const fieldCategories = useMemo(() => {
+    if (!group) return { autoResolved: [] as Array<{ field: typeof MERGE_FIELDS[0]; selectedPropId: string; value: any; displayValue: string }>, conflicting: [] as typeof MERGE_FIELDS, empty: [] as typeof MERGE_FIELDS };
+    
+    const autoResolved: Array<{ field: typeof MERGE_FIELDS[0]; selectedPropId: string; value: any; displayValue: string }> = [];
+    const conflicting: typeof MERGE_FIELDS = [];
+    const empty: typeof MERGE_FIELDS = [];
+    
+    MERGE_FIELDS.filter(f => !f.isArrayField).forEach(field => {
+      const propValues = group.properties.map(p => ({
+        id: p.id,
+        value: field.getValue(p),
+        displayValue: field.display(field.getValue(p)),
+        isEmpty: !field.getValue(p) || field.display(field.getValue(p)) === '-'
+      }));
+      
+      const nonEmptyProps = propValues.filter(pv => !pv.isEmpty);
+      
+      if (nonEmptyProps.length === 0) {
+        // All empty - skip display
+        empty.push(field);
+      } else if (nonEmptyProps.length === 1) {
+        // Only one has data - auto-select it
+        autoResolved.push({ 
+          field, 
+          selectedPropId: nonEmptyProps[0].id, 
+          value: nonEmptyProps[0].value,
+          displayValue: nonEmptyProps[0].displayValue
+        });
+      } else {
+        // Multiple have data - check if same or different
+        const uniqueValues = new Set(nonEmptyProps.map(pv => JSON.stringify(pv.value)));
+        if (uniqueValues.size === 1) {
+          // All same value - auto-select first non-empty
+          autoResolved.push({ 
+            field, 
+            selectedPropId: nonEmptyProps[0].id, 
+            value: nonEmptyProps[0].value,
+            displayValue: nonEmptyProps[0].displayValue
+          });
+        } else {
+          // Different values - needs user selection
+          conflicting.push(field);
+        }
+      }
+    });
+    
+    return { autoResolved, conflicting, empty };
+  }, [group]);
 
   // Reset state when group changes
   React.useEffect(() => {
@@ -129,17 +183,41 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
       )[0];
       setPrimaryId(oldest.id);
       setContactMergeMode('stack');
+      setAutoResolvedExpanded(false);
       
-      // Initialize field selections with primary's values
+      // Initialize field selections with smart auto-resolution
       const selections: Record<string, string> = {};
-      MERGE_FIELDS.forEach(field => {
-        selections[field.key] = oldest.id;
+      
+      MERGE_FIELDS.filter(f => !f.isArrayField).forEach(field => {
+        const propValues = group.properties.map(p => ({
+          id: p.id,
+          value: field.getValue(p),
+          isEmpty: !field.getValue(p) || field.display(field.getValue(p)) === '-'
+        }));
+        
+        const nonEmptyProps = propValues.filter(pv => !pv.isEmpty);
+        
+        if (nonEmptyProps.length === 1) {
+          // Auto-select the one with data
+          selections[field.key] = nonEmptyProps[0].id;
+        } else if (nonEmptyProps.length > 1) {
+          // Check if all same - if so, pick first; otherwise default to oldest
+          const uniqueValues = new Set(nonEmptyProps.map(pv => JSON.stringify(pv.value)));
+          if (uniqueValues.size === 1) {
+            selections[field.key] = nonEmptyProps[0].id;
+          } else {
+            // True conflict - default to oldest
+            selections[field.key] = oldest.id;
+          }
+        } else {
+          // All empty, default to oldest
+          selections[field.key] = oldest.id;
+        }
       });
+      
       setFieldSelections(selections);
     }
   }, [group]);
-
-  const properties = group?.properties || [];
 
   // Calculate combined contact counts for preview
   const combinedCounts = useMemo(() => {
@@ -168,25 +246,6 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
       emails: allEmails.size,
       owners: allOwners.size,
     };
-  }, [group]);
-
-  // Determine which fields have different values across duplicates
-  const fieldsWithDifferences = useMemo(() => {
-    if (!group) return new Set<string>();
-    const diffs = new Set<string>();
-    
-    MERGE_FIELDS.filter(f => !f.isArrayField).forEach(field => {
-      const values = group.properties.map(p => {
-        const val = field.getValue(p);
-        return JSON.stringify(val);
-      });
-      const uniqueValues = new Set(values.filter(v => v !== 'null' && v !== '"-"' && v !== '""'));
-      if (uniqueValues.size > 1) {
-        diffs.add(field.key);
-      }
-    });
-    
-    return diffs;
   }, [group]);
 
   const handleMerge = async () => {
@@ -254,7 +313,6 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
 
   if (!group) return null;
 
-  const nonArrayFields = MERGE_FIELDS.filter(f => !f.isArrayField);
   const arrayFields = MERGE_FIELDS.filter(f => f.isArrayField);
 
   return (
@@ -323,110 +381,188 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
             )}
           </div>
 
-          {/* Field Comparison Table */}
+          {/* Smart Resolution Summary */}
+          <div className="flex items-center gap-4 text-sm">
+            {fieldCategories.autoResolved.length > 0 && (
+              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{fieldCategories.autoResolved.length} fields auto-resolved</span>
+              </div>
+            )}
+            {fieldCategories.conflicting.length > 0 && (
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                <AlertCircle className="w-4 h-4" />
+                <span>{fieldCategories.conflicting.length} field{fieldCategories.conflicting.length !== 1 ? 's' : ''} need{fieldCategories.conflicting.length === 1 ? 's' : ''} your selection</span>
+              </div>
+            )}
+          </div>
+
           <ScrollArea className="h-[300px] border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-card border-b z-10">
-                <tr>
-                  <th className="text-left p-2 font-medium w-32">Field</th>
-                  {properties.map((prop, idx) => (
-                    <th key={prop.id} className="text-left p-2 font-medium">
-                      <div className="flex items-center gap-2">
-                        Record {String.fromCharCode(65 + idx)}
-                        {prop.id === primaryId && (
-                          <Badge variant="secondary" className="text-xs">Primary</Badge>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {nonArrayFields.map(field => {
-                  const hasDiff = fieldsWithDifferences.has(field.key);
-                  return (
-                    <tr key={field.key} className={cn("border-b", hasDiff && "bg-amber-500/5")}>
-                      <td className="p-2 font-medium text-muted-foreground">
-                        {field.label}
-                        {hasDiff && <span className="text-amber-500 ml-1">*</span>}
-                      </td>
-                      {properties.map(prop => {
-                        const value = field.getValue(prop);
-                        const displayed = field.display(value);
-                        const isSelected = fieldSelections[field.key] === prop.id;
-                        const isEmpty = displayed === '-' || !value;
-                        
-                        return (
-                          <td 
-                            key={prop.id} 
-                            className={cn(
-                              "p-2 cursor-pointer hover:bg-muted/50 transition-colors",
-                              isSelected && "bg-primary/10 ring-1 ring-primary/30",
-                              isEmpty && "text-muted-foreground/50"
-                            )}
-                            onClick={() => {
-                              if (!isEmpty) {
-                                setFieldSelections(prev => ({ ...prev, [field.key]: prop.id }));
-                              }
-                            }}
-                          >
+            <div className="p-2 space-y-4">
+              {/* Conflicts Section - Needs User Selection */}
+              {fieldCategories.conflicting.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">Select value for each field</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-amber-500/10 border-b border-amber-500/20">
+                      <tr>
+                        <th className="text-left p-2 font-medium w-32">Field</th>
+                        {properties.map((prop, idx) => (
+                          <th key={prop.id} className="text-left p-2 font-medium">
                             <div className="flex items-center gap-2">
-                              {isSelected && <Check className="w-3 h-3 text-primary" />}
-                              <span className={cn("truncate max-w-[150px]", isSelected && "font-medium")}>
-                                {displayed}
-                              </span>
+                              Record {String.fromCharCode(65 + idx)}
+                              {prop.id === primaryId && (
+                                <Badge variant="secondary" className="text-xs">Primary</Badge>
+                              )}
                             </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fieldCategories.conflicting.map(field => (
+                        <tr key={field.key} className="border-b border-amber-500/10 bg-amber-500/5">
+                          <td className="p-2 font-medium text-muted-foreground">
+                            {field.label}
                           </td>
-                        );
-                      })}
+                          {properties.map(prop => {
+                            const value = field.getValue(prop);
+                            const displayed = field.display(value);
+                            const isSelected = fieldSelections[field.key] === prop.id;
+                            const isEmpty = displayed === '-' || !value;
+                            
+                            return (
+                              <td 
+                                key={prop.id} 
+                                className={cn(
+                                  "p-2 cursor-pointer hover:bg-amber-500/10 transition-colors",
+                                  isSelected && "bg-primary/10 ring-1 ring-primary/30",
+                                  isEmpty && "text-muted-foreground/50"
+                                )}
+                                onClick={() => {
+                                  if (!isEmpty) {
+                                    setFieldSelections(prev => ({ ...prev, [field.key]: prop.id }));
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isSelected && <Check className="w-3 h-3 text-primary" />}
+                                  <span className={cn("truncate max-w-[150px]", isSelected && "font-medium")}>
+                                    {displayed}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Auto-Resolved Section - Collapsible */}
+              {fieldCategories.autoResolved.length > 0 && (
+                <Collapsible open={autoResolvedExpanded} onOpenChange={setAutoResolvedExpanded}>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 hover:underline w-full">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="font-medium">{fieldCategories.autoResolved.length} fields auto-resolved</span>
+                    <ChevronDown className={cn("w-4 h-4 transition-transform", autoResolvedExpanded && "rotate-180")} />
+                    <span className="text-xs text-muted-foreground ml-auto">(click to review)</span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    <table className="w-full text-sm">
+                      <thead className="bg-emerald-500/10 border-b border-emerald-500/20">
+                        <tr>
+                          <th className="text-left p-2 font-medium w-32">Field</th>
+                          <th className="text-left p-2 font-medium">Selected Value</th>
+                          <th className="text-left p-2 font-medium w-24">Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fieldCategories.autoResolved.map(({ field, selectedPropId, displayValue }) => {
+                          const sourceIdx = properties.findIndex(p => p.id === selectedPropId);
+                          return (
+                            <tr key={field.key} className="border-b border-emerald-500/10">
+                              <td className="p-2 font-medium text-muted-foreground">{field.label}</td>
+                              <td className="p-2">
+                                <div className="flex items-center gap-2">
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="truncate max-w-[200px]">{displayValue}</span>
+                                </div>
+                              </td>
+                              <td className="p-2 text-muted-foreground text-xs">
+                                Record {String.fromCharCode(65 + sourceIdx)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Contact Data Section */}
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Contact Data {contactMergeMode === 'stack' ? '(will be combined)' : '(from primary only)'}
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 border-b">
+                    <tr>
+                      <th className="text-left p-2 font-medium w-32">Field</th>
+                      {properties.map((prop, idx) => (
+                        <th key={prop.id} className="text-left p-2 font-medium">
+                          Record {String.fromCharCode(65 + idx)}
+                        </th>
+                      ))}
                     </tr>
-                  );
-                })}
+                  </thead>
+                  <tbody>
+                    {arrayFields.map(field => (
+                      <tr key={field.key} className="border-b">
+                        <td className="p-2 font-medium text-muted-foreground">{field.label}</td>
+                        {properties.map(prop => {
+                          const value = field.getValue(prop);
+                          return (
+                            <td key={prop.id} className="p-2">
+                              {field.key === 'phones' && <PhoneList phones={value} />}
+                              {field.key === 'emails' && <EmailList emails={value} />}
+                              {field.key === 'ownerContacts' && <OwnerContactsList owners={value} />}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
 
-                {/* Array fields section */}
-                <tr className="bg-muted/30">
-                  <td colSpan={properties.length + 1} className="p-2 font-medium text-xs text-muted-foreground uppercase tracking-wide">
-                    Contact Data {contactMergeMode === 'stack' ? '(will be combined)' : '(from primary only)'}
-                  </td>
-                </tr>
-                {arrayFields.map(field => (
-                  <tr key={field.key} className="border-b">
-                    <td className="p-2 font-medium text-muted-foreground">{field.label}</td>
-                    {properties.map(prop => {
-                      const value = field.getValue(prop);
-                      return (
+                    {/* Tags row */}
+                    <tr className="border-b">
+                      <td className="p-2 font-medium text-muted-foreground">Tags</td>
+                      {properties.map(prop => (
                         <td key={prop.id} className="p-2">
-                          {field.key === 'phones' && <PhoneList phones={value} />}
-                          {field.key === 'emails' && <EmailList emails={value} />}
-                          {field.key === 'ownerContacts' && <OwnerContactsList owners={value} />}
+                          <div className="flex flex-wrap gap-1">
+                            {prop.tags.filter(t => !t.startsWith('list-')).length > 0 
+                              ? prop.tags.filter(t => !t.startsWith('list-')).map(t => (
+                                  <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
+                                ))
+                              : <span className="text-muted-foreground/50">-</span>
+                            }
+                          </div>
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-
-                {/* Tags row */}
-                <tr className="border-b">
-                  <td className="p-2 font-medium text-muted-foreground">Tags</td>
-                  {properties.map(prop => (
-                    <td key={prop.id} className="p-2">
-                      <div className="flex flex-wrap gap-1">
-                        {prop.tags.filter(t => !t.startsWith('list-')).length > 0 
-                          ? prop.tags.filter(t => !t.startsWith('list-')).map(t => (
-                              <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
-                            ))
-                          : <span className="text-muted-foreground/50">-</span>
-                        }
-                      </div>
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </ScrollArea>
 
           <p className="text-xs text-muted-foreground">
-            <span className="text-amber-500">*</span> Fields with different values. Click a cell to select that value for the merged record. Tags from all records will be combined.
+            Tags from all records will be combined automatically.
           </p>
         </div>
 

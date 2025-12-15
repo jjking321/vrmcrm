@@ -150,6 +150,33 @@ const toProperty = (
 });
 
 const BATCH_SIZE = 100;
+const FETCH_BATCH_SIZE = 1000;
+
+// Helper to fetch ALL properties in batches (Supabase limits to 1000 rows per request)
+async function fetchAllPropertiesInBatches(companyId: string): Promise<DbProperty[]> {
+  const allProperties: DbProperty[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + FETCH_BATCH_SIZE - 1);
+
+    if (error) throw error;
+    
+    allProperties.push(...((data || []) as unknown as DbProperty[]));
+    
+    // If we got fewer than FETCH_BATCH_SIZE, we've reached the end
+    hasMore = data?.length === FETCH_BATCH_SIZE;
+    offset += FETCH_BATCH_SIZE;
+  }
+
+  return allProperties;
+}
 
 // Helper to fetch owners in batches to avoid URL length issues
 async function fetchAllOwners(propertyIds: string[], companyId: string): Promise<DbOwner[]> {
@@ -271,16 +298,10 @@ export const useProperties = () => {
     queryFn: async (): Promise<Property[]> => {
       if (!companyId) return [];
 
-      // Fetch ALL properties (use range to override default 1000 limit)
-      const { data: properties, error: propError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
-        .range(0, 99999);
+      // Fetch ALL properties using batched approach to overcome 1000 row limit
+      const properties = await fetchAllPropertiesInBatches(companyId);
 
-      if (propError) throw propError;
-      if (!properties?.length) return [];
+      if (!properties.length) return [];
 
       const propertyIds = properties.map(p => p.id);
 

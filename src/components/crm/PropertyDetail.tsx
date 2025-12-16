@@ -853,7 +853,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                     <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                       Market Estimate
-                      {property.marketData.comparableCount && (
+                      {property.marketData.comparableCount > 0 && (
                         <span className="text-muted-foreground/70">({property.marketData.comparableCount} comps)</span>
                       )}
                     </p>

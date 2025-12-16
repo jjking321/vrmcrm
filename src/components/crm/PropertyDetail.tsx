@@ -6,7 +6,8 @@ import { useLogCallActivity } from '@/hooks/useCallLists';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
-import { fetchZillowData, fetchAirbnbEstimate, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
+import { fetchZillowData, fetchAirbnbActuals, fetchAirbnbProjections, applyZillowDataWithStreetView, applyAirbnbActualsData, applyAirbnbProjectionsData } from '@/lib/enrichment';
+import { MonthlyPerformanceChart } from './MonthlyPerformanceChart';
 import { 
   getPrimaryOwnerName, getAllOwnerNames, getAllOwnerNamesArray, getOwnerCount, getPrimaryPhone, 
   getCallablePhones, hasDoNotCall, isLitigator, formatMailingAddress,
@@ -94,7 +95,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
   const [selectedPhoneIndex, setSelectedPhoneIndex] = useState(0);
   const [showCallbackPicker, setShowCallbackPicker] = useState(false);
   const [callbackDate, setCallbackDate] = useState('');
-  const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
+  const [isLoadingActuals, setIsLoadingActuals] = useState(false);
+  const [isLoadingProjections, setIsLoadingProjections] = useState(false);
 
   // Reset edited values when property changes
   useEffect(() => {
@@ -141,21 +143,39 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
     }
   };
 
-  const handleFetchAirROI = async () => {
-    setIsLoadingAirROI(true);
+  const handleFetchActuals = async () => {
+    setIsLoadingActuals(true);
     try {
-      const result = await fetchAirbnbEstimate(property);
+      const result = await fetchAirbnbActuals(property);
       if (result.success && result.data) {
-        const updates = applyAirROIData(property, result.data);
+        const updates = applyAirbnbActualsData(property, result.data);
         onUpdateProperty(property.id, updates);
-        toast.success('Revenue data enriched from Airbnb');
+        toast.success('Airbnb actuals data loaded');
       } else {
-        toast.error(result.error || 'Failed to fetch revenue data');
+        toast.error(result.error || 'Failed to fetch actuals');
       }
     } catch (err) {
-      toast.error('Failed to fetch revenue data');
+      toast.error('Failed to fetch actuals');
     } finally {
-      setIsLoadingAirROI(false);
+      setIsLoadingActuals(false);
+    }
+  };
+
+  const handleFetchProjections = async () => {
+    setIsLoadingProjections(true);
+    try {
+      const result = await fetchAirbnbProjections(property);
+      if (result.success && result.data) {
+        const updates = applyAirbnbProjectionsData(property, result.data);
+        onUpdateProperty(property.id, updates);
+        toast.success('Airbnb projections loaded');
+      } else {
+        toast.error(result.error || 'Failed to fetch projections');
+      }
+    } catch (err) {
+      toast.error('Failed to fetch projections');
+    } finally {
+      setIsLoadingProjections(false);
     }
   };
 
@@ -688,13 +708,22 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                       Zillow
                     </button>
                     <button
-                      onClick={handleFetchAirROI}
-                      disabled={isLoadingAirROI}
+                      onClick={handleFetchActuals}
+                      disabled={isLoadingActuals || !property.airbnbListingId}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
-                      title="Fetch from Airbnb"
+                      title={property.airbnbListingId ? "Fetch actual performance data" : "Add Airbnb URL to enable"}
                     >
-                      {isLoadingAirROI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                      Airbnb
+                      {isLoadingActuals ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      Actuals
+                    </button>
+                    <button
+                      onClick={handleFetchProjections}
+                      disabled={isLoadingProjections || (!property.latitude || !property.longitude)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-input rounded-lg hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                      title={property.latitude && property.longitude ? "Fetch market projections" : "Add coordinates to enable"}
+                    >
+                      {isLoadingProjections ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      Projections
                     </button>
                   </>
                 )}
@@ -753,8 +782,41 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                 </div>
               ) : (
                 <>
-                  {/* Actual Performance - Only show if property has Airbnb link */}
-                  {property.airbnbUrl && (
+                  {/* Monthly Performance Chart - Only show if actuals data exists */}
+                  {property.marketData?.monthlyMetrics && property.marketData.monthlyMetrics.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Monthly Performance (Past 12 Months)
+                      </p>
+                      <MonthlyPerformanceChart data={property.marketData.monthlyMetrics} />
+                      
+                      {/* TTM Summary Stats */}
+                      <div className="grid grid-cols-3 gap-3 mt-3">
+                        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                          <p className="text-xs text-emerald-600 font-medium mb-1">TTM Revenue</p>
+                          <p className="text-lg font-bold text-emerald-700">
+                            {property.marketData.ttmRevenue ? `$${property.marketData.ttmRevenue.toLocaleString()}` : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                          <p className="text-xs text-amber-600 font-medium mb-1">Avg ADR</p>
+                          <p className="text-lg font-bold text-amber-700">
+                            {property.marketData.ttmAvgADR ? `$${property.marketData.ttmAvgADR}` : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                          <p className="text-xs text-violet-600 font-medium mb-1">Avg Occupancy</p>
+                          <p className="text-lg font-bold text-violet-700">
+                            {property.marketData.ttmAvgOccupancy ? `${Math.round(property.marketData.ttmAvgOccupancy * 100)}%` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actual Performance - Only show if property has Airbnb link and no monthly metrics (legacy) */}
+                  {property.airbnbUrl && (!property.marketData?.monthlyMetrics || property.marketData.monthlyMetrics.length === 0) && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>

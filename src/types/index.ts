@@ -98,6 +98,15 @@ export interface Activity {
   propertyAddress?: string; // Display-friendly property address
 }
 
+// Monthly performance metrics from AirROI
+export interface MonthlyMetrics {
+  date: string;        // "2024-01" format
+  occupancy: number;
+  averageDailyRate: number;
+  revPar: number;
+  revenue: number;
+}
+
 export interface MarketData {
   // Actual performance (from listing endpoint - only available if has Airbnb link)
   adr: number;
@@ -111,11 +120,19 @@ export interface MarketData {
   marketAvgOccupancy?: number;
   marketAvgRevenue?: number;
   comparableCount?: number;
-  dataSource?: 'airroi_listing' | 'airroi_calculator';
+  dataSource?: 'airroi_actuals' | 'airroi_projections';
   
   // Property value and other fields
   propertyValue: number;
   monthlyRevenueDistribution?: number[];
+  
+  // Monthly performance data (from /listings/metrics/all)
+  monthlyMetrics?: MonthlyMetrics[];
+  
+  // Computed TTM rollup from monthly data
+  ttmRevenue?: number;
+  ttmAvgOccupancy?: number;
+  ttmAvgADR?: number;
 }
 
 export interface Property {

@@ -23,11 +23,11 @@ interface MonthlyPerformanceChartProps {
 const chartConfig = {
   revenue: {
     label: "Revenue",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(173 80% 40%)",
   },
   occupancy: {
     label: "Occupancy",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(45 93% 47%)",
   },
 } satisfies ChartConfig;
 

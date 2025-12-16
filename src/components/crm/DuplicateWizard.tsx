@@ -122,7 +122,7 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   // Use live data from the database
   const { data: liveGroups = [] } = useDuplicates();
   
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Note: currentIndex only used for reset, not for iteration
   const [mergedCount, setMergedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
   const [processedAddresses, setProcessedAddresses] = useState<Set<string>>(new Set());
@@ -136,9 +136,9 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   const mergeMutation = useMergeDuplicates();
 
   // Find current group from live data - skip already merged/processed
+  // Always start from 0 and use processedAddresses to skip handled groups
   const currentGroup = useMemo(() => {
-    // Find next unprocessed group that still exists in live data
-    for (let i = currentIndex; i < initialGroups.length; i++) {
+    for (let i = 0; i < initialGroups.length; i++) {
       const initialGroup = initialGroups[i];
       if (processedAddresses.has(initialGroup.normalizedAddress)) continue;
       
@@ -149,7 +149,7 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
       }
     }
     return null;
-  }, [initialGroups, liveGroups, currentIndex, processedAddresses]);
+  }, [initialGroups, liveGroups, processedAddresses]);
 
   const properties = currentGroup?.properties || [];
   
@@ -158,7 +158,7 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
     !processedAddresses.has(g.normalizedAddress) && g.properties.length > 1
   ).length;
   
-  const isComplete = !currentGroup && currentIndex >= initialGroups.length;
+  const isComplete = !currentGroup && processedAddresses.size > 0;
   const progress = initialGroups.length > 0 ? ((mergedCount + skippedCount) / initialGroups.length) * 100 : 0;
 
   // Reset per-group state when current group changes
@@ -195,7 +195,6 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   // Reset wizard state when opened
   React.useEffect(() => {
     if (open) {
-      setCurrentIndex(0);
       setMergedCount(0);
       setSkippedCount(0);
       setProcessedAddresses(new Set());
@@ -310,7 +309,6 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
     // Track this address as processed
     setProcessedAddresses(prev => new Set([...prev, currentGroup.normalizedAddress]));
     setMergedCount(prev => prev + 1);
-    setCurrentIndex(prev => prev + 1);
   };
 
   const handleSkip = () => {
@@ -318,7 +316,6 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
       setProcessedAddresses(prev => new Set([...prev, currentGroup.normalizedAddress]));
     }
     setSkippedCount(prev => prev + 1);
-    setCurrentIndex(prev => prev + 1);
   };
 
   const handleClose = () => {

@@ -77,7 +77,73 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { airbnbListingId, airbnbListingIds, lat, lng, bedrooms, baths, guests } = body;
+    const { airbnbListingId, airbnbListingIds, lat, lng, bedrooms, baths, guests, mode } = body;
+
+    // Mode: Monthly metrics for actuals (uses /listings/metrics/all)
+    if (airbnbListingId && mode === 'metrics') {
+      console.log("Fetching AirROI monthly metrics for ID:", airbnbListingId);
+      
+      const params = new URLSearchParams({
+        id: airbnbListingId,
+        currency: 'native',
+        num_months: '12',
+      });
+
+      const apiUrl = `https://api.airroi.com/listings/metrics/all?${params}`;
+      console.log("AirROI Metrics API URL:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "x-api-key": AIRROI_API_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("AirROI Metrics API error:", response.status, errorText);
+        return new Response(
+          JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
+          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await response.json();
+      console.log("AirROI metrics raw response:", JSON.stringify(data));
+      
+      // Extract monthly data from results array
+      const monthlyData = data.results || [];
+      
+      // Compute TTM rollup
+      const ttmRevenue = monthlyData.reduce((sum: number, m: any) => sum + (m.revenue || 0), 0);
+      const ttmAvgOccupancy = monthlyData.length > 0 
+        ? monthlyData.reduce((sum: number, m: any) => sum + (m.occupancy || 0), 0) / monthlyData.length 
+        : 0;
+      const ttmAvgADR = monthlyData.length > 0 
+        ? monthlyData.reduce((sum: number, m: any) => sum + (m.average_daily_rate || 0), 0) / monthlyData.length 
+        : 0;
+      
+      const result = {
+        monthly_metrics: monthlyData.map((m: any) => ({
+          date: m.date,
+          occupancy: m.occupancy,
+          average_daily_rate: m.average_daily_rate,
+          rev_par: m.rev_par,
+          revenue: m.revenue,
+        })),
+        ttm_revenue: Math.round(ttmRevenue),
+        ttm_avg_occupancy: ttmAvgOccupancy,
+        ttm_avg_adr: Math.round(ttmAvgADR),
+        data_source: 'airroi_actuals',
+      };
+      
+      console.log("Normalized metrics data:", JSON.stringify(result));
+
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Mode 1: Single listing by ID
     if (airbnbListingId) {

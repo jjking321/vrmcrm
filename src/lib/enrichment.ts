@@ -44,6 +44,29 @@ export interface AirROIData {
   l90d_occupancy?: number;
 }
 
+// Monthly metrics data from /listings/metrics/all endpoint
+export interface AirROIMetricsData {
+  monthly_metrics: Array<{
+    date: string;
+    occupancy: number;
+    average_daily_rate: number;
+    rev_par: number;
+    revenue: number;
+  }>;
+  ttm_revenue: number;
+  ttm_avg_occupancy: number;
+  ttm_avg_adr: number;
+  data_source: string;
+}
+
+// Projections data from calculator endpoint
+export interface AirROIProjectionsData {
+  average_daily_rate: number;
+  occupancy: number;
+  estimated_annual_revenue: number;
+  data_source: string;
+}
+
 export interface AddressVerification {
   isValid: boolean;
   accuracy?: number;
@@ -508,7 +531,6 @@ export function applyAirROIData(property: Property, airroiData: AirROIData): Par
       marketAvgOccupancy: airroiData.market_avg_occupancy ? Math.round(airroiData.market_avg_occupancy * 100) : undefined,
       marketAvgRevenue: airroiData.market_avg_revenue,
       comparableCount: airroiData.comparable_count,
-      dataSource: airroiData.data_source as 'airroi_listing' | 'airroi_calculator',
     },
   };
 
@@ -518,4 +540,113 @@ export function applyAirROIData(property: Property, airroiData: AirROIData): Par
   }
 
   return updates;
+}
+
+// Fetch Airbnb Actuals - uses /listings/metrics/all endpoint (requires listing ID)
+export async function fetchAirbnbActuals(property: Property): Promise<{ success: boolean; data?: AirROIMetricsData; error?: string }> {
+  try {
+    // Get listing ID from property or extract from URL
+    let listingId = property.airbnbListingId;
+    if (!listingId && property.airbnbUrl) {
+      listingId = extractAirbnbListingId(property.airbnbUrl) || undefined;
+    }
+    
+    if (!listingId) {
+      return { success: false, error: 'No Airbnb listing ID available. Add an Airbnb URL to fetch actuals.' };
+    }
+    
+    console.log('Fetching actuals (metrics) for property:', property.id, 'listingId:', listingId);
+    
+    const { data, error } = await supabase.functions.invoke('enrich-airroi', {
+      body: {
+        airbnbListingId: listingId,
+        mode: 'metrics',
+      },
+    });
+
+    if (error) {
+      console.error('AirROI actuals enrichment error:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (data?.error) {
+      return { success: false, error: data.error };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('Error fetching AirROI actuals:', err);
+    return { success: false, error: 'Failed to fetch Airbnb actuals' };
+  }
+}
+
+// Fetch Airbnb Projections - uses /calculator/estimate endpoint (requires lat/lng)
+export async function fetchAirbnbProjections(property: Property): Promise<{ success: boolean; data?: AirROIProjectionsData; error?: string }> {
+  try {
+    if (!property.latitude || !property.longitude) {
+      return { 
+        success: false, 
+        error: 'Property must have coordinates (latitude/longitude) to fetch projections.' 
+      };
+    }
+
+    console.log('Fetching projections (calculator) for property:', property.id);
+
+    const { data, error } = await supabase.functions.invoke('enrich-airroi', {
+      body: {
+        lat: property.latitude,
+        lng: property.longitude,
+        bedrooms: property.bedrooms || 2,
+        baths: property.bathrooms || 1,
+        guests: property.guests || (property.bedrooms || 2) * 2,
+      },
+    });
+
+    if (error) {
+      console.error('AirROI projections enrichment error:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (data?.error) {
+      return { success: false, error: data.error };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('Error fetching AirROI projections:', err);
+    return { success: false, error: 'Failed to fetch Airbnb projections' };
+  }
+}
+
+// Apply Airbnb Actuals (monthly metrics) data to property
+export function applyAirbnbActualsData(property: Property, metricsData: AirROIMetricsData): Partial<Property> {
+  return {
+    marketData: {
+      ...property.marketData,
+      monthlyMetrics: metricsData.monthly_metrics.map(m => ({
+        date: m.date,
+        occupancy: m.occupancy,
+        averageDailyRate: m.average_daily_rate,
+        revPar: m.rev_par,
+        revenue: m.revenue,
+      })),
+      ttmRevenue: metricsData.ttm_revenue,
+      ttmAvgOccupancy: metricsData.ttm_avg_occupancy,
+      ttmAvgADR: metricsData.ttm_avg_adr,
+      dataSource: 'airroi_actuals' as const,
+    },
+  };
+}
+
+// Apply Airbnb Projections (calculator) data to property
+export function applyAirbnbProjectionsData(property: Property, projectionsData: AirROIProjectionsData): Partial<Property> {
+  return {
+    marketData: {
+      ...property.marketData,
+      marketAvgADR: Math.round(projectionsData.average_daily_rate),
+      marketAvgOccupancy: Math.round(projectionsData.occupancy * 100),
+      marketAvgRevenue: Math.round(projectionsData.estimated_annual_revenue),
+      dataSource: 'airroi_projections' as const,
+    },
+  };
 }

@@ -194,9 +194,17 @@ export async function fetchAirbnbEstimateBatch(
   
   if (properties.length === 0) return resultMap;
 
-  // Separate properties with and without listing IDs
-  const withIds = properties.filter(p => p.airbnbListingId);
-  const withoutIds = properties.filter(p => !p.airbnbListingId);
+  // Extract listing IDs from URLs if not already set, then separate properties
+  const propertiesWithExtractedIds = properties.map(p => {
+    let listingId = p.airbnbListingId;
+    if (!listingId && p.airbnbUrl) {
+      listingId = extractAirbnbListingId(p.airbnbUrl) || undefined;
+    }
+    return { ...p, airbnbListingId: listingId };
+  });
+  
+  const withIds = propertiesWithExtractedIds.filter(p => p.airbnbListingId);
+  const withoutIds = propertiesWithExtractedIds.filter(p => !p.airbnbListingId);
   
   let processed = 0;
   const total = properties.length;
@@ -204,7 +212,7 @@ export async function fetchAirbnbEstimateBatch(
   // Process properties with listing IDs via batch endpoint
   if (withIds.length > 0) {
     const listingIds = withIds.map(p => p.airbnbListingId!);
-    const propertyIdToListingId = new Map(withIds.map(p => [p.airbnbListingId!, p.id]));
+    const listingIdToPropertyId = new Map(withIds.map(p => [p.airbnbListingId!, p.id]));
     
     console.log(`Batch fetching ${listingIds.length} listings via batch endpoint`);
     
@@ -227,7 +235,7 @@ export async function fetchAirbnbEstimateBatch(
           if (listingResult && !listingResult.error) {
             resultMap.set(p.id, { success: true, data: listingResult });
           } else {
-            resultMap.set(p.id, { 
+            resultMap.set(p.id, {
               success: false, 
               error: listingResult?.error || 'No data returned for listing' 
             });

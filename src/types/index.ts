@@ -99,11 +99,21 @@ export interface Activity {
 }
 
 export interface MarketData {
+  // Actual performance (from listing endpoint - only available if has Airbnb link)
   adr: number;
   occupancyRate: number;
   projectedRevenue: number;
   airbnbRating?: number;
   reviewCount?: number;
+  
+  // Market estimates (from comparable listings or calculator)
+  marketAvgADR?: number;
+  marketAvgOccupancy?: number;
+  marketAvgRevenue?: number;
+  comparableCount?: number;
+  dataSource?: 'airroi_listing' | 'airroi_calculator';
+  
+  // Property value and other fields
   propertyValue: number;
   monthlyRevenueDistribution?: number[];
 }

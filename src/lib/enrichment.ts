@@ -28,6 +28,11 @@ export interface AirROIData {
   airbnb_rating?: number;
   review_count?: number;
   data_source: string;
+  // Market estimates from comparables
+  market_avg_adr?: number;
+  market_avg_occupancy?: number;
+  market_avg_revenue?: number;
+  comparable_count?: number;
   // Extended fields from listing endpoint
   listing_name?: string;
   cover_photo_url?: string;
@@ -491,12 +496,19 @@ export function applyAirROIData(property: Property, airroiData: AirROIData): Par
   const updates: Partial<Property> = {
     marketData: {
       ...property.marketData,
+      // Actual performance (from listing)
       adr: Math.round(airroiData.average_daily_rate),
       occupancyRate: Math.round(airroiData.occupancy * 100),
       projectedRevenue: Math.round(airroiData.estimated_annual_revenue),
       monthlyRevenueDistribution: airroiData.monthly_revenue_distributions,
       airbnbRating: airroiData.airbnb_rating,
       reviewCount: airroiData.review_count,
+      // Market estimates (from comparables or calculator)
+      marketAvgADR: airroiData.market_avg_adr,
+      marketAvgOccupancy: airroiData.market_avg_occupancy ? Math.round(airroiData.market_avg_occupancy * 100) : undefined,
+      marketAvgRevenue: airroiData.market_avg_revenue,
+      comparableCount: airroiData.comparable_count,
+      dataSource: airroiData.data_source as 'airroi_listing' | 'airroi_calculator',
     },
   };
 

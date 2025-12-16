@@ -113,15 +113,27 @@ export async function captureStreetView(
   }
 }
 
+// Extract Airbnb listing ID from URL
+function extractAirbnbListingId(url: string): string | null {
+  const match = url.match(/\/rooms\/(\d+)/);
+  return match ? match[1] : null;
+}
+
 export async function fetchAirbnbEstimate(property: Property): Promise<{ success: boolean; data?: AirROIData; error?: string }> {
   try {
-    // If property has Airbnb listing ID, use the listing endpoint
-    if (property.airbnbListingId) {
-      console.log('Using listing endpoint for property:', property.id, 'listingId:', property.airbnbListingId);
+    // Get listing ID from property or extract from URL
+    let listingId = property.airbnbListingId;
+    if (!listingId && property.airbnbUrl) {
+      listingId = extractAirbnbListingId(property.airbnbUrl) || undefined;
+    }
+    
+    // If we have a listing ID, use the listing endpoint
+    if (listingId) {
+      console.log('Using listing endpoint for property:', property.id, 'listingId:', listingId);
       
       const { data, error } = await supabase.functions.invoke('enrich-airroi', {
         body: {
-          airbnbListingId: property.airbnbListingId,
+          airbnbListingId: listingId,
         },
       });
 

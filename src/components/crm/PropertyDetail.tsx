@@ -702,7 +702,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             </div>
 
             <div className="space-y-4">
-              {/* Key Metrics */}
+              {/* Editing Mode */}
               {isEditingMarket ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
@@ -752,36 +752,89 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
-                    <p className="text-xs text-emerald-600 font-medium mb-1">Est. Annual Revenue</p>
-                    <p className="text-lg font-bold text-emerald-700">
-                      {property.marketData?.projectedRevenue ? `$${property.marketData.projectedRevenue.toLocaleString()}` : '—'}
+                <>
+                  {/* Actual Performance - Only show if property has Airbnb link */}
+                  {property.airbnbUrl && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Actual Performance
+                        {property.marketData.reviewCount !== undefined && (
+                          <span className="text-muted-foreground/70">({property.marketData.reviewCount} reviews)</span>
+                        )}
+                      </p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                          <p className="text-xs text-emerald-600 font-medium mb-1">Annual Revenue</p>
+                          <p className="text-lg font-bold text-emerald-700">
+                            {property.marketData?.projectedRevenue ? `$${property.marketData.projectedRevenue.toLocaleString()}` : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                          <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
+                          <p className="text-lg font-bold text-amber-700">
+                            {property.marketData?.adr ? `$${property.marketData.adr}` : '—'}
+                          </p>
+                        </div>
+                        <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                          <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
+                          <p className="text-lg font-bold text-violet-700">
+                            {property.marketData?.occupancyRate ? `${property.marketData.occupancyRate}%` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Market Estimate - Always show */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      Market Estimate
+                      {property.marketData.comparableCount && (
+                        <span className="text-muted-foreground/70">({property.marketData.comparableCount} comps)</span>
+                      )}
                     </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100/50">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Est. Revenue</p>
+                        <p className="text-lg font-bold text-blue-700">
+                          {(property.marketData?.marketAvgRevenue || (!property.airbnbUrl && property.marketData?.projectedRevenue)) 
+                            ? `$${(property.marketData?.marketAvgRevenue || property.marketData?.projectedRevenue)?.toLocaleString()}` 
+                            : '—'}
+                        </p>
+                      </div>
+                      <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100/50">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Avg ADR</p>
+                        <p className="text-lg font-bold text-blue-700">
+                          {(property.marketData?.marketAvgADR || (!property.airbnbUrl && property.marketData?.adr)) 
+                            ? `$${property.marketData?.marketAvgADR || property.marketData?.adr}` 
+                            : '—'}
+                        </p>
+                      </div>
+                      <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100/50">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Avg Occupancy</p>
+                        <p className="text-lg font-bold text-blue-700">
+                          {(property.marketData?.marketAvgOccupancy || (!property.airbnbUrl && property.marketData?.occupancyRate)) 
+                            ? `${property.marketData?.marketAvgOccupancy || property.marketData?.occupancyRate}%` 
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">Property Value</p>
-                    <p className="text-lg font-bold text-blue-700">
+
+                  {/* Property Value - Always show */}
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <p className="text-xs text-slate-600 font-medium mb-1">Property Value</p>
+                    <p className="text-lg font-bold text-slate-700">
                       {property.marketData?.propertyValue ? `$${property.marketData.propertyValue.toLocaleString()}` : '—'}
                     </p>
                   </div>
-                  <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
-                    <p className="text-xs text-amber-600 font-medium mb-1">ADR</p>
-                    <p className="text-lg font-bold text-amber-700">
-                      {property.marketData?.adr ? `$${property.marketData.adr}` : '—'}
-                    </p>
-                  </div>
-                  <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
-                    <p className="text-xs text-violet-600 font-medium mb-1">Occupancy</p>
-                    <p className="text-lg font-bold text-violet-700">
-                      {property.marketData?.occupancyRate ? `${property.marketData.occupancyRate}%` : '—'}
-                    </p>
-                  </div>
-                </div>
+                </>
               )}
 
-              {/* Rating */}
-              {property.marketData.airbnbRating && (
+              {/* Rating - Only show if property has Airbnb link and rating */}
+              {property.airbnbUrl && property.marketData.airbnbRating && (
                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <span className="text-sm text-muted-foreground">Airbnb Rating</span>
                   <div className="flex items-center gap-1">

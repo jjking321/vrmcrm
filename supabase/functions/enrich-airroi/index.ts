@@ -13,13 +13,41 @@ function normalizeListingResponse(data: any) {
   const ratings = data.ratings || {};
   const listingInfo = data.listing_info || {};
   const hostInfo = data.host_info || {};
+  const comparables = data.comparable_listings || [];
+  
+  // Calculate market averages from comparable listings
+  let marketAvgADR = null;
+  let marketAvgOccupancy = null;
+  let marketAvgRevenue = null;
+  
+  if (comparables.length > 0) {
+    const validComps = comparables.filter((c: any) => c.performance_metrics?.ttm_revenue > 0);
+    if (validComps.length > 0) {
+      marketAvgADR = Math.round(
+        validComps.reduce((sum: number, c: any) => sum + (c.performance_metrics?.ttm_avg_rate || 0), 0) / validComps.length
+      );
+      marketAvgOccupancy = 
+        validComps.reduce((sum: number, c: any) => sum + (c.performance_metrics?.ttm_occupancy || 0), 0) / validComps.length;
+      marketAvgRevenue = Math.round(
+        validComps.reduce((sum: number, c: any) => sum + (c.performance_metrics?.ttm_revenue || 0), 0) / validComps.length
+      );
+    }
+  }
   
   return {
+    // Actual listing performance
     average_daily_rate: performanceMetrics.ttm_avg_rate || performanceMetrics.l90d_avg_rate,
     occupancy: performanceMetrics.ttm_occupancy || performanceMetrics.l90d_occupancy,
     estimated_annual_revenue: performanceMetrics.ttm_revenue,
     airbnb_rating: ratings.rating_overall,
     review_count: ratings.num_reviews,
+    
+    // Market estimates from comparables
+    market_avg_adr: marketAvgADR,
+    market_avg_occupancy: marketAvgOccupancy,
+    market_avg_revenue: marketAvgRevenue,
+    comparable_count: comparables.length,
+    
     data_source: "airroi_listing",
     // Extended fields from listing endpoint
     listing_name: listingInfo.listing_name,

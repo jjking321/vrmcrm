@@ -203,7 +203,7 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            ids: chunk,
+            listing_ids: chunk,
             currency: "native",
           }),
         });
@@ -221,20 +221,23 @@ serve(async (req) => {
         const data = await response.json();
         console.log("AirROI batch raw response:", JSON.stringify(data));
         
-        // Process each listing in the response
-        if (data.listings && Array.isArray(data.listings)) {
-          data.listings.forEach((listing: any) => {
-            const listingId = listing.listing_info?.listing_id || listing.id;
+        // Process each listing in the results array
+        if (data.results && Array.isArray(data.results)) {
+          data.results.forEach((listing: any) => {
+            const listingId = listing.listing_info?.listing_id;
             if (listingId) {
-              allResults[listingId] = normalizeListingResponse(listing);
+              allResults[listingId.toString()] = normalizeListingResponse(listing);
             }
           });
         }
         
-        // Also handle if response is an object keyed by ID
-        if (typeof data === 'object' && !Array.isArray(data) && !data.listings) {
-          Object.entries(data).forEach(([id, listingData]: [string, any]) => {
-            allResults[id] = normalizeListingResponse(listingData);
+        // Also handle if response has listings array (legacy format)
+        if (data.listings && Array.isArray(data.listings)) {
+          data.listings.forEach((listing: any) => {
+            const listingId = listing.listing_info?.listing_id || listing.id;
+            if (listingId) {
+              allResults[listingId.toString()] = normalizeListingResponse(listing);
+            }
           });
         }
       }

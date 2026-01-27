@@ -215,12 +215,13 @@ export function getOwnerTypeBadgeClass(type?: string): string {
 /**
  * Normalize phone number for comparison (last 10 digits)
  */
-function normalizePhone(phone: string): string {
+export function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '').slice(-10);
 }
 
 /**
  * Deduplicate phones by normalized number
+ * First occurrence wins - preserves original source
  */
 export function dedupePhones(phones: PhoneContact[]): PhoneContact[] {
   const seen = new Map<string, PhoneContact>();
@@ -236,6 +237,7 @@ export function dedupePhones(phones: PhoneContact[]): PhoneContact[] {
 
 /**
  * Deduplicate emails by address (case-insensitive)
+ * First occurrence wins - preserves original source
  */
 export function dedupeEmails(emails: EmailContact[]): EmailContact[] {
   const seen = new Map<string, EmailContact>();
@@ -251,15 +253,18 @@ export function dedupeEmails(emails: EmailContact[]): EmailContact[] {
 
 /**
  * Merge owner contacts (dedupe by name similarity, normalize to Title Case)
+ * First occurrence wins - preserves original source
  */
 export function mergeOwnerContacts(existing: OwnerContact[], incoming: OwnerContact[]): OwnerContact[] {
   const result: OwnerContact[] = [];
   
-  // First, add existing with normalized names
+  // First, add existing with normalized names (preserve source)
   for (const owner of existing) {
     result.push({
       firstName: normalizeOwnerName(owner.firstName || ''),
       lastName: normalizeOwnerName(owner.lastName || ''),
+      source: owner.source,
+      addedAt: owner.addedAt,
     });
   }
   
@@ -278,6 +283,8 @@ export function mergeOwnerContacts(existing: OwnerContact[], incoming: OwnerCont
       result.push({
         firstName: normalizedFirst,
         lastName: normalizedLast,
+        source: newOwner.source,
+        addedAt: newOwner.addedAt,
       });
     }
   }
@@ -287,18 +294,26 @@ export function mergeOwnerContacts(existing: OwnerContact[], incoming: OwnerCont
 
 /**
  * Transform import data row to Owner structure
+ * @param data - The import row data
+ * @param source - Optional source name (list name or "manual")
  */
-export function transformImportToOwner(data: Record<string, any>): Owner {
+export function transformImportToOwner(data: Record<string, any>, source?: string): Owner {
   const owners: OwnerContact[] = [];
   const phones: PhoneContact[] = [];
   const emails: EmailContact[] = [];
+  const now = new Date().toISOString();
   
   // Parse multiple owners
   for (let i = 1; i <= 4; i++) {
     const firstName = data[`owner${i}FirstName`] || '';
     const lastName = data[`owner${i}LastName`] || '';
     if (firstName || lastName) {
-      owners.push({ firstName, lastName });
+      owners.push({ 
+        firstName, 
+        lastName,
+        source: source || undefined,
+        addedAt: now,
+      });
     }
   }
   
@@ -314,7 +329,15 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
       const dncRaw = data[`phone${i}DNC`] || '';
       const doNotCall = dncRaw === 'true' || dncRaw === '1' || dncRaw.toLowerCase() === 'yes' || dncRaw.toLowerCase() === 'dnc';
       
-      phones.push({ number, type, doNotCall });
+      phones.push({ 
+        number, 
+        type, 
+        doNotCall,
+        source: source || undefined,
+        addedAt: now,
+        status: 'unknown',
+        callCount: 0,
+      });
     }
   }
   
@@ -326,14 +349,19 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
         address: emailAddr.trim(),
         type: 'unknown',
         optedOut: false,
+        source: source || undefined,
+        addedAt: now,
+        status: 'unknown',
       });
     }
   }
   
-  // Normalize owner names to Title Case
+  // Normalize owner names to Title Case (preserve source metadata)
   const normalizedOwners: OwnerContact[] = owners.map(o => ({
     firstName: normalizeOwnerName(o.firstName),
     lastName: normalizeOwnerName(o.lastName),
+    source: o.source,
+    addedAt: o.addedAt,
   }));
   
   // Determine primary name for legacy field (normalized)
@@ -368,6 +396,6 @@ export function transformImportToOwner(data: Record<string, any>): Owner {
     litigator: litigator || undefined,
     contactName: data.contactName || undefined,
     age: data.age ? parseInt(data.age, 10) : undefined,
-    lastVerifiedDate: new Date().toISOString(),
+    lastVerifiedDate: now,
   };
 }

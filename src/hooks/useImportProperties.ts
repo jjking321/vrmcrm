@@ -59,13 +59,22 @@ const chunkArray = <T>(array: T[], size: number): T[][] => {
   return chunks;
 };
 
-// Helper to parse numeric fields from strings like "5 guests", "2 bedrooms", "2.0 bathrooms"
+// Helper to parse numeric fields from strings like "2.0 bathrooms" (returns decimals)
 const parseNumericField = (value: any): number => {
   if (!value) return 0;
   if (typeof value === 'number') return value;
   const str = String(value);
   const match = str.match(/[\d.]+/);
   return match ? parseFloat(match[0]) : 0;
+};
+
+// Helper to parse integer fields from strings like "5 guests", "2 bedrooms" (returns integers)
+const parseIntegerField = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value === 'number') return Math.floor(value);
+  const str = String(value);
+  const match = str.match(/[\d.]+/);
+  return match ? Math.floor(parseFloat(match[0])) : 0;
 };
 
 export const useImportProperties = () => {
@@ -320,9 +329,9 @@ export const useImportProperties = () => {
                 zip,
                 latitude,
                 longitude,
-                bedrooms: parseNumericField(row.bedrooms),
+                bedrooms: parseIntegerField(row.bedrooms),
                 bathrooms: parseNumericField(row.bathrooms),
-                guests: parseNumericField(row.guests) || null,
+                guests: parseIntegerField(row.guests) || null,
                 property_type: row.propertyType || null,
                 tags: options.globalTags || [],
                 property_url: row.propertyUrl || null,
@@ -446,9 +455,9 @@ export const useImportProperties = () => {
               zip: row.zip,
               latitude: updateLatitude,
               longitude: updateLongitude,
-              bedrooms: parseNumericField(row.bedrooms),
+              bedrooms: parseIntegerField(row.bedrooms),
               bathrooms: parseNumericField(row.bathrooms),
-              guests: parseNumericField(row.guests) || null,
+              guests: parseIntegerField(row.guests) || null,
               property_type: row.propertyType || null,
               tags: [...new Set([...(existingAddressMap.get(update.normalizedAddr)?.tags || []), ...(options.globalTags || [])])],
               property_url: row.propertyUrl || null,

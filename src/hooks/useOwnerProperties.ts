@@ -1,17 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Property, Owner, Activity, PhoneContact, EmailContact, OwnerContact, MarketData } from '@/types';
 
 export const useOwnerProperties = (ownerName: string | null) => {
+  const { company } = useAuth();
+
   return useQuery({
-    queryKey: ['owner-properties', ownerName],
+    queryKey: ['owner-properties', ownerName, company?.id],
     queryFn: async () => {
-      if (!ownerName) return [];
+      if (!ownerName || !company?.id) return [];
 
       // Query owners table where name matches
       const { data: owners, error } = await supabase
         .from('owners')
         .select('property_id')
+        .eq('company_id', company.id)
         .or(`name.ilike.%${ownerName}%`);
 
       if (error) throw error;
@@ -117,22 +121,26 @@ export const useOwnerProperties = (ownerName: string | null) => {
         };
       });
 
-      // Filter to only properties where this owner name actually matches
+      // Filter to only properties where this owner name actually matches (case-insensitive)
+      const ownerNameLower = ownerName.toLowerCase();
+      
       return properties.filter(p => {
-        // Check primary name
+        // Check primary name (case-insensitive)
         const primaryName = p.owner.owners?.[0] 
           ? `${p.owner.owners[0].firstName} ${p.owner.owners[0].lastName}`.trim()
           : p.owner.name;
-        if (primaryName === ownerName) return true;
+        if (primaryName.toLowerCase() === ownerNameLower) return true;
         
-        // Check additional owners
+        // Check additional owners (case-insensitive)
         if (p.owner.owners) {
-          return p.owner.owners.some(o => `${o.firstName} ${o.lastName}`.trim() === ownerName);
+          return p.owner.owners.some(o => 
+            `${o.firstName} ${o.lastName}`.trim().toLowerCase() === ownerNameLower
+          );
         }
         
-        return p.owner.name === ownerName;
+        return p.owner.name.toLowerCase() === ownerNameLower;
       });
     },
-    enabled: !!ownerName,
+    enabled: !!ownerName && !!company?.id,
   });
 };

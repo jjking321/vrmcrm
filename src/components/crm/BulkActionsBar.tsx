@@ -38,6 +38,24 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const selectedCount = selectedIds.size;
   const selectedProperties = properties.filter(p => selectedIds.has(p.id));
 
+  // Check if property needs Zillow enrichment
+  const needsZillowEnrichment = (property: Property): boolean => {
+    return !property.image || 
+           !property.zillowUrl || 
+           !property.marketData?.propertyValue;
+  };
+
+  // Check if property needs Airbnb enrichment  
+  const needsAirbnbEnrichment = (property: Property): boolean => {
+    const adr = property.marketData?.adr || 0;
+    const revenue = property.marketData?.projectedRevenue || 0;
+    return adr === 0 && revenue === 0;
+  };
+
+  // Calculate counts for button labels
+  const zillowNeeded = selectedProperties.filter(needsZillowEnrichment).length;
+  const airbnbNeeded = selectedProperties.filter(needsAirbnbEnrichment).length;
+
   const handleAddTag = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTag.trim()) return;
@@ -79,12 +97,20 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   };
 
   const handleBulkZillow = async () => {
+    const propertiesToEnrich = selectedProperties.filter(needsZillowEnrichment);
+    
+    if (propertiesToEnrich.length === 0) {
+      toast.info('All selected properties already have Zillow data');
+      return;
+    }
+
     setIsLoadingZillow(true);
     setEnrichProgress(0);
     let successCount = 0;
+    const skippedCount = selectedCount - propertiesToEnrich.length;
 
-    for (let i = 0; i < selectedProperties.length; i++) {
-      const property = selectedProperties[i];
+    for (let i = 0; i < propertiesToEnrich.length; i++) {
+      const property = propertiesToEnrich[i];
       try {
         const result = await fetchZillowData(property);
         if (result.success && result.data) {
@@ -95,28 +121,37 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
       } catch (err) {
         console.error(`Failed to enrich ${property.address}:`, err);
       }
-      setEnrichProgress(((i + 1) / selectedProperties.length) * 100);
+      setEnrichProgress(((i + 1) / propertiesToEnrich.length) * 100);
     }
 
     setIsLoadingZillow(false);
-    toast.success(`Enriched ${successCount} of ${selectedCount} properties with Zillow data`);
+    const skippedMsg = skippedCount > 0 ? ` (${skippedCount} already had data)` : '';
+    toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties with Zillow data${skippedMsg}`);
   };
 
   const handleBulkAirROI = async () => {
+    const propertiesToEnrich = selectedProperties.filter(needsAirbnbEnrichment);
+    
+    if (propertiesToEnrich.length === 0) {
+      toast.info('All selected properties already have Airbnb data');
+      return;
+    }
+
     setIsLoadingAirROI(true);
     setEnrichProgress(0);
     let successCount = 0;
+    const skippedCount = selectedCount - propertiesToEnrich.length;
 
     // Use batch enrichment which handles listing IDs vs calculator intelligently
     const results = await fetchAirbnbEstimateBatch(
-      selectedProperties,
+      propertiesToEnrich,
       (progress) => setEnrichProgress(progress)
     );
 
     // Apply results to properties
     results.forEach((result, propertyId) => {
       if (result.success && result.data) {
-        const property = selectedProperties.find(p => p.id === propertyId);
+        const property = propertiesToEnrich.find(p => p.id === propertyId);
         if (property) {
           const updates = applyAirROIData(property, result.data);
           onUpdateProperty(propertyId, updates);
@@ -126,7 +161,8 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
     });
 
     setIsLoadingAirROI(false);
-    toast.success(`Enriched ${successCount} of ${selectedCount} properties with Airbnb data`);
+    const skippedMsg = skippedCount > 0 ? ` (${skippedCount} already had data)` : '';
+    toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties with Airbnb data${skippedMsg}`);
   };
 
   // Get common tags across selected properties
@@ -279,7 +315,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
             ) : (
               <>
                 <RefreshCw className="w-4 h-4" />
-                Zillow
+                Zillow {zillowNeeded > 0 && zillowNeeded < selectedCount && `(${zillowNeeded})`}
               </>
             )}
           </button>
@@ -301,7 +337,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
             ) : (
               <>
                 <RefreshCw className="w-4 h-4" />
-                Airbnb
+                Airbnb {airbnbNeeded > 0 && airbnbNeeded < selectedCount && `(${airbnbNeeded})`}
               </>
             )}
           </button>

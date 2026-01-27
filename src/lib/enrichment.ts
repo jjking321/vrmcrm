@@ -450,10 +450,11 @@ export async function verifyAddressBatch(
 export function applyZillowData(property: Property, zillowData: ZillowData): Partial<Property> & { streetViewUrl?: string } {
   const updates: Partial<Property> & { streetViewUrl?: string } = {};
   
-  if (zillowData.bedrooms && zillowData.bedrooms > 0) {
+  // Only update bedrooms/bathrooms if property doesn't already have them from another source
+  if (zillowData.bedrooms && zillowData.bedrooms > 0 && (!property.bedrooms || property.bedrooms === 0)) {
     updates.bedrooms = zillowData.bedrooms;
   }
-  if (zillowData.bathrooms && zillowData.bathrooms > 0) {
+  if (zillowData.bathrooms && zillowData.bathrooms > 0 && (!property.bathrooms || property.bathrooms === 0)) {
     updates.bathrooms = zillowData.bathrooms;
   }
   if (zillowData.livingArea) {

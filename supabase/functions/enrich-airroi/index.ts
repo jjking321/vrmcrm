@@ -221,11 +221,16 @@ serve(async (req) => {
         const data = await response.json();
         console.log("AirROI batch raw response:", JSON.stringify(data));
         
-        // Process results - match by position since large listing IDs lose precision in JSON
+        // Process results - match by listing_id prefix to handle precision loss
         if (data.results && Array.isArray(data.results)) {
-          data.results.forEach((listing: any, index: number) => {
-            // Use the original ID we sent (chunk[index]) to preserve precision
-            const originalId = chunk[index];
+          data.results.forEach((listing: any) => {
+            const returnedId = listing.listing_info?.listing_id?.toString() || '';
+            // Find original ID that matches the returned ID (first 15 chars to avoid precision issues)
+            const originalId = chunk.find(id => 
+              id === returnedId || 
+              id.startsWith(returnedId.slice(0, 15)) ||
+              returnedId.startsWith(id.slice(0, 15))
+            );
             if (originalId && listing.listing_info) {
               allResults[originalId] = normalizeListingResponse(listing);
             }
@@ -236,9 +241,11 @@ serve(async (req) => {
         if (data.errors && Array.isArray(data.errors)) {
           data.errors.forEach((error: any) => {
             const errorId = error.listing_id?.toString() || error.id?.toString();
-            // Try to find matching original ID
+            // Try to find matching original ID (prefix match)
             const matchingOriginalId = chunk.find(id => 
-              id === errorId || id.startsWith(errorId?.slice(0, 15))
+              id === errorId || 
+              id.startsWith(errorId?.slice(0, 15)) ||
+              errorId?.startsWith(id.slice(0, 15))
             );
             if (matchingOriginalId) {
               allResults[matchingOriginalId] = { error: error.message || 'Listing not found' };

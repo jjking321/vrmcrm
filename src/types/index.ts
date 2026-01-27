@@ -25,11 +25,25 @@ export interface AuthSession {
   company: Company;
 }
 
+// Phone status for quality tracking
+export type PhoneStatus = 'unknown' | 'verified' | 'wrong_number' | 'disconnected' | 'no_answer';
+
+// Email status for quality tracking
+export type EmailStatus = 'unknown' | 'verified' | 'bounced' | 'unsubscribed';
+
 // Individual phone with metadata
 export interface PhoneContact {
   number: string;
   type: 'mobile' | 'landline' | 'unknown';
   doNotCall: boolean;
+  // Source tracking
+  source?: string;        // List name or "manual"
+  addedAt?: string;       // ISO timestamp
+  // Quality tracking
+  status?: PhoneStatus;
+  lastCalledAt?: string;  // ISO timestamp
+  callCount?: number;     // Total call attempts
+  notes?: string;         // Optional notes
 }
 
 // Individual email with metadata
@@ -37,12 +51,21 @@ export interface EmailContact {
   address: string;
   type: 'personal' | 'work' | 'unknown';
   optedOut: boolean;
+  // Source tracking
+  source?: string;        // List name or "manual"
+  addedAt?: string;       // ISO timestamp
+  // Quality tracking
+  status?: EmailStatus;
+  lastVerifiedAt?: string; // ISO timestamp
 }
 
 // Individual owner (supports up to 4)
 export interface OwnerContact {
   firstName: string;
   lastName: string;
+  // Source tracking
+  source?: string;        // List name or "manual"
+  addedAt?: string;       // ISO timestamp
 }
 
 export interface Owner {

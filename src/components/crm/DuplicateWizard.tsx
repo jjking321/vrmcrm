@@ -17,9 +17,10 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { 
   Check, Calendar, Phone, Mail, Users, PhoneOff, ChevronDown, 
-  CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, PartyPopper, Merge, Tag
+  CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, PartyPopper, Merge, Tag, CheckCircle, XCircle, HelpCircle
 } from 'lucide-react';
-import { PhoneContact, EmailContact, OwnerContact } from '@/types';
+import { PhoneContact, EmailContact, OwnerContact, PhoneStatus, EmailStatus } from '@/types';
+import { SourceBadge } from './SourceBadge';
 
 // Extract meaningful source tags (filter out internal list- prefixed tags)
 const getSourceTags = (tags: string[]): string[] => {
@@ -64,19 +65,49 @@ const MERGE_FIELDS: MergeField[] = [
   { key: 'ownerContacts', label: 'Owner Contacts', getValue: p => p.owner?.owners || [], display: v => v?.length > 0 ? `${v.length} owner(s)` : '-', isOwnerField: true, isArrayField: true },
 ];
 
+// Helper to get phone status icon
+const PhoneStatusIcon: React.FC<{ status?: PhoneStatus }> = ({ status }) => {
+  switch (status) {
+    case 'verified':
+      return <CheckCircle className="w-3 h-3 text-emerald-500" />;
+    case 'wrong_number':
+    case 'disconnected':
+      return <XCircle className="w-3 h-3 text-red-500" />;
+    case 'no_answer':
+      return <HelpCircle className="w-3 h-3 text-amber-500" />;
+    default:
+      return <HelpCircle className="w-3 h-3 text-muted-foreground/50" />;
+  }
+};
+
+// Helper to get email status icon
+const EmailStatusIcon: React.FC<{ status?: EmailStatus }> = ({ status }) => {
+  switch (status) {
+    case 'verified':
+      return <CheckCircle className="w-3 h-3 text-emerald-500" />;
+    case 'bounced':
+      return <XCircle className="w-3 h-3 text-red-500" />;
+    case 'unsubscribed':
+      return <XCircle className="w-3 h-3 text-amber-500" />;
+    default:
+      return <HelpCircle className="w-3 h-3 text-muted-foreground/50" />;
+  }
+};
+
 const PhoneList: React.FC<{ phones: PhoneContact[] }> = ({ phones }) => {
   if (!phones || phones.length === 0) return <span className="text-muted-foreground/50">-</span>;
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {phones.map((p, i) => (
-        <div key={i} className="flex items-center gap-1 text-xs">
+        <div key={i} className="flex items-center gap-1.5 text-xs">
           {p.doNotCall ? (
             <PhoneOff className="w-3 h-3 text-amber-500" />
           ) : (
-            <Phone className="w-3 h-3 text-muted-foreground" />
+            <PhoneStatusIcon status={p.status} />
           )}
-          <span className={cn(p.doNotCall && "text-amber-600")}>{p.number}</span>
-          {p.type && <Badge variant="outline" className="text-[10px] px-1 py-0">{p.type}</Badge>}
+          <span className={cn(p.doNotCall && "text-amber-600", p.status === 'wrong_number' && "line-through text-muted-foreground")}>{p.number}</span>
+          {p.type && p.type !== 'unknown' && <Badge variant="outline" className="text-[10px] px-1 py-0">{p.type}</Badge>}
+          <SourceBadge source={p.source} />
         </div>
       ))}
     </div>
@@ -86,11 +117,12 @@ const PhoneList: React.FC<{ phones: PhoneContact[] }> = ({ phones }) => {
 const EmailList: React.FC<{ emails: EmailContact[] }> = ({ emails }) => {
   if (!emails || emails.length === 0) return <span className="text-muted-foreground/50">-</span>;
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {emails.map((e, i) => (
-        <div key={i} className="flex items-center gap-1 text-xs">
-          <Mail className="w-3 h-3 text-muted-foreground" />
-          <span className="truncate max-w-[120px]">{e.address}</span>
+        <div key={i} className="flex items-center gap-1.5 text-xs">
+          <EmailStatusIcon status={e.status} />
+          <span className={cn("truncate max-w-[120px]", e.status === 'bounced' && "line-through text-muted-foreground")}>{e.address}</span>
+          <SourceBadge source={e.source} />
         </div>
       ))}
     </div>
@@ -100,13 +132,14 @@ const EmailList: React.FC<{ emails: EmailContact[] }> = ({ emails }) => {
 const OwnerContactsList: React.FC<{ owners: OwnerContact[] }> = ({ owners }) => {
   if (!owners || owners.length === 0) return <span className="text-muted-foreground/50">-</span>;
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {owners.map((o, i) => (
-        <div key={i} className="flex items-center gap-1 text-xs">
+        <div key={i} className="flex items-center gap-1.5 text-xs">
           <Users className="w-3 h-3 text-muted-foreground" />
-          <span className="truncate max-w-[120px]">
+          <span className="truncate max-w-[100px]">
             {o.firstName} {o.lastName}
           </span>
+          <SourceBadge source={o.source} />
         </div>
       ))}
     </div>

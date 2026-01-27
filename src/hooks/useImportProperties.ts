@@ -279,7 +279,8 @@ export const useImportProperties = () => {
           if (options.importMode === 'updateOnly') {
             skippedCount++;
           } else {
-            const owner = transformImportToOwner(row);
+            const source = options.listName || undefined;
+            const owner = transformImportToOwner(row, source);
             
             // Smart booking link detection - move Airbnb URLs to airbnbUrl field
             let airbnbUrl = row.airbnbUrl || null;
@@ -394,7 +395,8 @@ export const useImportProperties = () => {
         for (const chunk of updateChunks) {
           await Promise.all(chunk.map(async (update) => {
             const row = update.row;
-            const importedOwner = transformImportToOwner(row);
+            const source = options.listName || undefined;
+            const importedOwner = transformImportToOwner(row, source);
             const existingOwner = currentOwnersMap.get(update.id);
             
             const propUpdates: Record<string, any> = {

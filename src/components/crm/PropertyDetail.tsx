@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Property, PipelineStage, FieldDefinition, Activity, CallOutcome } from '@/types';
+import { Property, PipelineStage, FieldDefinition, Activity, CallOutcome, PhoneStatus, EmailStatus } from '@/types';
 import { useAddActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useProperties';
 import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
 import { useLogCallActivity } from '@/hooks/useCallLists';
 import ActivityLog from './ActivityLog';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
+import { SourceBadge } from './SourceBadge';
 import { fetchZillowData, fetchAirbnbActuals, fetchAirbnbProjections, applyZillowDataWithStreetView, applyAirbnbActualsData, applyAirbnbProjectionsData } from '@/lib/enrichment';
 import { MonthlyPerformanceChart } from './MonthlyPerformanceChart';
 import { 
@@ -18,7 +19,7 @@ import {
   ArrowLeft, Save, X, Plus, ExternalLink, Star, 
   TrendingUp, Home, Pencil, Ruler, Users, Calendar, RefreshCw, Loader2,
   AlertTriangle, PhoneOff, Clock, Link, DollarSign, Trash2,
-  CheckCircle, Voicemail, PhoneMissed, XCircle
+  CheckCircle, Voicemail, PhoneMissed, XCircle, HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +35,35 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Helper to get phone status icon
+const PhoneStatusIcon: React.FC<{ status?: PhoneStatus }> = ({ status }) => {
+  switch (status) {
+    case 'verified':
+      return <CheckCircle className="w-3 h-3 text-emerald-500" />;
+    case 'wrong_number':
+    case 'disconnected':
+      return <XCircle className="w-3 h-3 text-red-500" />;
+    case 'no_answer':
+      return <HelpCircle className="w-3 h-3 text-amber-500" />;
+    default:
+      return <Phone className="w-3 h-3 text-muted-foreground" />;
+  }
+};
+
+// Helper to get email status icon
+const EmailStatusIcon: React.FC<{ status?: EmailStatus }> = ({ status }) => {
+  switch (status) {
+    case 'verified':
+      return <CheckCircle className="w-3 h-3 text-emerald-500" />;
+    case 'bounced':
+      return <XCircle className="w-3 h-3 text-red-500" />;
+    case 'unsubscribed':
+      return <XCircle className="w-3 h-3 text-amber-500" />;
+    default:
+      return <Mail className="w-3 h-3 text-muted-foreground" />;
+  }
+};
 
 // Extract Airbnb listing ID from URL
 const extractAirbnbListingId = (url: string): string | null => {
@@ -1170,23 +1200,26 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                               {idx + 1}
                             </div>
                             <div>
-                              <button
-                                onClick={() => onSelectOwner?.(ownerFullName || primaryName)}
-                                className="font-medium text-foreground text-sm hover:text-brand hover:underline transition-colors text-left"
-                              >
-                                {ownerFullName || 'Unknown'}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => onSelectOwner?.(ownerFullName || primaryName)}
+                                  className="font-medium text-foreground text-sm hover:text-brand hover:underline transition-colors text-left"
+                                >
+                                  {ownerFullName || 'Unknown'}
+                                </button>
+                                <SourceBadge source={owner.source} />
+                              </div>
                               {associatedPhone && (
-                                <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-1">
                                   {associatedPhone.doNotCall ? (
                                     <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
                                       <PhoneOff className="w-3 h-3 text-amber-500" />
-                                      {associatedPhone.number}
+                                      <span className={cn(associatedPhone.status === 'wrong_number' && "line-through")}>{associatedPhone.number}</span>
                                       <span className="px-1 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                                     </a>
                                   ) : (
-                                    <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
-                                      <Phone className="w-3 h-3" />
+                                    <a href={`tel:${associatedPhone.number}`} className={cn("flex items-center gap-1 text-xs text-muted-foreground hover:text-brand", associatedPhone.status === 'wrong_number' && "line-through opacity-60")}>
+                                      <PhoneStatusIcon status={associatedPhone.status} />
                                       {associatedPhone.number}
                                       {associatedPhone.type !== 'unknown' && (
                                         <span className={cn("px-1 py-0.5 text-xs rounded border", getPhoneTypeBadgeClass(associatedPhone.type))}>
@@ -1195,6 +1228,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                                       )}
                                     </a>
                                   )}
+                                  <SourceBadge source={associatedPhone.source} />
                                 </div>
                               )}
                             </div>
@@ -1208,16 +1242,16 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                       <div className="pt-2 border-t border-border">
                         <p className="text-xs text-muted-foreground mb-2">Additional phones:</p>
                         {property.owner.phones.slice(property.owner.owners.length).map((phone, idx) => (
-                          <div key={idx} className="flex items-center gap-2 ml-10">
+                          <div key={idx} className="flex items-center gap-2 ml-10 mb-1">
                             {phone.doNotCall ? (
                               <a href={`tel:${phone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
                                 <PhoneOff className="w-3 h-3 text-amber-500" />
-                                {phone.number}
+                                <span className={cn(phone.status === 'wrong_number' && "line-through")}>{phone.number}</span>
                                 <span className="px-1 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">DNC</span>
                               </a>
                             ) : (
-                              <a href={`tel:${phone.number}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand">
-                                <Phone className="w-3 h-3" />
+                              <a href={`tel:${phone.number}`} className={cn("flex items-center gap-1 text-xs text-muted-foreground hover:text-brand", phone.status === 'wrong_number' && "line-through opacity-60")}>
+                                <PhoneStatusIcon status={phone.status} />
                                 {phone.number}
                                 {phone.type !== 'unknown' && (
                                   <span className={cn("px-1 py-0.5 rounded border", getPhoneTypeBadgeClass(phone.type))}>
@@ -1226,6 +1260,7 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                                 )}
                               </a>
                             )}
+                            <SourceBadge source={phone.source} />
                           </div>
                         ))}
                       </div>
@@ -1268,8 +1303,30 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
                   )}
                 </div>
 
-                {/* Email */}
-                {property.owner.email && (
+                {/* Emails with source badges */}
+                {property.owner.emails && property.owner.emails.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Emails:</p>
+                    {property.owner.emails.map((email, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <a 
+                          href={`mailto:${email.address}`} 
+                          className={cn(
+                            "flex items-center gap-1 text-sm text-muted-foreground hover:text-brand transition-colors",
+                            email.status === 'bounced' && "line-through opacity-60"
+                          )}
+                        >
+                          <EmailStatusIcon status={email.status} />
+                          {email.address}
+                        </a>
+                        <SourceBadge source={email.source} />
+                        {email.optedOut && (
+                          <span className="px-1 py-0.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded">opted out</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : property.owner.email && (
                   <a href={`mailto:${property.owner.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-brand transition-colors">
                     <Mail className="w-4 h-4" />
                     {property.owner.email}

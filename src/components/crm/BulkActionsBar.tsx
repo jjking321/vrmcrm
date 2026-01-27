@@ -45,11 +45,12 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
            !property.marketData?.propertyValue;
   };
 
-  // Check if property needs Airbnb enrichment  
+  // Check if property needs Airbnb enrichment (needs both ADR AND revenue to be considered complete)
   const needsAirbnbEnrichment = (property: Property): boolean => {
     const adr = property.marketData?.adr || 0;
     const revenue = property.marketData?.projectedRevenue || 0;
-    return adr === 0 && revenue === 0;
+    // Need enrichment if missing ADR OR missing revenue (both required for complete data)
+    return adr === 0 || revenue === 0;
   };
 
   // Calculate counts for button labels

@@ -1,126 +1,101 @@
 
+# Fix Owner Detail Page Navigation
 
-# Filter Bulk Enrichment to Missing Data Only
+## Problem Summary
 
-## Overview
+Clicking an owner from the Owners page leads to a broken page showing "Owner not found" because the `useOwnerProperties` hook fails to find matching properties.
 
-This update modifies the bulk Zillow and Airbnb enrichment actions in the selection toolbar to automatically skip properties that have already been enriched. This saves API calls and avoids unnecessary updates.
+## Root Causes
 
----
+1. **Missing company_id filter**: The query to fetch owner properties doesn't filter by company, potentially causing RLS issues or empty results
+2. **Case-sensitive name matching**: The owner list aggregates names case-insensitively, but the detail page uses exact string matching, causing mismatches when names have different casing in the database
 
-## Current Behavior
-
-When you select properties and click "Zillow" or "Airbnb", the system enriches **all** selected properties—even those already enriched.
-
-## New Behavior
-
-The enrichment will only target properties **missing key data**:
-
-| Enrichment | Skip If Property Has |
-|------------|---------------------|
-| **Zillow** | `image` AND `zillowUrl` AND `marketData.propertyValue` |
-| **Airbnb** | `marketData.adr` > 0 OR `marketData.projectedRevenue` > 0 |
-
----
-
-## Implementation
-
-### Update `BulkActionsBar.tsx`
-
-#### 1. Add Filter Helper Functions
+## Technical Analysis
 
 ```text
-// Check if property needs Zillow enrichment
-const needsZillowEnrichment = (property: Property): boolean => {
-  return !property.image || 
-         !property.zillowUrl || 
-         !property.marketData?.propertyValue;
-};
+useAllOwners (aggregation)        useOwnerProperties (detail fetch)
+─────────────────────────────     ───────────────────────────────────
+normalizedKey = name.toLowerCase()  .ilike.%${ownerName}% (fuzzy)
+                                    → then exact match: primaryName === ownerName
+```
 
-// Check if property needs Airbnb enrichment  
-const needsAirbnbEnrichment = (property: Property): boolean => {
-  const adr = property.marketData?.adr || 0;
-  const revenue = property.marketData?.projectedRevenue || 0;
-  return adr === 0 && revenue === 0;
+Example failure scenario:
+- Database has: "JOHN SMITH" and "John Smith" (two records)
+- Owner list displays: "John Smith" (picks Title Case)
+- Detail fetch: searches for "John Smith" but exact match fails against "JOHN SMITH"
+
+## Implementation Plan
+
+### File: `src/hooks/useOwnerProperties.ts`
+
+| Change | Description |
+|--------|-------------|
+| Add company_id import | Import useAuth to get current company |
+| Add company_id filter | Filter owners table by company_id |
+| Fix name matching | Use case-insensitive comparison for name matching |
+| Guard for missing company | Return empty array if no company context |
+
+### Code Changes
+
+**1. Add company context:**
+```typescript
+import { useAuth } from '@/contexts/AuthContext';
+
+export const useOwnerProperties = (ownerName: string | null) => {
+  const { company } = useAuth();
+  
+  return useQuery({
+    queryKey: ['owner-properties', ownerName, company?.id],
+    queryFn: async () => {
+      if (!ownerName || !company?.id) return [];
+      // ...
+    },
+    enabled: !!ownerName && !!company?.id,
+  });
 };
 ```
 
-#### 2. Modify `handleBulkZillow`
+**2. Add company_id filter to query:**
+```typescript
+const { data: owners, error } = await supabase
+  .from('owners')
+  .select('property_id')
+  .eq('company_id', company.id)  // Add this line
+  .or(`name.ilike.%${ownerName}%`);
+```
 
-Filter selected properties to only those needing enrichment:
-
-```text
-const handleBulkZillow = async () => {
-  const propertiesToEnrich = selectedProperties.filter(needsZillowEnrichment);
+**3. Fix case-insensitive matching for final filter:**
+```typescript
+return properties.filter(p => {
+  const ownerNameLower = ownerName.toLowerCase();
   
-  if (propertiesToEnrich.length === 0) {
-    toast.info('All selected properties already have Zillow data');
-    return;
+  // Check primary name (case-insensitive)
+  const primaryName = p.owner.owners?.[0] 
+    ? `${p.owner.owners[0].firstName} ${p.owner.owners[0].lastName}`.trim()
+    : p.owner.name;
+  if (primaryName.toLowerCase() === ownerNameLower) return true;
+  
+  // Check additional owners (case-insensitive)
+  if (p.owner.owners) {
+    return p.owner.owners.some(o => 
+      `${o.firstName} ${o.lastName}`.trim().toLowerCase() === ownerNameLower
+    );
   }
   
-  // ... existing enrichment loop using propertiesToEnrich instead of selectedProperties
-  
-  toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties (${selectedCount - propertiesToEnrich.length} already had data)`);
-};
+  return p.owner.name.toLowerCase() === ownerNameLower;
+});
 ```
 
-#### 3. Modify `handleBulkAirROI`
+## Testing
 
-Filter selected properties to only those needing enrichment:
+After the fix:
+1. Navigate to Owners page
+2. Click any owner name
+3. Owner detail page should load with properties and activities
+4. Verify back navigation works
 
-```text
-const handleBulkAirROI = async () => {
-  const propertiesToEnrich = selectedProperties.filter(needsAirbnbEnrichment);
-  
-  if (propertiesToEnrich.length === 0) {
-    toast.info('All selected properties already have Airbnb data');
-    return;
-  }
-  
-  // ... existing batch call using propertiesToEnrich
-  
-  toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties (${selectedCount - propertiesToEnrich.length} already had data)`);
-};
-```
+## Files Modified
 
-#### 4. Update Button Labels (Optional Enhancement)
-
-Show count of properties needing enrichment in the button:
-
-```text
-// Calculate counts
-const zillowNeeded = selectedProperties.filter(needsZillowEnrichment).length;
-const airbnbNeeded = selectedProperties.filter(needsAirbnbEnrichment).length;
-
-// In button labels:
-Zillow ({zillowNeeded})
-Airbnb ({airbnbNeeded})
-```
-
----
-
-## File to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/crm/BulkActionsBar.tsx` | Add filter helpers, filter properties before enrichment, update toast messages |
-
----
-
-## User Experience
-
-1. Select 10 properties
-2. Click "Zillow" button (shows "Zillow (3)" if only 3 need data)
-3. Only 3 properties are enriched
-4. Toast shows: "Enriched 3 of 3 properties (7 already had data)"
-
-If all selected properties already have data:
-- Toast shows: "All selected properties already have Zillow data"
-- No API calls made
-
----
-
-## Summary
-
-This change adds two filter functions and applies them before bulk enrichment runs. Properties that already have key data fields populated are automatically skipped, reducing API usage and preventing unnecessary database updates.
-
+| File | Change Type |
+|------|-------------|
+| `src/hooks/useOwnerProperties.ts` | Bug fix - add company filter and case-insensitive matching |

@@ -102,9 +102,13 @@ serve(async (req) => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("AirROI Metrics API error:", response.status, errorText);
+        // Return 200 with error field so frontend can handle gracefully
+        const errorMessage = response.status === 404 
+          ? 'Listing not found in AirROI database. The listing may be new or not yet indexed.'
+          : `AirROI API error: ${response.status}`;
         return new Response(
-          JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
-          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: errorMessage, status: response.status }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -167,9 +171,13 @@ serve(async (req) => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("AirROI API error:", response.status, errorText);
+        // Return 200 with error field so frontend can handle gracefully
+        const errorMessage = response.status === 404 
+          ? 'Listing not found in AirROI database. The listing may be new or not yet indexed.'
+          : `AirROI API error: ${response.status}`;
         return new Response(
-          JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
-          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: errorMessage, status: response.status }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -295,9 +303,13 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AirROI API error:", response.status, errorText);
+      // Return 200 with error field so frontend can handle gracefully
+      const errorMessage = response.status === 404 
+        ? 'No market data available for this location.'
+        : `AirROI API error: ${response.status}`;
       return new Response(
-        JSON.stringify({ error: `AirROI API error: ${response.status} - ${errorText}` }),
-        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: errorMessage, status: response.status }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

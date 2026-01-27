@@ -6,6 +6,7 @@ import {
   PhoneOff, Clock, Home, Users, Loader2
 } from 'lucide-react';
 import { Badge } from './Badge';
+import { SourceBadge } from './SourceBadge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { cn } from '@/lib/utils';
 import {
@@ -207,7 +208,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                           
                           {/* Phone for this owner */}
                           {associatedPhone && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {associatedPhone.doNotCall ? (
                                 <a href={`tel:${associatedPhone.number}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand">
                                   <PhoneOff className="w-4 h-4 text-amber-500" />
@@ -225,16 +226,40 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                                   )}
                                 </a>
                               )}
+                              <SourceBadge source={associatedPhone.source} />
                             </div>
                           )}
                           
-                          {/* Email for primary owner */}
+                          {/* Email for primary owner - show from emails array if available */}
                           {showEmail && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <a href={`mailto:${owner.email}`} className="flex items-center gap-1.5 text-sm text-brand hover:underline">
                                 <Mail className="w-4 h-4 text-muted-foreground" />
                                 {owner.email}
                               </a>
+                              {owner.emails?.[0]?.source && (
+                                <SourceBadge source={owner.emails[0].source} />
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Additional emails for this owner */}
+                          {owner.emails && owner.emails.length > 1 && idx === 0 && (
+                            <div className="space-y-1.5 mt-1">
+                              {owner.emails.slice(1).map((emailContact, emailIdx) => (
+                                <div key={emailIdx} className="flex items-center gap-2 flex-wrap">
+                                  <a href={`mailto:${emailContact.address}`} className="flex items-center gap-1.5 text-sm text-brand hover:underline">
+                                    <Mail className="w-4 h-4 text-muted-foreground" />
+                                    {emailContact.address}
+                                    {emailContact.type !== 'unknown' && (
+                                      <span className="px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded border">
+                                        {emailContact.type}
+                                      </span>
+                                    )}
+                                  </a>
+                                  <SourceBadge source={emailContact.source} />
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -270,7 +295,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                 <div className="pt-3 border-t border-border">
                   <p className="text-xs text-muted-foreground mb-2">Additional phones:</p>
                   {owner.phones.slice(owner.owners.length).map((phone, idx) => (
-                    <div key={idx} className="flex items-center gap-2 py-1">
+                    <div key={idx} className="flex items-center gap-2 flex-wrap py-1">
                       {phone.doNotCall ? (
                         <a href={`tel:${phone.number}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand">
                           <PhoneOff className="w-4 h-4 text-amber-500" />
@@ -288,6 +313,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                           )}
                         </a>
                       )}
+                      <SourceBadge source={phone.source} />
                     </div>
                   ))}
                 </div>

@@ -1,87 +1,74 @@
 
-# Backfill Source for Phone and Email Contacts
 
-## Overview
+# Migrate Legacy Email Column to Emails Array
 
-Add source tracking to existing phone and email contacts that were imported before the source tracking feature was implemented. This will use the property's first tag as the source indicator.
+## Problem
+
+The previous backfill only updated owners who already had data in the `emails` JSONB array. However, **1,341 owners** have email addresses stored in the legacy single `email` column that were never migrated to the new array format.
 
 ## Current State
 
-| Data Type | Records Missing Source | Records With Source |
-|-----------|----------------------|---------------------|
-| Phones    | 1,092 owners         | Already populated on new imports |
-| Emails    | 42 owners            | Already populated on new imports |
+| Data Location | Count |
+|---------------|-------|
+| Legacy `email` column (not migrated) | 1,341 owners |
+| `emails` JSONB array (already backfilled) | 191 owners |
+| **Total owners with any email** | ~1,532 owners |
 
-### Source Distribution (for phones)
-- `absentee`: 545 owners
-- `cb permit`: 476 owners  
-- `happy palms`: 71 owners
+## Implementation
 
-## Implementation Approach
+Create a database migration to convert legacy email column data into the new `emails` JSONB array format with full source tracking.
 
-Create a one-time database migration that updates the JSONB arrays to add source and addedAt fields to each phone/email object.
-
-### SQL Migration Logic
+### Migration Logic
 
 ```sql
--- For each owner with phones missing source:
+-- For each owner with legacy email but empty emails array:
 -- 1. Get the first tag from the associated property
--- 2. Update each phone object in the array to add:
+-- 2. Create a new emails array with one entry containing:
+--    - address: the legacy email value
 --    - source: first property tag
 --    - addedAt: owner's created_at timestamp
---    - status: 'unknown' (if not set)
---    - callCount: 0 (if not set)
+--    - status: 'unknown'
+--    - type: 'unknown'
+--    - optedOut: false
 ```
 
-### Technical Details
-
-The migration will:
-
-1. **Join owners to properties** to get the tag information
-2. **Use jsonb_agg with jsonb_set** to add missing fields to each contact object
-3. **Set source** to the first property tag (e.g., "absentee", "cb permit", "happy palms")
-4. **Set addedAt** to the owner's original `created_at` timestamp
-5. **Preserve existing fields** (number, type, doNotCall, etc.)
-
-### Sample Before/After
+### Sample Transformation
 
 **Before:**
-```json
-{
-  "number": "407-484-0628",
-  "type": "mobile",
-  "doNotCall": true
-}
+```
+email: "jjking@mail.com"
+emails: []
 ```
 
 **After:**
-```json
-{
-  "number": "407-484-0628",
-  "type": "mobile",
-  "doNotCall": true,
+```
+email: "jjking@mail.com"  (preserved for backwards compatibility)
+emails: [{
+  "address": "jjking@mail.com",
   "source": "absentee",
   "addedAt": "2025-12-10T16:37:52.961Z",
   "status": "unknown",
-  "callCount": 0
-}
+  "type": "unknown",
+  "optedOut": false
+}]
 ```
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| New migration file | SQL to backfill phone and email source fields |
+| New migration file | SQL to migrate legacy email to emails array with source |
 
 ## Verification
 
-After migration runs:
-1. Query owners table to confirm source fields are populated
-2. Check Owner Detail page displays source badges correctly
-3. Verify no data loss (phone numbers, emails preserved)
+After migration:
+1. Query should show ~1,532 owners with emails in array
+2. Owner Detail page displays source badges for all emails
+3. Legacy email column preserved (no data loss)
 
 ## Risk Assessment
 
-- **Low risk**: Migration only adds fields, doesn't modify existing data
-- **Reversible**: Source fields can be removed if needed
-- **Non-breaking**: Frontend already handles missing source gracefully
+- **Low risk**: Only adds to emails array, doesn't modify legacy column
+- **Non-destructive**: Legacy email preserved as backup
+- **Idempotent**: Only affects owners with empty emails array
+

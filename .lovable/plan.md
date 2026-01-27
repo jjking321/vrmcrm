@@ -1,76 +1,126 @@
 
 
-# Fix: Import Integer Type Handling
+# Filter Bulk Enrichment to Missing Data Only
 
-## Problem
+## Overview
 
-The import failed with:
-```
-invalid input syntax for type integer: "80.60961834040972"
-```
+This update modifies the bulk Zillow and Airbnb enrichment actions in the selection toolbar to automatically skip properties that have already been enriched. This saves API calls and avoids unnecessary updates.
 
-This is a longitude value being inserted into the `guests` column (which is type `integer` in PostgreSQL).
+---
 
-## Root Causes
+## Current Behavior
 
-1. **Type Mismatch**: The `parseNumericField` helper uses `parseFloat()` which returns decimals, but `guests` and `bedrooms` are integer columns in the database
+When you select properties and click "Zillow" or "Airbnb", the system enriches **all** selected properties—even those already enriched.
 
-2. **Possible Mapping Issue**: A column containing coordinate data may be incorrectly mapped to `guests` in the Import Wizard UI
+## New Behavior
 
-## Solution
+The enrichment will only target properties **missing key data**:
 
-### 1. Fix Numeric Parsing for Integer Fields
+| Enrichment | Skip If Property Has |
+|------------|---------------------|
+| **Zillow** | `image` AND `zillowUrl` AND `marketData.propertyValue` |
+| **Airbnb** | `marketData.adr` > 0 OR `marketData.projectedRevenue` > 0 |
 
-Update `useImportProperties.ts` to use proper integer parsing for integer columns:
+---
 
-```text
-// Current (problematic):
-guests: parseNumericField(row.guests) || null,
-bedrooms: parseNumericField(row.bedrooms),
+## Implementation
 
-// Fixed:
-guests: row.guests ? Math.floor(parseNumericField(row.guests)) : null,
-bedrooms: Math.floor(parseNumericField(row.bedrooms)),
-```
+### Update `BulkActionsBar.tsx`
 
-This ensures:
-- Floats are converted to integers before database insert
-- Values like "2.0 bathrooms" become `2` not `2.0`
-- If a longitude accidentally gets mapped, it will at least not cause a type error
-
-### 2. Add parseIntegerField Helper
-
-Create a dedicated helper for integer columns:
+#### 1. Add Filter Helper Functions
 
 ```text
-const parseIntegerField = (value: any): number => {
-  if (!value) return 0;
-  if (typeof value === 'number') return Math.floor(value);
-  const str = String(value);
-  const match = str.match(/[\d.]+/);
-  return match ? Math.floor(parseFloat(match[0])) : 0;
+// Check if property needs Zillow enrichment
+const needsZillowEnrichment = (property: Property): boolean => {
+  return !property.image || 
+         !property.zillowUrl || 
+         !property.marketData?.propertyValue;
+};
+
+// Check if property needs Airbnb enrichment  
+const needsAirbnbEnrichment = (property: Property): boolean => {
+  const adr = property.marketData?.adr || 0;
+  const revenue = property.marketData?.projectedRevenue || 0;
+  return adr === 0 && revenue === 0;
 };
 ```
 
-### 3. Apply to All Integer Fields
+#### 2. Modify `handleBulkZillow`
 
-| Field | Current | Fixed |
-|-------|---------|-------|
-| `bedrooms` | `parseNumericField` | `parseIntegerField` |
-| `guests` | `parseNumericField` | `parseIntegerField` |
-| `bathrooms` | `parseNumericField` | Keep as-is (numeric type supports decimals) |
+Filter selected properties to only those needing enrichment:
 
-## Files to Modify
+```text
+const handleBulkZillow = async () => {
+  const propertiesToEnrich = selectedProperties.filter(needsZillowEnrichment);
+  
+  if (propertiesToEnrich.length === 0) {
+    toast.info('All selected properties already have Zillow data');
+    return;
+  }
+  
+  // ... existing enrichment loop using propertiesToEnrich instead of selectedProperties
+  
+  toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties (${selectedCount - propertiesToEnrich.length} already had data)`);
+};
+```
 
-| File | Change |
-|------|--------|
-| `src/hooks/useImportProperties.ts` | Add `parseIntegerField` helper and use it for `bedrooms` and `guests` |
+#### 3. Modify `handleBulkAirROI`
 
-## Recommendation
+Filter selected properties to only those needing enrichment:
 
-Before re-importing, please also **verify your column mappings** in the Import Wizard preview step. Check that:
-- `coordinates/longitude` maps to **Longitude** (not Guests)
-- `subDescription/items/0` maps to **Max Guests** 
+```text
+const handleBulkAirROI = async () => {
+  const propertiesToEnrich = selectedProperties.filter(needsAirbnbEnrichment);
+  
+  if (propertiesToEnrich.length === 0) {
+    toast.info('All selected properties already have Airbnb data');
+    return;
+  }
+  
+  // ... existing batch call using propertiesToEnrich
+  
+  toast.success(`Enriched ${successCount} of ${propertiesToEnrich.length} properties (${selectedCount - propertiesToEnrich.length} already had data)`);
+};
+```
 
-This ensures the correct data goes to the correct fields.
+#### 4. Update Button Labels (Optional Enhancement)
+
+Show count of properties needing enrichment in the button:
+
+```text
+// Calculate counts
+const zillowNeeded = selectedProperties.filter(needsZillowEnrichment).length;
+const airbnbNeeded = selectedProperties.filter(needsAirbnbEnrichment).length;
+
+// In button labels:
+Zillow ({zillowNeeded})
+Airbnb ({airbnbNeeded})
+```
+
+---
+
+## File to Modify
+
+| File | Changes |
+|------|---------|
+| `src/components/crm/BulkActionsBar.tsx` | Add filter helpers, filter properties before enrichment, update toast messages |
+
+---
+
+## User Experience
+
+1. Select 10 properties
+2. Click "Zillow" button (shows "Zillow (3)" if only 3 need data)
+3. Only 3 properties are enriched
+4. Toast shows: "Enriched 3 of 3 properties (7 already had data)"
+
+If all selected properties already have data:
+- Toast shows: "All selected properties already have Zillow data"
+- No API calls made
+
+---
+
+## Summary
+
+This change adds two filter functions and applies them before bulk enrichment runs. Properties that already have key data fields populated are automatically skipped, reducing API usage and preventing unnecessary database updates.
 

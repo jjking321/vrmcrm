@@ -1,263 +1,201 @@
-# Source Tracking & Quality Management for Contacts
 
-## Status: ✅ IMPLEMENTED
 
-This plan has been implemented. See the changes below.
+# Import Support for Cocoa Beach CSV Format
 
 ## Overview
 
-This plan extends the source tracking system to cover **phones, emails, and owner contacts**, and ensures the **merge wizard** properly handles source metadata during duplicate resolution.
+This plan adds auto-mapping patterns and parsing logic to seamlessly import your Cocoa Beach vacation rental data. The file has a unique format with scraped Airbnb/VRBO data, owner information, and contact details.
 
 ---
 
-## Part 1: Enhanced Contact Interfaces
+## What Your File Contains
 
-### PhoneContact Updates
-
-```text
-Current:        number, type, doNotCall
-
-Proposed:       number, type, doNotCall
-                + source (list name or "manual")
-                + addedAt (ISO timestamp)
-                + status ("unknown" | "verified" | "wrong_number" | "disconnected" | "no_answer")
-                + lastCalledAt (ISO timestamp)
-                + callCount (number)
-                + notes (optional string)
-```
-
-### EmailContact Updates
-
-```text
-Current:        address, type, optedOut
-
-Proposed:       address, type, optedOut
-                + source (list name or "manual")
-                + addedAt (ISO timestamp)
-                + status ("unknown" | "verified" | "bounced" | "unsubscribed")
-                + lastVerifiedAt (ISO timestamp)
-```
-
-### OwnerContact Updates
-
-```text
-Current:        firstName, lastName
-
-Proposed:       firstName, lastName
-                + source (list name or "manual")
-                + addedAt (ISO timestamp)
-```
+| Column | Maps To | Notes |
+|--------|---------|-------|
+| `title` | Listing Title | Property name from Airbnb |
+| `airbnb_url` | Airbnb URL | Already supported |
+| `vrbo_url` | Booking Link | **NEW: Add mapping** |
+| `subDescription/items/0` | Guests | **NEW: Parse number** |
+| `subDescription/items/1` | Bedrooms | **NEW: Parse number** |
+| `subDescription/items/2` | Bathrooms | **NEW: Parse number** |
+| `subDescription/items/3` | Property Type | **NEW: Add field** |
+| `host/name` | Host Name | Already supported |
+| `coordinates/latitude` | Latitude | **NEW: Add mapping** |
+| `coordinates/longitude` | Longitude | **NEW: Add mapping** |
+| `location` | (Skip) | General area, not needed |
+| `propertyType` | Property Type | Duplicate of subDescription/items/3 |
+| `Full Address` | Address (full) | Auto-parsed to components |
+| `GIS Coordinates` | GIS Coordinates | Already supported |
+| `Owner` | (Skip per your choice) | Using Contact Person instead |
+| `Owner's Address` | Mailing Address (full) | **NEW: Parse to components** |
+| `Contact Person` | Contact Name | Then parse first/last |
+| `Owner Contact 1` | Phone 1 | Already supported |
+| `Owner Contact 2` | Phone 2 | Already supported |
+| `Email 1` | Email 1 | Already supported |
+| `Email 2` | Email 2 | Already supported |
+| `price/price` | Market Data ADR | **NEW: Map to ADR field** |
 
 ---
 
-## Part 2: Import Flow Updates
+## Implementation Steps
 
-When importing a list, the **list name** flows through to each contact:
+### 1. Add New Auto-Map Patterns
 
-1. User enters list name in Import Wizard (existing field)
-2. `transformImportToOwner` receives the list name and stamps it on each phone, email, and owner contact
-3. `addedAt` is set to the current timestamp
-4. New phones/emails default to `status: 'unknown'`
-
-### Stacking Logic Changes
-
-When contacts are stacked during import or merge:
-
-- If the same phone number exists from a **different source**, both entries are kept (different sources = different context)
-- If the same phone number exists from the **same source**, dedupe normally
-- Source badges in UI show where each contact came from
-
----
-
-## Part 3: Merge Wizard Integration
-
-The merge wizard already handles contact stacking vs. override. Source tracking enhances this:
-
-### Visual Enhancements
-
-1. **Phone/Email lists show source badges** in the merge preview
-2. **Combined result preview** shows deduplicated contacts with their sources preserved
-3. Users can see at a glance: "3 phones from PropWire, 1 from Airbnb Scrape"
-
-### Stacking Behavior
-
-When "Combine all contacts" is selected:
-
-- All phones from all duplicate records are collected
-- Deduplication by number, but **source is preserved from first occurrence**
-- If same number appears from different sources, first source wins (preserves data provenance)
-
-### Override Behavior
-
-When "Use primary only" is selected:
-
-- Only contacts from the selected primary record are kept
-- Source metadata on those contacts remains intact
-
-### Display Changes in Merge Modal
+Update the `AUTO_MAP_PATTERNS` in `ImportWizard.tsx` to recognize your column names:
 
 ```text
-PHONES (Combined: 4)
-┌────────────────────────────────────────────────────┐
-│ (321) 555-1234   Mobile    [PropWire Q1]          │
-│ (321) 555-5678   Landline  [Airbnb Scrape]        │
-│ (321) 555-9999   Mobile    [PropWire Q1]          │
-│ (321) 555-0000   Unknown   [Happy Palms List]    │
-└────────────────────────────────────────────────────┘
-
-EMAILS (Combined: 2)
-┌────────────────────────────────────────────────────┐
-│ john@email.com             [PropWire Q1]          │
-│ jsmith@work.com            [Airbnb Scrape]        │
-└────────────────────────────────────────────────────┘
+vrboUrl:           ['vrbo_url', 'vrbo url', 'vrbo link', 'vrbo']
+guests:            ['guests', 'subDescription/items/0', 'max guests', 'sleeps']
+latitude:          ['latitude', 'coordinates/latitude', 'lat']
+longitude:         ['longitude', 'coordinates/longitude', 'long', 'lng']
+adr:               ['adr', 'price/price', 'average daily rate', 'nightly rate']
+contactPerson:     ['contact person', 'contact name', 'primary contact']
 ```
 
----
+### 2. Add Contact Person Parsing
 
-## Part 4: UI Display Updates
+When `contactPerson` is mapped but individual owner names aren't, automatically split into first/last name:
+- "Charles Evers" -> firstName: "Charles", lastName: "Evers"
+- "Patricia Eldridge" -> firstName: "Patricia", lastName: "Eldridge"
 
-### PropertyDetail Phone Section
+Update `transformImportToOwner` in `ownerUtils.ts`:
 
 ```text
-PHONES
-┌────────────────────────────────────────────────────────────┐
-│ ✓ (321) 555-1234   Mobile    [PropWire Q1] Verified       │
-│   Last called: Jan 15 • 3 attempts                         │
-├────────────────────────────────────────────────────────────┤
-│ ? (321) 555-5678   Landline  [Airbnb Scrape] Unknown      │
-│   Never called                                             │
-├────────────────────────────────────────────────────────────┤
-│ ✗ (321) 555-9999   Mobile    [Old List] Wrong Number      │
-│   Marked bad: Jan 10                                       │
-└────────────────────────────────────────────────────────────┘
+// If contactName provided but no owner names, split it
+if (data.contactPerson && !data.owner1FirstName) {
+  const parts = data.contactPerson.trim().split(/\s+/);
+  const firstName = parts[0] || '';
+  const lastName = parts.slice(1).join(' ') || '';
+  owners.push({ firstName, lastName, source, addedAt: now });
+}
 ```
 
-### PropertyDetail Email Section
+### 3. Add Mailing Address Parsing
+
+When `Owner's Address` contains a full address like "1008 CAMPBELL ST ORLANDO FL 32806", parse it into components using existing `parseFullAddress` function.
+
+Update `transformImportToOwner`:
 
 ```text
-EMAILS
-┌────────────────────────────────────────────────────────────┐
-│ ✓ john@email.com           [PropWire Q1] Verified         │
-├────────────────────────────────────────────────────────────┤
-│ ? jsmith@work.com          [Airbnb Scrape] Unknown        │
-├────────────────────────────────────────────────────────────┤
-│ ⚠ old@email.com            [Old List] Bounced            │
-└────────────────────────────────────────────────────────────┘
+// Parse full mailing address if components not provided
+if (data.mailingAddress && !data.mailingCity && !data.mailingState) {
+  const parsed = parseFullAddress(data.mailingAddress);
+  if (parsed.isValid) {
+    mailingAddress = parsed.street;
+    mailingCity = parsed.city;
+    mailingState = parsed.state;
+    mailingZip = parsed.zip;
+  }
+}
 ```
 
-### Quick Actions
+### 4. Add Number Parsing for Guests/Beds/Baths
 
-- Click phone/email to see full metadata (source, added date, call history)
-- "Mark Verified" / "Mark Bad" buttons for quick status updates
-- Status persists and syncs with dialer outcomes
+Handle formats like "5 guests", "2 bedrooms", "2.0 bathrooms" by extracting the numeric portion:
+
+```text
+// In useImportProperties.ts
+const parseNumericField = (value: string): number => {
+  if (!value) return 0;
+  const match = value.match(/[\d.]+/);
+  return match ? parseFloat(match[0]) : 0;
+};
+
+bedrooms: parseNumericField(row.bedrooms),
+bathrooms: parseNumericField(row.bathrooms),
+guests: parseNumericField(row.guests),
+```
+
+### 5. Add ADR to Market Data
+
+When `adr` or `price/price` is mapped, use it to populate initial market data:
+
+```text
+market_data: {
+  adr: parseFloat(row.adr) || 0,
+  occupancyRate: 0,
+  projectedRevenue: 0,
+  propertyValue: 0,
+},
+```
+
+### 6. Add Target Fields to Import Wizard
+
+Add new field options to the mapping dropdown:
+
+| Field ID | Label | Group |
+|----------|-------|-------|
+| `vrboUrl` | VRBO URL | Airbnb |
+| `guests` | Max Guests | Property |
+| `latitude` | Latitude | Property |
+| `longitude` | Longitude | Property |
+| `propertyType` | Property Type | Property |
+| `contactPerson` | Contact Person | Contact |
+| `adr` | Nightly Rate (ADR) | Market Data |
 
 ---
 
-## Part 5: Dialer Integration
-
-When a call outcome is logged:
-
-1. The phone's `status` is updated based on outcome:
-   - "Answered" -> optionally prompt to mark as `verified`
-   - "Wrong Number" -> automatically set to `wrong_number`
-   - "Voicemail" / "No Answer" -> increment `callCount`, track `lastCalledAt`
-   
-2. Phones with `wrong_number` or `disconnected` status:
-   - Shown with warning in dialer
-   - Optionally skipped automatically
-   - Dimmed/strikethrough in property detail
-
----
-
-## Implementation Summary
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/types/index.ts` | Add source/status/addedAt fields to PhoneContact, EmailContact, OwnerContact |
-| `src/lib/ownerUtils.ts` | Update `transformImportToOwner` to accept and apply source; update dedupe functions to preserve source |
-| `src/hooks/useImportProperties.ts` | Pass list name to owner transform; ensure source stamps on new contacts |
-| `src/components/crm/ImportWizard.tsx` | Ensure list name flows through import options |
-| `src/components/crm/DuplicateMergeModal.tsx` | Display source badges on PhoneList/EmailList; show combined sources in preview |
-| `src/components/crm/DuplicateWizard.tsx` | Same source badge display as merge modal |
-| `src/hooks/useDuplicateDetection.ts` | Preserve source when stacking contacts during merge |
-| `src/components/crm/PropertyDetail.tsx` | Display source badges and status indicators; add quick mark actions |
-| `src/components/crm/CallDialer.tsx` | Update phone status on call outcomes; show source in dialer view |
-| `src/hooks/useProperties.ts` | Add `useUpdatePhoneStatus` hook for individual contact updates |
+| `src/components/crm/ImportWizard.tsx` | Add new auto-map patterns and target fields |
+| `src/lib/ownerUtils.ts` | Add contact person parsing and mailing address parsing |
+| `src/hooks/useImportProperties.ts` | Add number extraction for beds/baths/guests, handle latitude/longitude mapping, handle ADR |
 
 ---
 
-## Technical Details
+## Import Flow Preview
 
-### Updated TypeScript Interfaces
+When you upload this CSV:
 
-```typescript
-export interface PhoneContact {
-  number: string;
-  type: 'mobile' | 'landline' | 'unknown';
-  doNotCall: boolean;
-  // New fields
-  source?: string;
-  addedAt?: string;
-  status?: 'unknown' | 'verified' | 'wrong_number' | 'disconnected' | 'no_answer';
-  lastCalledAt?: string;
-  callCount?: number;
-  notes?: string;
-}
+1. **Auto-Mapping** detects columns like `vrbo_url`, `Contact Person`, `Owner Contact 1`
+2. **Address Parsing** splits "Full Address" into street/city/state/zip
+3. **Mailing Address Parsing** splits "Owner's Address" via Geocodio (per your choice)
+4. **Contact Person** becomes Owner 1 with first/last name split
+5. **Phones/Emails** import with source tracking (list name you provide)
+6. **ADR** populates initial market data
+7. **Duplicate Check** matches against existing properties by normalized address
 
-export interface EmailContact {
-  address: string;
-  type: 'personal' | 'work' | 'unknown';
-  optedOut: boolean;
-  // New fields
-  source?: string;
-  addedAt?: string;
-  status?: 'unknown' | 'verified' | 'bounced' | 'unsubscribed';
-  lastVerifiedAt?: string;
-}
+---
 
-export interface OwnerContact {
-  firstName: string;
-  lastName: string;
-  // New fields
-  source?: string;
-  addedAt?: string;
-}
-```
+## Example Result
 
-### Dedupe Logic with Source Preservation
+For row 2 of your CSV:
 
-```typescript
-export function dedupePhones(phones: PhoneContact[]): PhoneContact[] {
-  const seen = new Map<string, PhoneContact>();
-  for (const phone of phones) {
-    if (!phone.number) continue;
-    const key = normalizePhone(phone.number);
-    if (key.length >= 7 && !seen.has(key)) {
-      // First occurrence wins - preserves original source
-      seen.set(key, phone);
-    }
-  }
-  return Array.from(seen.values());
-}
+```text
+Property:
+  Address: 1050 N Atlantic Ave #404
+  City: Cocoa Beach
+  State: FL
+  ZIP: 32931
+  Bedrooms: 2
+  Bathrooms: 2.0
+  Guests: 5
+  VRBO URL: https://www.vrbo.com/751735
+  Listing Title: "Sandcastles 404 - Come for the Launches..."
+  Host: Kathleen Evers
+  ADR: $269.10
+
+Owner:
+  Name: Charles Evers (from Contact Person)
+  Phone 1: (407) 421-1664 [Source: "Cocoa Beach Import"]
+  Phone 2: (407) 473-9683 [Source: "Cocoa Beach Import"]
+  Email: daniel@voltacuts.com [Source: "Cocoa Beach Import"]
+  Mailing: 1008 CAMPBELL ST, ORLANDO, FL 32806 (parsed via Geocodio)
 ```
 
 ---
 
-## Migration Path
+## Summary
 
-- Existing contacts without `source` display as "Unknown source"
-- Existing contacts without `status` default to `unknown`
-- No database migration required (JSONB columns accept new fields)
-- Gradual enrichment as new imports add source metadata
+This update requires changes to 3 files to add:
+- 7 new auto-map patterns for your column names
+- Contact person to first/last name splitting
+- Mailing address parsing via existing Geocodio flow
+- Numeric extraction for "X guests", "X bedrooms" formats
+- ADR mapping to market data
+- New target field options in the mapping dropdown
 
----
-
-## Benefits
-
-1. **Data provenance** - Know exactly where each phone/email came from
-2. **Quality tracking** - Don't waste time on bad numbers, track verification
-3. **Merge clarity** - See sources during duplicate resolution
-4. **Sustainable stacking** - Add lists indefinitely without losing context
-5. **Dialer efficiency** - Skip bad numbers, prioritize verified ones
-6. **Email accuracy** - Track bounces and opt-outs per source
+After implementation, your Cocoa Beach CSV will import with minimal manual mapping needed.
 

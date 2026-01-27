@@ -1,4 +1,5 @@
 import { Owner, PhoneContact, OwnerContact, EmailContact } from '@/types';
+import { parseFullAddress } from '@/lib/addressParser';
 
 /**
  * Convert a string to Title Case
@@ -317,6 +318,22 @@ export function transformImportToOwner(data: Record<string, any>, source?: strin
     }
   }
   
+  // If contactPerson is provided but no owner names, split it into first/last
+  if (data.contactPerson && owners.length === 0) {
+    const contactPerson = String(data.contactPerson).trim();
+    if (contactPerson) {
+      const parts = contactPerson.split(/\s+/);
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
+      owners.push({
+        firstName,
+        lastName,
+        source: source || undefined,
+        addedAt: now,
+      });
+    }
+  }
+  
   // Parse multiple phones
   for (let i = 1; i <= 3; i++) {
     const number = data[`phone${i}`] || '';
@@ -367,7 +384,7 @@ export function transformImportToOwner(data: Record<string, any>, source?: strin
   // Determine primary name for legacy field (normalized)
   const rawPrimaryName = normalizedOwners.length > 0 
     ? `${normalizedOwners[0].firstName} ${normalizedOwners[0].lastName}`.trim()
-    : data.ownerName || data.contactName || '';
+    : data.ownerName || data.contactName || data.contactPerson || '';
   const primaryName = normalizeOwnerName(rawPrimaryName);
   
   // Parse boolean fields
@@ -379,6 +396,23 @@ export function transformImportToOwner(data: Record<string, any>, source?: strin
   const litigator = litigatorRaw === 'true' || litigatorRaw === '1' || 
     litigatorRaw.toLowerCase() === 'yes' || litigatorRaw.toLowerCase() === 'litigator';
   
+  // Parse mailing address - check if it's a full address that needs parsing
+  let mailingAddress = data.mailingAddress || '';
+  let mailingCity = data.mailingCity || '';
+  let mailingState = data.mailingState || '';
+  let mailingZip = data.mailingZip || '';
+  
+  // If mailingAddress is populated but city/state are not, try to parse it
+  if (mailingAddress && !mailingCity && !mailingState) {
+    const parsed = parseFullAddress(mailingAddress);
+    if (parsed.isValid && parsed.city && parsed.state) {
+      mailingAddress = parsed.street;
+      mailingCity = parsed.city;
+      mailingState = parsed.state;
+      mailingZip = parsed.zip || mailingZip;
+    }
+  }
+  
   return {
     name: primaryName,
     owners: normalizedOwners.length > 0 ? normalizedOwners : undefined,
@@ -386,15 +420,15 @@ export function transformImportToOwner(data: Record<string, any>, source?: strin
     emails: emails.length > 0 ? emails : undefined,
     email: emails.length > 0 ? emails[0].address : (data.email || data.ownerEmail || ''),
     phone: phones.length > 0 ? phones[0].number : (data.ownerPhone || ''),
-    mailingAddress: data.mailingAddress || '',
-    mailingCity: data.mailingCity || '',
-    mailingState: data.mailingState || '',
-    mailingZip: data.mailingZip || '',
+    mailingAddress,
+    mailingCity,
+    mailingState,
+    mailingZip,
     ownershipLengthMonths: data.ownershipLength ? parseInt(data.ownershipLength, 10) : undefined,
     ownerType: data.ownerType || undefined,
     ownerOccupied: ownerOccupied || undefined,
     litigator: litigator || undefined,
-    contactName: data.contactName || undefined,
+    contactName: data.contactName || data.contactPerson || undefined,
     age: data.age ? parseInt(data.age, 10) : undefined,
     lastVerifiedDate: now,
   };

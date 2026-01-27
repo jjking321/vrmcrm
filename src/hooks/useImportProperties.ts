@@ -59,6 +59,15 @@ const chunkArray = <T>(array: T[], size: number): T[][] => {
   return chunks;
 };
 
+// Helper to parse numeric fields from strings like "5 guests", "2 bedrooms", "2.0 bathrooms"
+const parseNumericField = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value === 'number') return value;
+  const str = String(value);
+  const match = str.match(/[\d.]+/);
+  return match ? parseFloat(match[0]) : 0;
+};
+
 export const useImportProperties = () => {
   const queryClient = useQueryClient();
   const { company, user } = useAuth();
@@ -291,6 +300,17 @@ export const useImportProperties = () => {
               bookingLink = null;
             }
             
+            // Handle separate latitude/longitude fields if not from standardization/GIS
+            if (!latitude && row.latitude) {
+              latitude = parseFloat(row.latitude);
+            }
+            if (!longitude && row.longitude) {
+              longitude = parseFloat(row.longitude);
+            }
+            
+            // Parse ADR for market data
+            const adrValue = parseNumericField(row.adr);
+            
             newProperties.push({
               property: {
                 company_id: company.id,
@@ -300,8 +320,10 @@ export const useImportProperties = () => {
                 zip,
                 latitude,
                 longitude,
-                bedrooms: parseInt(row.bedrooms) || 0,
-                bathrooms: parseFloat(row.bathrooms) || 0,
+                bedrooms: parseNumericField(row.bedrooms),
+                bathrooms: parseNumericField(row.bathrooms),
+                guests: parseNumericField(row.guests) || null,
+                property_type: row.propertyType || null,
                 tags: options.globalTags || [],
                 property_url: row.propertyUrl || null,
                 airbnb_url: airbnbUrl,
@@ -311,7 +333,12 @@ export const useImportProperties = () => {
                 room_type: row.roomType || null,
                 property_manager: row.propertyManager || null,
                 host: row.host || null,
-                market_data: { adr: 0, occupancyRate: 0, projectedRevenue: 0, propertyValue: 0 },
+                market_data: { 
+                  adr: adrValue, 
+                  occupancyRate: 0, 
+                  projectedRevenue: 0, 
+                  propertyValue: 0 
+                },
               },
               owner,
             });
@@ -399,15 +426,30 @@ export const useImportProperties = () => {
             const importedOwner = transformImportToOwner(row, source);
             const existingOwner = currentOwnersMap.get(update.id);
             
+            // Handle separate latitude/longitude fields for updates
+            let updateLatitude = row._latitude;
+            let updateLongitude = row._longitude;
+            if (!updateLatitude && row.latitude) {
+              updateLatitude = parseFloat(row.latitude);
+            }
+            if (!updateLongitude && row.longitude) {
+              updateLongitude = parseFloat(row.longitude);
+            }
+            
+            // Parse ADR for market data updates
+            const updateAdrValue = parseNumericField(row.adr);
+            
             const propUpdates: Record<string, any> = {
               address: row.address,
               city: row.city,
               state: row.state,
               zip: row.zip,
-              latitude: row._latitude,
-              longitude: row._longitude,
-              bedrooms: parseInt(row.bedrooms) || 0,
-              bathrooms: parseFloat(row.bathrooms) || 0,
+              latitude: updateLatitude,
+              longitude: updateLongitude,
+              bedrooms: parseNumericField(row.bedrooms),
+              bathrooms: parseNumericField(row.bathrooms),
+              guests: parseNumericField(row.guests) || null,
+              property_type: row.propertyType || null,
               tags: [...new Set([...(existingAddressMap.get(update.normalizedAddr)?.tags || []), ...(options.globalTags || [])])],
               property_url: row.propertyUrl || null,
               listing_title: row.listingTitle || null,
@@ -415,6 +457,16 @@ export const useImportProperties = () => {
               property_manager: row.propertyManager || null,
               host: row.host || null,
             };
+            
+            // Update market data with ADR if provided
+            if (updateAdrValue > 0) {
+              const existingProp = currentPropsMap.get(update.id);
+              const existingMarketData = existingProp?.market_data || {};
+              propUpdates.market_data = {
+                ...existingMarketData,
+                adr: updateAdrValue,
+              };
+            }
             
             // Smart booking link detection for updates - move Airbnb URLs to airbnbUrl field
             let airbnbUrl = row.airbnbUrl || null;

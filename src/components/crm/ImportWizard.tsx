@@ -71,7 +71,7 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   owner4FirstName: ['owner 4 first name', 'owner4 first name', 'first name 4'],
   owner4LastName: ['owner 4 last name', 'owner4 last name', 'last name 4'],
   
-  mailingAddress: ['mailing address', 'owner mailing address', 'mail address', 'owner address'],
+  mailingAddress: ['mailing address', 'owner mailing address', 'mail address', 'owner address', "owner's address"],
   mailingCity: ['mailing city', 'owner mailing city', 'owner city'],
   mailingState: ['mailing state', 'owner mailing state', 'owner state'],
   mailingZip: ['mailing zip', 'owner mailing zip', 'owner zip'],
@@ -80,14 +80,15 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   ownerType: ['owner type', 'ownership type'],
   ownerOccupied: ['owner occupied', 'owner occ', 'oo', 'occupied'],
   
-  contactName: ['contact name', 'primary contact'],
+  // Contact Person (for Cocoa Beach format - splits into first/last)
+  contactPerson: ['contact person', 'contact name', 'primary contact'],
   email: ['email', 'owner email', 'e-mail', 'applicant email'],
   age: ['age', 'owner age'],
   
-  phone1: ['phone 1', 'phone1', 'primary phone', 'phone', 'phone number 1', 'phone number', 'applicant phone'],
+  phone1: ['phone 1', 'phone1', 'primary phone', 'phone', 'phone number 1', 'phone number', 'applicant phone', 'owner contact 1'],
   phone1Type: ['phone 1 type', 'phone1 type', 'phone type 1'],
   phone1DNC: ['phone 1 dnc', 'phone1 dnc', 'dnc 1', 'phone 1 do not call'],
-  phone2: ['phone 2', 'phone2', 'phone number 2'],
+  phone2: ['phone 2', 'phone2', 'phone number 2', 'owner contact 2'],
   phone2Type: ['phone 2 type', 'phone2 type', 'phone type 2'],
   phone2DNC: ['phone 2 dnc', 'phone2 dnc', 'dnc 2', 'phone 2 do not call'],
   phone3: ['phone 3', 'phone3', 'phone number 3'],
@@ -102,17 +103,26 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   
   litigator: ['litigator', 'litigator flag', 'litigation'],
   
-  bedrooms: ['bedrooms', 'beds', 'br'],
-  bathrooms: ['bathrooms', 'baths', 'ba'],
+  bedrooms: ['bedrooms', 'beds', 'br', 'subdescription/items/1'],
+  bathrooms: ['bathrooms', 'baths', 'ba', 'subdescription/items/2'],
+  guests: ['guests', 'max guests', 'sleeps', 'subdescription/items/0'],
+  propertyType: ['property type', 'subdescription/items/3', 'type of property'],
   
   // Scraped Airbnb data fields
   listingTitle: ['listing title', 'title', 'listing name', 'property name'],
-  roomType: ['room type', 'type', 'permit type', 'registration type'],
+  roomType: ['room type', 'permit type', 'registration type'],
   propertyManager: ['property manager', 'manager', 'pm', 'management company'],
-  host: ['host', 'airbnb host', 'host name'],
-  airbnbUrl: ['airbnb property link', 'airbnb url', 'airbnb link', 'airbnb'],
-  bookingLink: ['booking link', 'booking url', 'vrbo', 'vrbo link', 'vrbo url', 'other booking'],
+  host: ['host', 'airbnb host', 'host name', 'host/name'],
+  airbnbUrl: ['airbnb property link', 'airbnb url', 'airbnb link', 'airbnb', 'airbnb_url'],
+  bookingLink: ['booking link', 'booking url', 'vrbo', 'vrbo link', 'vrbo url', 'vrbo_url', 'other booking'],
   gisCoordinates: ['gis coordinates', 'coordinates', 'lat/long', 'latlong'],
+  
+  // Coordinates (separate lat/long)
+  latitude: ['latitude', 'coordinates/latitude', 'lat'],
+  longitude: ['longitude', 'coordinates/longitude', 'long', 'lng'],
+  
+  // Market data
+  adr: ['adr', 'price/price', 'average daily rate', 'nightly rate', 'daily rate'],
 };
 
 function autoMapHeaders(headers: string[]): Record<string, string> {
@@ -401,7 +411,11 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'propertyUrl', label: '🔗 Property URL', group: 'Property' },
     { id: 'bedrooms', label: '🛏️ Bedrooms', group: 'Property' },
     { id: 'bathrooms', label: '🚿 Bathrooms', group: 'Property' },
+    { id: 'guests', label: '👥 Max Guests', group: 'Property' },
+    { id: 'propertyType', label: '🏠 Property Type', group: 'Property' },
     { id: 'gisCoordinates', label: '📍 GIS Coordinates', group: 'Property' },
+    { id: 'latitude', label: '📍 Latitude', group: 'Property' },
+    { id: 'longitude', label: '📍 Longitude', group: 'Property' },
     
     // Airbnb/Scraped Data
     { id: 'listingTitle', label: '🏠 Listing Title', group: 'Airbnb' },
@@ -410,6 +424,9 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'host', label: '👤 Host Name', group: 'Airbnb' },
     { id: 'airbnbUrl', label: '🔗 Airbnb URL', group: 'Airbnb' },
     { id: 'bookingLink', label: '🔗 Booking Link (VRBO, etc.)', group: 'Airbnb' },
+    
+    // Market Data
+    { id: 'adr', label: '💰 Nightly Rate (ADR)', group: 'Market Data' },
     
     // Multiple Owners
     { id: 'owner1FirstName', label: '👤 Owner 1 First Name', group: 'Owners' },
@@ -433,6 +450,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     { id: 'ownerOccupied', label: '🏠 Owner Occupied', group: 'Ownership' },
     
     // Contact
+    { id: 'contactPerson', label: '👤 Contact Person', group: 'Contact' },
     { id: 'contactName', label: '👤 Contact Name', group: 'Contact' },
     { id: 'email', label: '✉️ Email', group: 'Contact' },
     { id: 'age', label: '📊 Age', group: 'Contact' },

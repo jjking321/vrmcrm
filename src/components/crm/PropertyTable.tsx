@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 interface PropertyTableProps {
   properties: Property[];
+  allMatchingProperties?: Property[];
   onSelectProperty: (id: string) => void;
   sortConfig: SortConfig;
   onSort: (field: string) => void;
@@ -24,6 +25,7 @@ interface PropertyTableProps {
 
 export const PropertyTable: React.FC<PropertyTableProps> = ({
   properties,
+  allMatchingProperties,
   onSelectProperty,
   sortConfig,
   onSort,
@@ -259,7 +261,10 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
     return <td className={cellClass}>{value ?? '-'}</td>;
   };
 
-  const allSelected = properties.length > 0 && properties.every(p => selectedIds.has(p.id));
+  const allPageSelected = properties.length > 0 && properties.every(p => selectedIds.has(p.id));
+  const totalMatchingCount = allMatchingProperties?.length || properties.length;
+  const hasMoreThanPage = totalMatchingCount > properties.length;
+  const showSelectAllBanner = allPageSelected && hasMoreThanPage && selectedIds.size === properties.length;
 
   return (
     <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
@@ -270,9 +275,9 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
               <th className="px-4 py-3 bg-muted/30 border-b border-border sticky top-0">
                 <input
                   type="checkbox"
-                  checked={allSelected}
+                  checked={allPageSelected}
                   onChange={() => {
-                    if (allSelected) {
+                    if (allPageSelected) {
                       onSelectAll([]);
                     } else {
                       onSelectAll(properties.map(p => p.id));
@@ -284,6 +289,25 @@ export const PropertyTable: React.FC<PropertyTableProps> = ({
               {visibleColumns.map(col => renderHeader(col))}
             </tr>
           </thead>
+          {showSelectAllBanner && (
+            <tbody>
+              <tr>
+                <td colSpan={visibleColumns.length + 1} className="px-4 py-2 bg-primary/10 border-b border-border">
+                  <div className="flex items-center justify-center gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      All {properties.length} properties on this page are selected.
+                    </span>
+                    <button
+                      onClick={() => onSelectAll(allMatchingProperties!.map(p => p.id))}
+                      className="text-primary font-medium hover:underline"
+                    >
+                      Select all {totalMatchingCount.toLocaleString()} matching properties
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          )}
           <tbody className="divide-y divide-border">
             {properties.map((property) => (
               <tr

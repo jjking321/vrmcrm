@@ -14,6 +14,7 @@ interface BulkActionsBarProps {
   onUpdateProperty: (id: string, updates: Partial<Property>) => void;
   onDeleteProperties: (ids: string[]) => void;
   onSaveList: (name: string, rules?: FilterRule[]) => void;
+  pageSize?: number;
 }
 
 export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
@@ -24,6 +25,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onUpdateProperty,
   onDeleteProperties,
   onSaveList,
+  pageSize = 100,
 }) => {
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -210,7 +212,10 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         <div className="flex items-center gap-2 pr-3 border-r border-border">
           <CheckSquare className="w-4 h-4 text-brand" />
           <span className="text-sm font-medium text-foreground">
-            {selectedCount} selected
+            {selectedCount.toLocaleString()} selected
+            {selectedCount > pageSize && (
+              <span className="text-muted-foreground ml-1">(across pages)</span>
+            )}
           </span>
           <button
             onClick={onClearSelection}

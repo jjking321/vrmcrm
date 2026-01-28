@@ -82,6 +82,7 @@ const PropertyTableWithPagination: React.FC<{
         <>
           <PropertyTable
             properties={pagination.paginatedItems}
+            allMatchingProperties={displayProperties}
             onSelectProperty={handleSelectProperty}
             sortConfig={sortConfig}
             onSort={handleSort}

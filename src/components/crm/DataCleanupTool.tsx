@@ -947,14 +947,28 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                     onClick={() => autoMergeMutation.mutate({ groups: duplicateGroups, strategy: 'oldest' })}
                     disabled={autoMergeMutation.isPending}
                   >
-                    Auto-merge (Keep Oldest)
+                    {autoMergeMutation.isPending ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                        Merging...
+                      </>
+                    ) : (
+                      'Auto-merge (Keep Oldest)'
+                    )}
                   </Button>
                   <Button 
                     variant="outline"
                     onClick={() => autoMergeMutation.mutate({ groups: duplicateGroups, strategy: 'newest' })}
                     disabled={autoMergeMutation.isPending}
                   >
-                    Auto-merge (Keep Newest)
+                    {autoMergeMutation.isPending ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                        Merging...
+                      </>
+                    ) : (
+                      'Auto-merge (Keep Newest)'
+                    )}
                   </Button>
                 </div>
               </div>

@@ -27,6 +27,7 @@ export const SYSTEM_FIELDS: FieldDefinition[] = [
   { id: 'litigator', label: 'Litigator', type: 'checkbox', isSystem: true },
   { id: 'hasDNC', label: 'Has DNC Phone', type: 'checkbox', isSystem: true },
   { id: 'mailingAddress', label: 'Mailing Address', type: 'text', isSystem: true },
+  { id: 'host', label: 'Host', type: 'text', isSystem: true },
 ];
 
 export const MOCK_PROPERTIES: Property[] = [

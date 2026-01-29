@@ -1,104 +1,72 @@
 
-# Allow Selection Beyond 100 Items for Bulk Actions
+
+# Add Tag Search/Select to Bulk Actions Bar
 
 ## Problem
 
-Currently, the PropertyTable only receives paginated items (100 at a time), so when using "Select All" checkbox, it only selects properties visible on the current page. Users cannot select all filtered/matching properties for bulk operations.
+Currently, when adding a tag via bulk actions, users must type the tag name manually. This can lead to typos and duplicate tags with slight variations (e.g., "absentee" vs "Absentee").
 
 ## Solution
 
-Add a "Select All X Properties" action that appears after using the page-level select all, allowing users to select all matching properties across all pages.
+Replace the plain text input with a searchable dropdown that shows existing tags from the database. Users can either select an existing tag or type a new one.
 
-## Implementation Approach
+## Implementation
 
-### Pattern: Gmail-style "Select All" Enhancement
+### User Experience
 
-When user clicks the header checkbox to select all on current page, show a banner/notification above the table:
+1. User clicks "Add Tag" button
+2. A searchable input appears showing filtered existing tags as they type
+3. User can click an existing tag to select it, OR
+4. Type a new tag name and press Enter to create it
+5. Selected/created tag is applied to all selected properties
 
-```
-"All 100 properties on this page are selected. Select all 547 matching properties?"
-```
+### Technical Approach
 
-Clicking this will select all properties from the full dataset.
-
-## Technical Changes
-
-### 1. Update PropertyTableWithPagination Component
-
-Pass the full `displayProperties` array to PropertyTable so it knows the total count available for selection.
-
-| Location | Change |
-|----------|--------|
-| `PropertyTableWithPagination` | Add `allProperties` prop and pass to PropertyTable |
-
-### 2. Update PropertyTable Component
-
-Add a new `allMatchingProperties` prop and display a selection banner when all visible items are selected but more exist.
-
-| Location | Change |
-|----------|--------|
-| Props interface | Add `allMatchingProperties?: Property[]` |
-| Selection logic | Add banner to select all matching properties |
-| Checkbox behavior | Track "page selected" vs "all selected" states |
-
-### 3. Add Selection Banner UI
-
-Add a banner that appears between the header checkbox and table content:
-
-```tsx
-{allVisibleSelected && allMatchingProperties.length > properties.length && (
-  <div className="px-4 py-2 bg-brand/10 text-sm flex items-center justify-between">
-    <span>All {properties.length} properties on this page are selected.</span>
-    <button onClick={() => onSelectAll(allMatchingProperties.map(p => p.id))}>
-      Select all {allMatchingProperties.length} matching properties
-    </button>
-  </div>
-)}
-```
-
-### 4. Update BulkActionsBar Display
-
-Update the selection count to indicate when selection spans multiple pages:
-
-```tsx
-<span className="text-sm font-medium text-foreground">
-  {selectedCount} selected
-  {selectedCount > 100 && " (across pages)"}
-</span>
-```
-
-## User Experience Flow
-
-1. User applies filters → sees 547 matching properties
-2. User clicks header checkbox → selects 100 on current page
-3. Banner appears: "All 100 on this page selected. **Select all 547?**"
-4. User clicks "Select all 547" → all matching properties selected
-5. BulkActionsBar shows "547 selected (across pages)"
-6. User can now perform bulk actions on all 547 properties
+Use the `Command` component (cmdk-based) combined with `Popover` for a searchable combobox pattern, similar to the shadcn/ui Combobox example.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/crm/MainApp.tsx` | Pass full displayProperties to PropertyTableWithPagination |
-| `src/components/crm/PropertyTable.tsx` | Add allMatchingProperties prop and selection banner |
-| `src/components/crm/BulkActionsBar.tsx` | Update count display for multi-page selections |
+| `src/components/crm/BulkActionsBar.tsx` | Add useUniqueTags hook, replace text input with searchable combobox |
 
-## Visual Design
+## Detailed Changes
+
+### BulkActionsBar.tsx
+
+1. **Add imports:**
+   - `useUniqueTags` hook
+   - Command components (Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem)
+   - Popover components
+   - Check icon for selected state
+
+2. **Add state for popover:**
+   - `tagPopoverOpen` to control the dropdown visibility
+
+3. **Replace tag input form with combobox:**
+   - Show a Popover with Command-based searchable list
+   - Filter existing tags as user types
+   - Show "Create new tag" option when input doesn't match existing tags
+   - Apply tag on selection
+
+### UI Layout
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ ☑ │ Address          │ Owner    │ Stage    │ Est. Revenue      │
-├─────────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ All 100 on this page selected. Select all 547 properties   │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│ ☑ │ 123 Main St      │ J. Smith │ Lead     │ $45,000           │
-│ ☑ │ 456 Oak Ave      │ M. Jones │ Prospect │ $38,000           │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│ 🔍 Search tags...                    │
+├──────────────────────────────────────┤
+│   absentee                           │
+│   cb permit                          │
+│   vacation rental                    │
+├──────────────────────────────────────┤
+│ + Create "new-tag-name"              │
+└──────────────────────────────────────┘
 ```
 
-## Alternative Considered
+### Selection Behavior
 
-**Increase page size to 500+**: Rejected because it would hurt performance and doesn't scale for datasets with thousands of properties. The banner approach is more flexible and follows established UX patterns (Gmail, Google Drive).
+- Clicking an existing tag immediately adds it to selected properties
+- Typing a new name and selecting "Create" option adds the new tag
+- Popover closes after selection
+- Toast confirms the action
+

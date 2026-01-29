@@ -209,11 +209,11 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
   // Reset state when group changes
   React.useEffect(() => {
     if (group) {
-      // Default to oldest record
-      const oldest = [...group.properties].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      // Default to newest record (most up-to-date info) but still stack all contacts
+      const newest = [...group.properties].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )[0];
-      setPrimaryId(oldest.id);
+      setPrimaryId(newest.id);
       setContactMergeMode('stack');
       setAutoResolvedExpanded(false);
       
@@ -238,12 +238,12 @@ export const DuplicateMergeModal: React.FC<DuplicateMergeModalProps> = ({
           if (uniqueValues.size === 1) {
             selections[field.key] = nonEmptyProps[0].id;
           } else {
-            // True conflict - default to oldest
-            selections[field.key] = oldest.id;
+            // True conflict - default to newest (most up-to-date)
+            selections[field.key] = newest.id;
           }
         } else {
-          // All empty, default to oldest
-          selections[field.key] = oldest.id;
+          // All empty, default to newest
+          selections[field.key] = newest.id;
         }
       });
       

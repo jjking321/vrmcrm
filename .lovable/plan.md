@@ -1,74 +1,62 @@
 
 
-# Default to Newest Record as Primary in Duplicate Merge
+# Fix Auto-Merge "Keep Newest" - Improve Feedback and Complete Wizard Update
 
-## Current Behavior
+## Problem Analysis
 
-The duplicate merge modal currently defaults to selecting the **oldest** record as the primary (the one that survives). The user wants the opposite: default to the **newest** record as primary while still stacking all contact information from older records.
+Based on investigating the network requests and code, the auto-merge **IS working** - I can see successful database operations (DELETE requests returning 204). However, there are two issues causing the perception that "nothing is happening":
 
-## Requested Change
+1. **No visual loading feedback** - The button just becomes disabled with no spinner or status text
+2. **DuplicateWizard still defaults to oldest** - This component wasn't updated when DuplicateMergeModal was changed
 
-| Setting | Current | New |
-|---------|---------|-----|
-| Default primary record | Oldest created | Newest created |
-| Contact stacking | All records combined | All records combined (unchanged) |
-| Field values | User selects per field | User selects per field (unchanged) |
+## Changes Required
 
-## Why This Makes Sense
+### 1. Add Loading Feedback to Auto-Merge Buttons
 
-- Newer records often have more up-to-date information (addresses, phones, etc.)
-- Stacking ensures no contacts are lost from older records
-- User still has full control to override and pick values from any record
+Update the auto-merge buttons in DataCleanupTool to show a spinner and "Merging..." text while processing.
 
-## Technical Changes
+**File:** `src/components/crm/DataCleanupTool.tsx`
 
-### 1. DuplicateMergeModal.tsx
+| Current | New |
+|---------|-----|
+| `Auto-merge (Keep Oldest)` | Shows spinner + "Merging..." when `isPending` |
+| `Auto-merge (Keep Newest)` | Shows spinner + "Merging..." when `isPending` |
 
-Update the `useEffect` that initializes state when a group changes:
+### 2. Update DuplicateWizard to Default to Newest
 
-**Current (line 211-215):**
+Align the wizard with DuplicateMergeModal by changing the default primary record from oldest to newest.
+
+**File:** `src/components/crm/DuplicateWizard.tsx`
+
+Change:
 ```tsx
-// Default to oldest record
-const oldest = [...group.properties].sort(
+const oldest = [...currentGroup.properties].sort(
   (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
 )[0];
 setPrimaryId(oldest.id);
 ```
 
-**New:**
+To:
 ```tsx
-// Default to newest record
-const newest = [...group.properties].sort(
+const newest = [...currentGroup.properties].sort(
   (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
 )[0];
 setPrimaryId(newest.id);
 ```
 
-Also update the conflicting field default selection to use the newest record instead of oldest (line 241-242).
+Also update the conflicting field selection default to use `newest.id` instead of `oldest.id`.
 
-### 2. DuplicateWizard.tsx (if applicable)
-
-Check if the wizard component has similar default logic and update it to match.
-
-## What Stays the Same
-
-- All contacts (phones, emails, owner contacts) still stack from all records
-- Tags still combine from all records
-- Activities from deleted records still transfer to kept record
-- User can still manually select any record as primary
-- User can still choose which record's value to use for each field
-
-## User Experience After Change
-
-1. User opens duplicate merge modal
-2. **Newest** record is pre-selected as primary
-3. For conflicting fields, newest record's value is pre-selected
-4. Contact stacking mode defaults to "Combine all contacts" (unchanged)
-5. User can still override any of these selections
-
-## Files to Modify
+## Summary of Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/crm/DuplicateMergeModal.tsx` | Default to newest record as primary and for conflicting fields |
+| `src/components/crm/DataCleanupTool.tsx` | Add loading spinners to auto-merge buttons |
+| `src/components/crm/DuplicateWizard.tsx` | Default to newest record instead of oldest |
+
+## Result
+
+After these changes:
+- Users will see a clear loading indicator when auto-merge is running
+- Both the modal and wizard will consistently default to keeping the newest record
+- The success toast will still show after completion with merge statistics
 

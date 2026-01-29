@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { FieldDefinition, Property } from '@/types';
-import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Users } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Check, AlertCircle, MapPin, Users, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { transformImportToOwner } from '@/lib/ownerUtils';
 import { DuplicateMergeReview, DuplicateMatch, DuplicateDecision } from './DuplicateMergeReview';
+import { verifyAddressBatch, BatchAddressInput } from '@/lib/enrichment';
+import { toast } from 'sonner';
 
 // Normalize address for comparison
 function normalizeAddress(address: string, city: string, state: string): string {
@@ -39,6 +41,7 @@ interface ImportWizardProps {
   onClose: () => void;
   onImport: (data: any[], options: { 
     standardize: boolean; 
+    alreadyStandardized?: boolean;
     globalTags?: string[]; 
     listName?: string;
     duplicateDecisions?: Map<string, DuplicateDecision>;
@@ -173,6 +176,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
   const [nonDuplicates, setNonDuplicates] = useState<Record<string, any>[]>([]);
   const [parsedImportData, setParsedImportData] = useState<Record<string, any>[]>([]);
+  
+  // Pre-standardization state
+  const [isStandardizing, setIsStandardizing] = useState(false);
+  const [wasPreStandardized, setWasPreStandardized] = useState(false);
 
   // Handle pre-loaded data from Data Cleanup Tool
   React.useEffect(() => {
@@ -300,6 +307,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
       // No duplicates, proceed directly
       onImport(parsedData, {
         standardize: standardizeAddresses,
+        alreadyStandardized: wasPreStandardized,
         globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
         listName: createList && listName ? listName : undefined,
         contactMergeMode,
@@ -309,10 +317,73 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     }
   };
 
-  const handleImport = () => {
+  // Pre-standardize addresses via Geocodio before running duplicate detection
+  const preStandardizeAddresses = async (parsedData: Record<string, any>[]): Promise<Record<string, any>[]> => {
+    if (!standardizeAddresses || parsedData.length === 0) {
+      return parsedData;
+    }
+
+    setIsStandardizing(true);
+    
+    try {
+      // Build batch input for Geocodio
+      const addressesToVerify: BatchAddressInput[] = parsedData
+        .map((row, idx) => ({
+          address: row.address || '',
+          city: row.city || '',
+          state: row.state || '',
+          zip: row.zip || '',
+          index: idx,
+        }))
+        .filter(a => a.address); // Only send non-empty addresses
+
+      if (addressesToVerify.length === 0) {
+        return parsedData;
+      }
+
+      const results = await verifyAddressBatch(addressesToVerify);
+
+      // Check if we hit quota or other errors
+      const firstResult = results.values().next().value;
+      if (firstResult && !firstResult.success && firstResult.error?.includes('quota')) {
+        toast.warning(firstResult.error);
+        // Fall back to non-standardized data
+        return parsedData;
+      }
+
+      // Apply standardized addresses back to parsed data
+      const standardizedData = parsedData.map((row, idx) => {
+        const result = results.get(idx);
+        if (result?.success && result.standardized) {
+          return {
+            ...row,
+            address: result.standardized.street,
+            city: result.standardized.city,
+            state: result.standardized.state,
+            zip: result.standardized.zip,
+            _latitude: result.latitude,
+            _longitude: result.longitude,
+            _alreadyStandardized: true,
+          };
+        }
+        return row;
+      });
+
+      setWasPreStandardized(true);
+      return standardizedData;
+    } catch (error) {
+      console.error('Pre-standardization error:', error);
+      toast.error('Address standardization failed, continuing without it');
+      return parsedData;
+    } finally {
+      setIsStandardizing(false);
+    }
+  };
+
+  const handleImport = async () => {
     // Handle pre-loaded data from Data Cleanup Tool
     if (preLoadedData && preLoadedData.length > 0 && preLoadedHeaders) {
-      const parsedData = preLoadedData.map(row => {
+      let parsedData = preLoadedData.map(row => {
         const obj: Record<string, any> = {};
         Object.entries(mapping).forEach(([colIndex, fieldId]) => {
           if (fieldId) {
@@ -322,6 +393,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
         });
         return obj;
       });
+      
+      // NEW: Pre-standardize addresses BEFORE duplicate detection
+      parsedData = await preStandardizeAddresses(parsedData);
+      
       processParsedData(parsedData);
       return;
     }
@@ -330,13 +405,13 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       if (evt.target?.result) {
         const text = evt.target.result as string;
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const dataRows = lines.slice(1);
 
-        const parsedData = dataRows.map(line => {
+        let parsedData = dataRows.map(line => {
           const values: string[] = [];
           let current = '';
           let inQuotes = false;
@@ -362,6 +437,9 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
           return obj;
         });
 
+        // NEW: Pre-standardize addresses BEFORE duplicate detection
+        parsedData = await preStandardizeAddresses(parsedData);
+
         processParsedData(parsedData);
       }
     };
@@ -371,6 +449,7 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
   const handleDuplicateConfirm = (decisions: Map<string, DuplicateDecision>) => {
     onImport(parsedImportData, {
       standardize: standardizeAddresses,
+      alreadyStandardized: wasPreStandardized,
       globalTags: globalTags ? globalTags.split(',').map(t => t.trim().toLowerCase()) : undefined,
       listName: createList && listName ? listName : undefined,
       duplicateDecisions: decisions,
@@ -397,6 +476,8 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
     setDuplicates([]);
     setNonDuplicates([]);
     setParsedImportData([]);
+    setIsStandardizing(false);
+    setWasPreStandardized(false);
     onClose();
   };
 
@@ -742,10 +823,17 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({
           {step === 'map' && (
             <button
               onClick={handleImport}
-              disabled={!Object.values(mapping).includes('address')}
-              className="px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+              disabled={!Object.values(mapping).includes('address') || isStandardizing}
+              className="px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              Import {recordCount} Properties
+              {isStandardizing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Standardizing addresses...
+                </>
+              ) : (
+                <>Import {recordCount} Properties</>
+              )}
             </button>
           )}
         </div>

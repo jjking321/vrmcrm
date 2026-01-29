@@ -1,70 +1,73 @@
 
 
-# Fix Tag Dropdown Not Showing All Tags
+# Fix Property Selection Not Clearing on Search or Navigation
 
 ## Problem Identified
 
-The `useUniqueTags` hook fetches ALL 1,491 properties just to extract their tags. This approach has two issues:
+When performing a search or navigating away from the properties view, the selected property checkboxes remain checked. This is confusing because:
 
-1. **Performance**: Downloading 1,491 rows over the network just to extract a few unique tags
-2. **Data truncation**: Large responses can get truncated, causing some tags to be missed
+1. **Search changes the displayed results** - The selection may include properties that are no longer visible
+2. **Navigation leaves stale state** - Coming back to properties view shows old selections that no longer make sense
 
-The "world traveler x" tag exists in the database but isn't appearing because it's on one of the properties that gets cut off due to response size limits.
+## Root Cause
+
+In `MainApp.tsx`, the `selectedIds` state (line 273) is never cleared when:
+- The search term changes
+- The user navigates to a different view (owners, dashboard, settings, etc.)
+
+The `handleViewChange` function (lines 255-265) clears filters and search term but doesn't clear `selectedIds`.
 
 ## Solution
 
-Create a database function that efficiently extracts unique tags using PostgreSQL's `unnest` and `DISTINCT` operations, then call it from the frontend via Supabase RPC.
+Add logic to clear `selectedIds` in two places:
+
+1. **When search term changes** - Clear selection when `debouncedSearchTerm` changes
+2. **When view changes** - Clear selection in `handleViewChange`
 
 ## Technical Changes
 
-### 1. Create Database Function
+### 1. Clear Selection on View Change
 
-Create a new PostgreSQL function `get_unique_tags(p_company_id uuid)` that:
-- Uses `unnest(tags)` to expand all tag arrays
-- Filters out `list-` prefixed tags
-- Returns distinct, sorted tags
+Add `setSelectedIds(new Set())` to the `handleViewChange` function:
 
-```sql
-CREATE OR REPLACE FUNCTION get_unique_tags(p_company_id uuid)
-RETURNS TABLE(tag text) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT DISTINCT t.tag 
-  FROM (
-    SELECT unnest(p.tags) as tag
-    FROM properties p
-    WHERE p.company_id = p_company_id
-    AND p.tags IS NOT NULL
-  ) AS t
-  WHERE t.tag NOT LIKE 'list-%'
-  ORDER BY t.tag;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+```tsx
+const handleViewChange = (newView: ViewMode, options?: { preserveFilters?: boolean }) => {
+  if (newView === 'properties' && !options?.preserveFilters) {
+    setFilterRules([]);
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setDeduplicateByOwner(false);
+  }
+  setViewInternal(newView);
+  setSelectedPropertyId(null);
+  setSelectedOwnerName(null);
+  setSelectedIds(new Set()); // ADD THIS LINE
+};
 ```
 
-### 2. Update useUniqueTags Hook
+### 2. Clear Selection When Search Changes
 
-Replace the current approach with an RPC call:
+Add a `useEffect` that clears selection when the debounced search term changes:
 
-```typescript
-const { data, error } = await supabase
-  .rpc('get_unique_tags', { p_company_id: companyId });
-
-if (error) throw error;
-
-return data?.map(row => row.tag) || [];
+```tsx
+// Clear selection when search term changes
+useEffect(() => {
+  setSelectedIds(new Set());
+}, [debouncedSearchTerm]);
 ```
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| Database migration | Create `get_unique_tags` function |
-| `src/hooks/useUniqueTags.ts` | Use RPC call instead of fetching all properties |
+| `src/components/crm/MainApp.tsx` | Add selection clearing logic |
 
-## Expected Outcome
+## Expected Behavior After Fix
 
-- All unique tags (including "world traveler x") will appear in the dropdown
-- Much faster query execution (single SQL query vs fetching 1,491 rows)
-- No response truncation issues
+| Action | Before Fix | After Fix |
+|--------|-----------|-----------|
+| Perform a search | Checkboxes stay selected | Selection cleared |
+| Navigate to Owners | Checkboxes stay selected | Selection cleared |
+| Navigate to Dashboard | Checkboxes stay selected | Selection cleared |
+| Navigate back to Properties | Old selection visible | Fresh start, no selection |
 

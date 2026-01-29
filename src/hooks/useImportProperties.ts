@@ -20,6 +20,7 @@ interface DuplicateDecision {
 
 interface ImportOptions {
   standardize: boolean;
+  alreadyStandardized?: boolean;
   globalTags?: string[];
   listName?: string;
   duplicateDecisions?: Map<string, DuplicateDecision>;
@@ -113,10 +114,11 @@ export const useImportProperties = () => {
       });
 
       // ========== PHASE 1: Batch Address Standardization ==========
+      // Skip if already standardized by frontend
       let standardizedData = data.map((row, idx) => ({ ...row, _originalIndex: idx }));
       let standardizedCount = 0;
 
-      if (options.standardize) {
+      if (options.standardize && !options.alreadyStandardized) {
         toast.loading(`Standardizing addresses...`, { id: toastId });
         
         // Build batch input - send ALL addresses to Geocodio for standardization

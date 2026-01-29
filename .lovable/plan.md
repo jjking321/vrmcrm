@@ -1,72 +1,74 @@
 
 
-# Add Tag Search/Select to Bulk Actions Bar
+# Default to Newest Record as Primary in Duplicate Merge
 
-## Problem
+## Current Behavior
 
-Currently, when adding a tag via bulk actions, users must type the tag name manually. This can lead to typos and duplicate tags with slight variations (e.g., "absentee" vs "Absentee").
+The duplicate merge modal currently defaults to selecting the **oldest** record as the primary (the one that survives). The user wants the opposite: default to the **newest** record as primary while still stacking all contact information from older records.
 
-## Solution
+## Requested Change
 
-Replace the plain text input with a searchable dropdown that shows existing tags from the database. Users can either select an existing tag or type a new one.
+| Setting | Current | New |
+|---------|---------|-----|
+| Default primary record | Oldest created | Newest created |
+| Contact stacking | All records combined | All records combined (unchanged) |
+| Field values | User selects per field | User selects per field (unchanged) |
 
-## Implementation
+## Why This Makes Sense
 
-### User Experience
+- Newer records often have more up-to-date information (addresses, phones, etc.)
+- Stacking ensures no contacts are lost from older records
+- User still has full control to override and pick values from any record
 
-1. User clicks "Add Tag" button
-2. A searchable input appears showing filtered existing tags as they type
-3. User can click an existing tag to select it, OR
-4. Type a new tag name and press Enter to create it
-5. Selected/created tag is applied to all selected properties
+## Technical Changes
 
-### Technical Approach
+### 1. DuplicateMergeModal.tsx
 
-Use the `Command` component (cmdk-based) combined with `Popover` for a searchable combobox pattern, similar to the shadcn/ui Combobox example.
+Update the `useEffect` that initializes state when a group changes:
+
+**Current (line 211-215):**
+```tsx
+// Default to oldest record
+const oldest = [...group.properties].sort(
+  (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+)[0];
+setPrimaryId(oldest.id);
+```
+
+**New:**
+```tsx
+// Default to newest record
+const newest = [...group.properties].sort(
+  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+)[0];
+setPrimaryId(newest.id);
+```
+
+Also update the conflicting field default selection to use the newest record instead of oldest (line 241-242).
+
+### 2. DuplicateWizard.tsx (if applicable)
+
+Check if the wizard component has similar default logic and update it to match.
+
+## What Stays the Same
+
+- All contacts (phones, emails, owner contacts) still stack from all records
+- Tags still combine from all records
+- Activities from deleted records still transfer to kept record
+- User can still manually select any record as primary
+- User can still choose which record's value to use for each field
+
+## User Experience After Change
+
+1. User opens duplicate merge modal
+2. **Newest** record is pre-selected as primary
+3. For conflicting fields, newest record's value is pre-selected
+4. Contact stacking mode defaults to "Combine all contacts" (unchanged)
+5. User can still override any of these selections
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/crm/BulkActionsBar.tsx` | Add useUniqueTags hook, replace text input with searchable combobox |
-
-## Detailed Changes
-
-### BulkActionsBar.tsx
-
-1. **Add imports:**
-   - `useUniqueTags` hook
-   - Command components (Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem)
-   - Popover components
-   - Check icon for selected state
-
-2. **Add state for popover:**
-   - `tagPopoverOpen` to control the dropdown visibility
-
-3. **Replace tag input form with combobox:**
-   - Show a Popover with Command-based searchable list
-   - Filter existing tags as user types
-   - Show "Create new tag" option when input doesn't match existing tags
-   - Apply tag on selection
-
-### UI Layout
-
-```text
-┌──────────────────────────────────────┐
-│ 🔍 Search tags...                    │
-├──────────────────────────────────────┤
-│   absentee                           │
-│   cb permit                          │
-│   vacation rental                    │
-├──────────────────────────────────────┤
-│ + Create "new-tag-name"              │
-└──────────────────────────────────────┘
-```
-
-### Selection Behavior
-
-- Clicking an existing tag immediately adds it to selected properties
-- Typing a new name and selecting "Create" option adds the new tag
-- Popover closes after selection
-- Toast confirms the action
+| `src/components/crm/DuplicateMergeModal.tsx` | Default to newest record as primary and for conflicting fields |
 

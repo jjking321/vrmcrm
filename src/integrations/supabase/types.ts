@@ -611,6 +611,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_unique_tags: {
+        Args: { p_company_id: string }
+        Returns: {
+          tag: string
+        }[]
+      }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

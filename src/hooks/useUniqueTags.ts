@@ -11,22 +11,13 @@ export const useUniqueTags = () => {
     queryFn: async () => {
       if (!companyId) return [];
 
-      // Fetch all properties to get all tags (override default 1000 row limit)
+      // Use RPC to efficiently get unique tags from the database
       const { data, error } = await supabase
-        .from('properties')
-        .select('tags')
-        .eq('company_id', companyId)
-        .range(0, 9999);
+        .rpc('get_unique_tags', { p_company_id: companyId });
 
       if (error) throw error;
 
-      // Flatten all tags, filter out list- prefixed tags, deduplicate, and sort
-      const allTags = data
-        .flatMap(p => p.tags || [])
-        .filter(tag => !tag.startsWith('list-'));
-      
-      const uniqueTags = [...new Set(allTags)].sort();
-      return uniqueTags;
+      return (data as { tag: string }[])?.map(row => row.tag) || [];
     },
     enabled: !!companyId,
   });

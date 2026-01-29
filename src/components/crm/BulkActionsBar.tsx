@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage, FilterRule } from '@/types';
-import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone } from 'lucide-react';
+import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchZillowData, fetchAirbnbEstimateBatch, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
 import { AddToCallListModal } from './AddToCallListModal';
+import { useUniqueTags } from '@/hooks/useUniqueTags';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from '@/components/ui/command';
 
 interface BulkActionsBarProps {
   selectedIds: Set<string>;
@@ -27,8 +37,8 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onSaveList,
   pageSize = 100,
 }) => {
-  const [isAddingTag, setIsAddingTag] = useState(false);
-  const [newTag, setNewTag] = useState('');
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [tagSearchValue, setTagSearchValue] = useState('');
   const [isMovingStage, setIsMovingStage] = useState(false);
   const [isLoadingZillow, setIsLoadingZillow] = useState(false);
   const [isLoadingAirROI, setIsLoadingAirROI] = useState(false);
@@ -36,6 +46,8 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [isCallListModalOpen, setIsCallListModalOpen] = useState(false);
+  
+  const { data: existingTags = [] } = useUniqueTags();
 
   const selectedCount = selectedIds.size;
   const selectedProperties = properties.filter(p => selectedIds.has(p.id));
@@ -59,20 +71,19 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const zillowNeeded = selectedProperties.filter(needsZillowEnrichment).length;
   const airbnbNeeded = selectedProperties.filter(needsAirbnbEnrichment).length;
 
-  const handleAddTag = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTag.trim()) return;
+  const handleAddTag = (tag: string) => {
+    if (!tag.trim()) return;
 
-    const tag = newTag.trim().toLowerCase();
+    const normalizedTag = tag.trim().toLowerCase();
     selectedProperties.forEach(property => {
-      if (!property.tags.includes(tag)) {
-        onUpdateProperty(property.id, { tags: [...property.tags, tag] });
+      if (!property.tags.includes(normalizedTag)) {
+        onUpdateProperty(property.id, { tags: [...property.tags, normalizedTag] });
       }
     });
 
-    toast.success(`Added tag "${tag}" to ${selectedCount} properties`);
-    setNewTag('');
-    setIsAddingTag(false);
+    toast.success(`Added tag "${normalizedTag}" to ${selectedCount} properties`);
+    setTagSearchValue('');
+    setTagPopoverOpen(false);
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
@@ -228,32 +239,64 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
 
         {/* Tag actions */}
         <div className="relative">
-          {isAddingTag ? (
-            <form onSubmit={handleAddTag} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                className="w-32 px-2 py-1.5 text-sm border border-input rounded-lg bg-background focus:border-brand outline-none"
-                placeholder="Tag name..."
-                autoFocus
-              />
-              <button type="submit" className="p-1.5 bg-brand text-brand-foreground rounded-lg text-xs">
-                Add
+          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <Tag className="w-4 h-4" />
+                Add Tag
               </button>
-              <button type="button" onClick={() => setIsAddingTag(false)} className="p-1.5 text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => setIsAddingTag(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-            >
-              <Tag className="w-4 h-4" />
-              Add Tag
-            </button>
-          )}
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0" align="start">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Search or create tag..."
+                  value={tagSearchValue}
+                  onValueChange={setTagSearchValue}
+                />
+                <CommandList>
+                  <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">
+                    No matching tags
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {existingTags
+                      .filter(tag => 
+                        tag.toLowerCase().includes(tagSearchValue.toLowerCase())
+                      )
+                      .slice(0, 10)
+                      .map(tag => (
+                        <CommandItem
+                          key={tag}
+                          value={tag}
+                          onSelect={() => handleAddTag(tag)}
+                          className="cursor-pointer"
+                        >
+                          <Check className={cn(
+                            "mr-2 h-4 w-4",
+                            commonTags.includes(tag) ? "opacity-100" : "opacity-0"
+                          )} />
+                          {tag}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                  {tagSearchValue.trim() && 
+                    !existingTags.some(t => t.toLowerCase() === tagSearchValue.toLowerCase()) && (
+                    <CommandGroup>
+                      <CommandItem
+                        value={tagSearchValue}
+                        onSelect={() => handleAddTag(tagSearchValue)}
+                        className="cursor-pointer"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create "{tagSearchValue.trim()}"
+                      </CommandItem>
+                    </CommandGroup>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Common tags to remove */}

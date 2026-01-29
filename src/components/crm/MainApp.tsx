@@ -262,7 +262,13 @@ const MainApp: React.FC = () => {
     setViewInternal(newView);
     setSelectedPropertyId(null);
     setSelectedOwnerName(null);
+    setSelectedIds(new Set());
   };
+
+  // Clear selection when search term changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [debouncedSearchTerm]);
   
   // Alias for internal use
   const setView = setViewInternal;

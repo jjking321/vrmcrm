@@ -197,10 +197,11 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
   // Reset per-group state when current group changes
   React.useEffect(() => {
     if (currentGroup) {
-      const oldest = [...currentGroup.properties].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      // Default to newest record (most up-to-date info) instead of oldest
+      const newest = [...currentGroup.properties].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )[0];
-      setPrimaryId(oldest.id);
+      setPrimaryId(newest.id);
       setContactMergeMode('stack');
       setAutoResolvedExpanded(false);
       
@@ -216,9 +217,10 @@ export const DuplicateWizard: React.FC<DuplicateWizardProps> = ({
           selections[field.key] = nonEmptyProps[0].id;
         } else if (nonEmptyProps.length > 1) {
           const uniqueValues = new Set(nonEmptyProps.map(pv => JSON.stringify(pv.value)));
-          selections[field.key] = uniqueValues.size === 1 ? nonEmptyProps[0].id : oldest.id;
+          // Default to newest for conflicts
+          selections[field.key] = uniqueValues.size === 1 ? nonEmptyProps[0].id : newest.id;
         } else {
-          selections[field.key] = oldest.id;
+          selections[field.key] = newest.id;
         }
       });
       setFieldSelections(selections);

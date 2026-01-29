@@ -1,146 +1,70 @@
 
 
-# Fix Duplicate Detection Timing - Check After Standardization
+# Fix Tag Dropdown Not Showing All Tags
 
 ## Problem Identified
 
-The import flow checks for duplicates **twice**, but at the wrong time:
+The `useUniqueTags` hook fetches ALL 1,491 properties just to extract their tags. This approach has two issues:
 
-| Step | Location | What It Does | Problem |
-|------|----------|--------------|---------|
-| 1 | ImportWizard (frontend) | Checks RAW CSV addresses against DB | Misses duplicates due to format differences |
-| 2 | useImportProperties (backend) | Checks AFTER standardization | User already bypassed the modal |
+1. **Performance**: Downloading 1,491 rows over the network just to extract a few unique tags
+2. **Data truncation**: Large responses can get truncated, causing some tags to be missed
 
-**Example scenario:**
-- CSV row: `"123 Main Street, Orlando, FL"` (full address in one field)
-- DB has: `"123 Main St, Orlando, FL"` (standardized)
-- Frontend says "no duplicate" → user proceeds
-- Backend standardizes and silently updates existing record
+The "world traveler x" tag exists in the database but isn't appearing because it's on one of the properties that gets cut off due to response size limits.
 
 ## Solution
 
-Move the duplicate detection to happen AFTER address standardization but BEFORE confirming the import.
-
-### New Flow
-
-```text
-User uploads CSV
-       ↓
-Map fields (current step)
-       ↓
-Click "Import"
-       ↓
-[NEW] Call Geocodio to standardize addresses FIRST
-       ↓
-[NEW] Check duplicates against standardized addresses
-       ↓
-Show duplicate modal (if any found)
-       ↓
-User reviews duplicates with accurate matching
-       ↓
-Proceed with import
-```
+Create a database function that efficiently extracts unique tags using PostgreSQL's `unnest` and `DISTINCT` operations, then call it from the frontend via Supabase RPC.
 
 ## Technical Changes
 
-### 1. Create Pre-Import Standardization Function
+### 1. Create Database Function
 
-Extract the Geocodio batch standardization logic into a reusable function that can be called before duplicate detection.
+Create a new PostgreSQL function `get_unique_tags(p_company_id uuid)` that:
+- Uses `unnest(tags)` to expand all tag arrays
+- Filters out `list-` prefixed tags
+- Returns distinct, sorted tags
 
-### 2. Update ImportWizard Flow
+```sql
+CREATE OR REPLACE FUNCTION get_unique_tags(p_company_id uuid)
+RETURNS TABLE(tag text) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT DISTINCT t.tag 
+  FROM (
+    SELECT unnest(p.tags) as tag
+    FROM properties p
+    WHERE p.company_id = p_company_id
+    AND p.tags IS NOT NULL
+  ) AS t
+  WHERE t.tag NOT LIKE 'list-%'
+  ORDER BY t.tag;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
 
-When user clicks "Import":
-1. If standardization is enabled, call Geocodio batch API first
-2. Apply standardized addresses to import data
-3. THEN run duplicate detection against standardized addresses
-4. Show duplicate modal with accurate matches
+### 2. Update useUniqueTags Hook
 
-### 3. Update Backend to Skip Re-Standardization
+Replace the current approach with an RPC call:
 
-If frontend already standardized, backend should not re-standardize (pass a flag).
+```typescript
+const { data, error } = await supabase
+  .rpc('get_unique_tags', { p_company_id: companyId });
+
+if (error) throw error;
+
+return data?.map(row => row.tag) || [];
+```
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/lib/enrichment.ts` | Ensure `verifyAddressBatch` is exported and usable from frontend |
-| `src/components/crm/ImportWizard.tsx` | Add pre-import standardization step before duplicate check |
-| `src/hooks/useImportProperties.ts` | Add flag to skip standardization if already done |
+| Database migration | Create `get_unique_tags` function |
+| `src/hooks/useUniqueTags.ts` | Use RPC call instead of fetching all properties |
 
-## Detailed Implementation
+## Expected Outcome
 
-### ImportWizard.tsx Changes
-
-```tsx
-const handleImport = async () => {
-  // Parse data from CSV
-  const parsedData = /* ... existing parsing ... */;
-  
-  // NEW: Pre-standardize addresses if option enabled
-  if (standardizeAddresses) {
-    setImportStatus('standardizing');
-    const addressesToVerify = parsedData
-      .filter(row => row.address)
-      .map((row, idx) => ({
-        address: row.address,
-        city: row.city || '',
-        state: row.state || '',
-        zip: row.zip || '',
-        index: idx,
-      }));
-    
-    const results = await verifyAddressBatch(addressesToVerify);
-    
-    // Apply standardized addresses to parsedData
-    parsedData.forEach((row, idx) => {
-      const result = results.get(idx);
-      if (result?.success && result.standardized) {
-        row.address = result.standardized.street;
-        row.city = result.standardized.city;
-        row.state = result.standardized.state;
-        row.zip = result.standardized.zip;
-        row._alreadyStandardized = true;
-      }
-    });
-  }
-  
-  // NOW run duplicate detection on standardized data
-  processParsedData(parsedData);
-};
-```
-
-### useImportProperties.ts Changes
-
-```tsx
-// Add to ImportOptions interface
-interface ImportOptions {
-  // ... existing options
-  alreadyStandardized?: boolean;
-}
-
-// In the mutation, check the flag
-if (options.standardize && !options.alreadyStandardized) {
-  // Run standardization
-} else {
-  // Skip - already done by frontend
-}
-```
-
-## User Experience After Fix
-
-1. User uploads CSV
-2. User maps fields and enables "Standardize addresses"
-3. User clicks "Import"
-4. **NEW: Loading state: "Standardizing addresses..."**
-5. Addresses are standardized via Geocodio
-6. Duplicate check runs against standardized addresses
-7. If duplicates found, modal shows accurate matches
-8. User can make informed decisions about each duplicate
-9. Import proceeds without missed duplicates
-
-## Edge Cases Handled
-
-- If Geocodio fails/quota exceeded: Fall back to local normalization
-- If standardization disabled: Use existing local normalization
-- Already standardized data from re-import: Skip double standardization
+- All unique tags (including "world traveler x") will appear in the dropdown
+- Much faster query execution (single SQL query vs fetching 1,491 rows)
+- No response truncation issues
 

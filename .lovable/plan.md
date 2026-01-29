@@ -1,73 +1,41 @@
 
 
-# Fix Property Selection Not Clearing on Search or Navigation
+# Add Host Name Column to Property Table
 
-## Problem Identified
+## Overview
 
-When performing a search or navigating away from the properties view, the selected property checkboxes remain checked. This is confusing because:
-
-1. **Search changes the displayed results** - The selection may include properties that are no longer visible
-2. **Navigation leaves stale state** - Coming back to properties view shows old selections that no longer make sense
-
-## Root Cause
-
-In `MainApp.tsx`, the `selectedIds` state (line 273) is never cleared when:
-- The search term changes
-- The user navigates to a different view (owners, dashboard, settings, etc.)
-
-The `handleViewChange` function (lines 255-265) clears filters and search term but doesn't clear `selectedIds`.
-
-## Solution
-
-Add logic to clear `selectedIds` in two places:
-
-1. **When search term changes** - Clear selection when `debouncedSearchTerm` changes
-2. **When view changes** - Clear selection in `handleViewChange`
+Add "Host" as a selectable column in the properties table. The data already exists in the database (`host` column) and in the Property type - we just need to register it as a system field and add rendering logic.
 
 ## Technical Changes
 
-### 1. Clear Selection on View Change
+### 1. Add Host to System Fields
 
-Add `setSelectedIds(new Set())` to the `handleViewChange` function:
+Update `src/data/mockData.ts` to include the host field in `SYSTEM_FIELDS`:
 
-```tsx
-const handleViewChange = (newView: ViewMode, options?: { preserveFilters?: boolean }) => {
-  if (newView === 'properties' && !options?.preserveFilters) {
-    setFilterRules([]);
-    setSearchTerm('');
-    setDebouncedSearchTerm('');
-    setDeduplicateByOwner(false);
-  }
-  setViewInternal(newView);
-  setSelectedPropertyId(null);
-  setSelectedOwnerName(null);
-  setSelectedIds(new Set()); // ADD THIS LINE
-};
+```typescript
+{ id: 'host', label: 'Host', type: 'text', isSystem: true },
 ```
 
-### 2. Clear Selection When Search Changes
+### 2. Add Column Rendering (Optional Enhancement)
 
-Add a `useEffect` that clears selection when the debounced search term changes:
-
-```tsx
-// Clear selection when search term changes
-useEffect(() => {
-  setSelectedIds(new Set());
-}, [debouncedSearchTerm]);
+The PropertyTable already has default rendering for unknown columns (line 260-261):
+```typescript
+const value = (property as any)[colId];
+return <td className={cellClass}>{value ?? '-'}</td>;
 ```
+
+This will work automatically. However, for consistency with other columns, we could add explicit rendering if needed.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/crm/MainApp.tsx` | Add selection clearing logic |
+| `src/data/mockData.ts` | Add `host` to `SYSTEM_FIELDS` array |
 
-## Expected Behavior After Fix
+## Result
 
-| Action | Before Fix | After Fix |
-|--------|-----------|-----------|
-| Perform a search | Checkboxes stay selected | Selection cleared |
-| Navigate to Owners | Checkboxes stay selected | Selection cleared |
-| Navigate to Dashboard | Checkboxes stay selected | Selection cleared |
-| Navigate back to Properties | Old selection visible | Fresh start, no selection |
+After this change:
+- "Host" will appear in the column selector dropdown
+- Users can enable/disable the Host column as needed
+- The column will display the host name or "-" if empty
 

@@ -11,10 +11,12 @@ export const useUniqueTags = () => {
     queryFn: async () => {
       if (!companyId) return [];
 
+      // Fetch all properties to get all tags (override default 1000 row limit)
       const { data, error } = await supabase
         .from('properties')
         .select('tags')
-        .eq('company_id', companyId);
+        .eq('company_id', companyId)
+        .range(0, 9999);
 
       if (error) throw error;
 

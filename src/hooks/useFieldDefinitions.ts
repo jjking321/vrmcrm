@@ -61,19 +61,26 @@ export function useInitializeFieldDefinitions() {
     mutationFn: async () => {
       if (!companyId) throw new Error('No company');
 
-      // Check if already initialized
+      // Get existing field definitions
       const { data: existing } = await supabase
         .from('field_definitions')
-        .select('id')
-        .eq('company_id', companyId)
-        .limit(1);
+        .select('field_key')
+        .eq('company_id', companyId);
 
-      if (existing && existing.length > 0) {
-        return; // Already initialized
+      const existingKeys = new Set((existing || []).map(f => f.field_key));
+
+      // Find missing system fields
+      const missingFields = SYSTEM_FIELDS.filter(field => !existingKeys.has(field.id));
+
+      if (missingFields.length === 0) {
+        return; // All fields present
       }
 
-      // Seed with system fields
-      const systemFields = SYSTEM_FIELDS.map((field, index) => ({
+      // Get max sort_order for new fields
+      const startOrder = existingKeys.size;
+
+      // Insert missing system fields
+      const fieldsToInsert = missingFields.map((field, index) => ({
         company_id: companyId,
         field_key: field.id,
         label: field.label,
@@ -81,12 +88,12 @@ export function useInitializeFieldDefinitions() {
         options: field.options || null,
         is_system: true,
         is_hidden: false,
-        sort_order: index,
+        sort_order: startOrder + index,
       }));
 
       const { error } = await supabase
         .from('field_definitions')
-        .insert(systemFields);
+        .insert(fieldsToInsert);
 
       if (error) throw error;
     },

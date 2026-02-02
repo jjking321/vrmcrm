@@ -1,41 +1,51 @@
 
+# Fix Host Filter Not Working
 
-# Add Host Name Column to Property Table
+## Problem Identified
 
-## Overview
+The "Host" field filter is not working because it's missing from both the server-side and client-side filtering logic. When you select "Host" as a filter field, the code doesn't know how to:
 
-Add "Host" as a selectable column in the properties table. The data already exists in the database (`host` column) and in the Property type - we just need to register it as a system field and add rendering logic.
+1. Query the database for the `host` column (server-side)
+2. Access the `property.host` value for comparison (client-side)
+
+Instead, both fall back to `default` cases that skip or look in the wrong place.
 
 ## Technical Changes
 
-### 1. Add Host to System Fields
+### 1. Add Host to Server-Side Filter Mapping
 
-Update `src/data/mockData.ts` to include the host field in `SYSTEM_FIELDS`:
+In `src/hooks/useServerFilteredProperties.ts`, add a case for `host` in the `buildFilterParams` function:
 
 ```typescript
-{ id: 'host', label: 'Host', type: 'text', isSystem: true },
+case 'host':
+  dbField = 'host';
+  break;
 ```
 
-### 2. Add Column Rendering (Optional Enhancement)
+### 2. Add Host to Client-Side Filter Evaluation
 
-The PropertyTable already has default rendering for unknown columns (line 260-261):
+In `src/hooks/usePropertyFiltering.ts`, add a case for `host` in the `applyFilterRules` function:
+
 ```typescript
-const value = (property as any)[colId];
-return <td className={cellClass}>{value ?? '-'}</td>;
+case 'host':
+  value = property.host || '';
+  break;
 ```
-
-This will work automatically. However, for consistency with other columns, we could add explicit rendering if needed.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/data/mockData.ts` | Add `host` to `SYSTEM_FIELDS` array |
+| `src/hooks/useServerFilteredProperties.ts` | Add `host` case to field mapping (around line 175) |
+| `src/hooks/usePropertyFiltering.ts` | Add `host` case to value extraction (around line 58) |
 
-## Result
+## Why Both Files?
 
-After this change:
-- "Host" will appear in the column selector dropdown
-- Users can enable/disable the Host column as needed
-- The column will display the host name or "-" if empty
+- **Server-side filtering** (`useServerFilteredProperties.ts`) is used when filter rules are active to query the database directly
+- **Client-side filtering** (`usePropertyFiltering.ts`) is used as a fallback and for sorting/additional processing
 
+Both need to understand the `host` field for consistent behavior.
+
+## Expected Result
+
+After this fix, filtering by Host with "contains Pastermack" will correctly show only properties where the host name contains "Pastermack".

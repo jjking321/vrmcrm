@@ -175,6 +175,9 @@ const buildFilterParams = (rules: FilterRule[], matchType: 'and' | 'or') => {
       case 'address':
         dbField = 'address';
         break;
+      case 'host':
+        dbField = 'host';
+        break;
       case 'ownerName':
         dbField = 'name';
         isOwnerField = true;

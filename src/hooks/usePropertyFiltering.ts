@@ -58,6 +58,9 @@ export const usePropertyFiltering = (
         case 'address':
           value = property.address;
           break;
+        case 'host':
+          value = property.host || '';
+          break;
         default:
           value = property.customFields?.[rule.field] ?? '';
       }

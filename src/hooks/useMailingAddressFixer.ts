@@ -43,6 +43,19 @@ function toTitleCase(str: string): string {
     .replace(/\b(Ii|Iii|Iv)\b/gi, (match) => match.toUpperCase());
 }
 
+// Street suffixes that are also state abbreviations - must not be treated as states
+// when they appear at the end of an address without a ZIP code
+const streetSuffixesMatchingStates = new Set([
+  'CT',  // Court (also Connecticut)
+  'NE',  // Northeast (also Nebraska)  
+  'NV',  // Not common but could appear
+  'AL',  // Alley (also Alabama)
+  'IN',  // Not common suffix but could be confused
+]);
+
+// Common street directional suffixes
+const directionalSuffixes = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW']);
+
 /**
  * Check if a mailing address field contains embedded city/state/zip
  * that differs from the stored city/state/zip values.
@@ -59,6 +72,7 @@ function hasEmbeddedAddressData(
   const addr = mailingAddress.trim();
   
   // Pattern 1: Check for "STATE ZIP" at end (e.g., "135 E 54TH ST NEW YORK, NY 10022")
+  // This is the most reliable pattern - if there's a ZIP code, it's definitely an address
   const stateZipPattern = /\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\s*$/i;
   const stateZipMatch = addr.match(stateZipPattern);
   
@@ -99,18 +113,10 @@ function hasEmbeddedAddressData(
     }
   }
   
-  // Pattern 3: Check for STATE at end without ZIP (e.g., "123 MAIN ST CITY FL")
-  const stateOnlyPattern = /\b([A-Z]{2})\s*$/i;
-  const stateOnlyMatch = addr.match(stateOnlyPattern);
-  if (stateOnlyMatch) {
-    const embeddedState = stateOnlyMatch[1].toUpperCase();
-    if (validStateAbbrs.has(embeddedState)) {
-      const storedStateNorm = storedState?.trim().toUpperCase() || '';
-      if (embeddedState !== storedStateNorm) {
-        return true;
-      }
-    }
-  }
+  // Pattern 3: Check for STATE at end without ZIP - BUT be careful about street suffixes!
+  // Only flag if it's likely a state, not a street suffix like CT (Court) or NE (Northeast)
+  // Skip this check entirely - too many false positives with street suffixes
+  // We only reliably detect embedded addresses when there's a ZIP code or comma delimiter
   
   return false;
 }

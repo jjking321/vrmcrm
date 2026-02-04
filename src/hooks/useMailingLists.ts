@@ -3,6 +3,41 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { MailingList, MailingListItem, Property } from '@/types';
 import { toast } from 'sonner';
+import { deriveMailingFields } from '@/lib/mailingAddress';
+
+// Street suffix abbreviation map for normalization
+const SUFFIX_MAP: Record<string, string> = {
+  street: 'st', avenue: 'ave', road: 'rd', drive: 'dr', lane: 'ln',
+  court: 'ct', circle: 'cir', boulevard: 'blvd', place: 'pl', way: 'way',
+  terrace: 'ter', trail: 'trl', parkway: 'pkwy', highway: 'hwy',
+};
+
+/**
+ * Normalize a mailing address for deduplication.
+ * - Lowercases everything
+ * - Strips punctuation
+ * - Abbreviates street suffixes
+ * - Collapses whitespace
+ */
+function normalizeMailingAddress(
+  street: string,
+  city: string,
+  state: string,
+  zip: string
+): string {
+  const combined = `${street} ${city} ${state} ${zip}`.toLowerCase();
+  
+  // Remove punctuation and special chars
+  let normalized = combined.replace(/[.,#\-']/g, '');
+  
+  // Abbreviate street suffixes
+  for (const [full, abbr] of Object.entries(SUFFIX_MAP)) {
+    normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
+  }
+  
+  // Collapse whitespace
+  return normalized.replace(/\s+/g, ' ').trim();
+}
 
 // Transform database row to MailingList
 const transformMailingList = (row: any): MailingList => ({
@@ -246,7 +281,7 @@ export const useAddToMailingList = () => {
       if (!company?.id) throw new Error('No company');
       
       // If deduping, get existing items in the list
-      let existingAddresses = new Set<string>();
+      let existingNormalizedAddresses = new Set<string>();
       if (dedupeByAddress) {
         const { data: existingItems } = await supabase
           .from('mailing_list_items')
@@ -254,15 +289,30 @@ export const useAddToMailingList = () => {
           .eq('mailing_list_id', listId);
         
         if (existingItems && existingItems.length > 0) {
-          // Get the properties to check mailing addresses
-          const { data: existingProps } = await supabase
+          // Get the owners to check mailing addresses
+          const { data: existingOwners } = await supabase
             .from('owners')
             .select('mailing_address, mailing_city, mailing_state, mailing_zip')
             .in('property_id', existingItems.map(i => i.property_id));
           
-          existingProps?.forEach(owner => {
-            const key = `${owner.mailing_address || ''}-${owner.mailing_city || ''}-${owner.mailing_state || ''}-${owner.mailing_zip || ''}`.toLowerCase();
-            existingAddresses.add(key);
+          existingOwners?.forEach(owner => {
+            // Use deriveMailingFields to get corrected components
+            const derived = deriveMailingFields(
+              {
+                mailingAddress: owner.mailing_address || '',
+                mailingCity: owner.mailing_city || '',
+                mailingState: owner.mailing_state || '',
+                mailingZip: owner.mailing_zip || '',
+              },
+              null
+            );
+            const key = normalizeMailingAddress(
+              derived.mailingAddress,
+              derived.mailingCity,
+              derived.mailingState,
+              derived.mailingZip
+            );
+            existingNormalizedAddresses.add(key);
           });
         }
       }
@@ -272,14 +322,20 @@ export const useAddToMailingList = () => {
       let skippedCount = 0;
       
       properties.forEach(property => {
-        // Check if mailing address already exists
+        // Check if mailing address already exists using derived + normalized key
         if (dedupeByAddress) {
-          const key = `${property.owner.mailingAddress || ''}-${property.owner.mailingCity || ''}-${property.owner.mailingState || ''}-${property.owner.mailingZip || ''}`.toLowerCase();
-          if (existingAddresses.has(key)) {
+          const derived = deriveMailingFields(property.owner, property);
+          const key = normalizeMailingAddress(
+            derived.mailingAddress,
+            derived.mailingCity,
+            derived.mailingState,
+            derived.mailingZip
+          );
+          if (existingNormalizedAddresses.has(key)) {
             skippedCount++;
             return;
           }
-          existingAddresses.add(key);
+          existingNormalizedAddresses.add(key);
         }
         
         items.push({

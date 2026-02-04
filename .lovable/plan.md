@@ -1,125 +1,103 @@
 
+# Backend Update: Populate Contact Names from CSV
 
-# Update Contact Names & Fix Priority Logic
+## Overview
 
-## What We're Doing
+Create a backend function to batch update ~500 property records with contact names from your CSV. The matching will use **Address** + **Owner 1 Last Name** to find the correct property, then set the **Name 1** value as `contact_name`.
 
-**Two changes:**
-1. **Update 500 existing records** - Populate the `contactName` field from your CSV's "Name 1" column
-2. **Fix the priority logic** - Make `contactName` the #1 choice for mailing addresses when it exists
+## Matching Logic
 
-## Current vs. New Behavior
-
-| Scenario | Current Result | New Result |
-|----------|----------------|------------|
-| Property owned by "Friling M Elaine Tr" with contactName "John Friling" | Uses trust name | Uses **John Friling** |
-| Property owned by "Property Investments Legacy Corp" with contactName "Aleksej Bockar" | Uses LLC name | Uses **Aleksej Bockar** |
-
-The legal owner (Trust/LLC) stays in the database - we're just adding a **preferred contact person** for mailing.
-
-## Implementation Steps
-
-### Step 1: Update Database Records
-
-Match each property from your CSV using the property address and populate the `contactName` field:
-
-| CSV Column | Database Field |
+| CSV Column | Database Match |
 |------------|----------------|
-| Address + City | → Match property |
-| Name 1 | → `owner.contactName` |
+| `Address` | `properties.address` (case-insensitive, fuzzy match on unit numbers) |
+| `Owner 1 Last Name` | `owners.owners[0].lastName` (case-insensitive) |
+| `Name 1` | → `owners.contact_name` |
 
-**Sample mappings from your CSV:**
+### Example Matches
 
-| Property Address | Name 1 → contactName |
-|-----------------|----------------------|
-| 410 STRAND DR, MELBOURNE BEACH | Aleksej Bockar |
-| 7520 RIDGEWOOD AVE APT 909, CAPE CANAVERAL | Alison Moses |
-| 5200 OCEAN BEACH BLVD # 22C, COCOA BEACH | Amanda Francoeur |
+| CSV Address | CSV Owner 1 Last Name | Name 1 → contact_name |
+|------------|----------------------|----------------------|
+| 410 STRAND DR | PROPERTY INVESTMENTS LEGACY CORP | Aleksej Bockar |
+| 7520 RIDGEWOOD AVE APT 909 | PITKANEN,MOSES FAMILY LAND TRUST | Alison Moses |
+| 5200 OCEAN BEACH BLVD # 22C | NEWPORT FINANCIAL GROUP LLC | Amanda Francoeur |
 
-### Step 2: Update Priority Logic
+## Implementation
 
-**File:** `src/lib/ownerUtils.ts`
+### Step 1: Create Edge Function
 
-Change `getBestMailingName()` to check `contactName` FIRST:
+**File:** `supabase/functions/batch-update-contact-names/index.ts`
+
+The function will:
+1. Accept CSV data as JSON array in the request body
+2. Loop through each row
+3. Match property by normalized address + owner last name
+4. Update the `contact_name` field in the `owners` table
+5. Return a summary of matched/updated/skipped records
 
 ```text
-Current Priority:
-1. Individual from owners[] array
-2. Corporate from owners[] array
-3. Legacy name field
-4. contactName  ← Currently LAST
-5. "Current Resident"
+Request Body Structure:
+{
+  "records": [
+    { "address": "8600 RIDGEWOOD AVE # 1205", "ownerLastName": "MATHEWS", "contactName": "Alan Mathews" },
+    { "address": "410 STRAND DR", "ownerLastName": "PROPERTY INVESTMENTS LEGACY CORP", "contactName": "Aleksej Bockar" },
+    ...
+  ]
+}
 
-New Priority:
-1. contactName  ← Move to FIRST when set
-2. Individual from owners[] array
-3. Corporate from owners[] array
-4. Legacy name field
-5. "Current Resident"
-```
-
-### Step 3: Update Import Wizard (for future imports)
-
-**File:** `src/components/crm/ImportWizard.tsx`
-
-Add "name 1", "name one", "name1" to the `contactPerson` field mappings so future imports auto-detect this column.
-
-## Technical Details
-
-### Database Update Query
-
-We'll use a backend function to batch update properties:
-
-```sql
--- For each property matching address/city:
-UPDATE properties 
-SET owner = jsonb_set(owner, '{contactName}', '"John Friling"')
-WHERE address ILIKE '123 Main St%' AND city ILIKE 'Miami%';
-```
-
-### Code Change: `src/lib/ownerUtils.ts`
-
-```typescript
-export function getBestMailingName(owner: Owner): string {
-  // NEW: Check contactName FIRST - this is the explicit preferred contact
-  if (owner.contactName) {
-    return normalizeOwnerName(owner.contactName);
-  }
-  
-  // Then check structured owners array - prefer individual over corporate
-  if (owner.owners && owner.owners.length > 0) {
-    // ... existing logic unchanged
-  }
-  
-  // ... rest of existing logic
+Response:
+{
+  "total": 499,
+  "matched": 485,
+  "updated": 485,
+  "skipped": 14,
+  "errors": [...]
 }
 ```
 
-### Code Change: `src/components/crm/ImportWizard.tsx`
+### Step 2: Call the Function
 
-Add to `fieldNameMappings`:
+After the function is deployed, I'll parse your CSV and call the function with the data to update all records.
 
-```typescript
-contactPerson: [
-  'contact person', 'contact name', 'primary contact',
-  'name 1', 'name one', 'name1',  // ← NEW
-  'name 2', 'name two', 'name2',  // ← NEW
-],
+## Technical Details
+
+### Address Normalization
+
+The function will normalize addresses for matching:
+- Remove commas, extra spaces
+- Handle unit variations: `# 1205` = `APT 1205` = `UNIT 1205`
+- Case-insensitive comparison
+
+### Database Query
+
+```sql
+UPDATE owners 
+SET contact_name = $contactName
+WHERE property_id IN (
+  SELECT p.id FROM properties p
+  WHERE UPPER(REPLACE(p.address, ',', '')) LIKE UPPER($normalizedAddress || '%')
+)
+AND (
+  UPPER(owners.owners->0->>'lastName') = UPPER($ownerLastName)
+  OR UPPER(owners.name) LIKE UPPER('%' || $ownerLastName || '%')
+)
 ```
 
-## Files to Modify
+## Files to Create
 
-| File | Changes |
+| File | Purpose |
 |------|---------|
-| `src/lib/ownerUtils.ts` | Move `contactName` check to top of `getBestMailingName()` |
-| `src/components/crm/ImportWizard.tsx` | Add "name 1" patterns to `contactPerson` mappings |
-| Database | Batch update 500 properties with contactName values |
+| `supabase/functions/batch-update-contact-names/index.ts` | Edge function to batch update records |
 
-## Result
+## Expected Results
 
-After this change:
-- **John Friling** will appear on mail for the Friling Trust property
-- **Aleksej Bockar** will appear on mail for Property Investments Legacy Corp
-- Legal owners remain unchanged in the database
-- Future imports will auto-detect "Name 1" columns
+After running this update:
+- **~485+ records** will have their `contact_name` populated
+- Properties owned by LLCs/Trusts will now display the individual contact name for mailing
+- The priority logic (already updated) will use `contact_name` first
 
+## Next Steps After Approval
+
+1. I'll create the edge function
+2. Parse your uploaded CSV into the required format
+3. Call the function to update all matching records
+4. Report back with the results (matched, updated, skipped)

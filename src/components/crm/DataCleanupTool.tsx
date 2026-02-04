@@ -21,9 +21,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy, User, Mail
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy, User, Mail, Flag
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -905,8 +906,16 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                         {malformedMailingAddresses.map((addr) => (
                           <TableRow key={addr.ownerId}>
                             <TableCell className="font-mono text-sm max-w-[300px]">
-                              <div className="truncate" title={addr.mailingAddress}>
-                                {addr.mailingAddress}
+                              <div className="flex items-center gap-2">
+                                <div className="truncate" title={addr.mailingAddress}>
+                                  {addr.mailingAddress}
+                                </div>
+                                {addr.isCanadian && (
+                                  <Badge variant="secondary" className="shrink-0 text-xs bg-red-50 text-red-700 border-red-200">
+                                    <Flag className="w-3 h-3 mr-1" />
+                                    CA
+                                  </Badge>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className={cn("text-sm", addr.mailingCity === addr.propertyCity && "text-amber-600 font-medium")}>
@@ -928,7 +937,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                                   variant="ghost" 
                                   onClick={() => handleTryMailingParse(addr)}
                                   disabled={applyLocalMailingParseMutation.isPending}
-                                  title="Try local parse"
+                                  title={addr.isCanadian ? "Parse Canadian address locally" : "Try local parse"}
                                 >
                                   <Sparkles className="w-3 h-3" />
                                 </Button>
@@ -936,8 +945,9 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
                                   size="sm" 
                                   variant="ghost" 
                                   onClick={() => handleSendMailingToGeocodio(addr)}
-                                  disabled={fixSingleMailingMutation.isPending}
-                                  title="Send to Geocodio"
+                                  disabled={fixSingleMailingMutation.isPending || addr.isCanadian}
+                                  title={addr.isCanadian ? "Geocodio doesn't support Canadian addresses" : "Send to Geocodio"}
+                                  className={addr.isCanadian ? "opacity-50 cursor-not-allowed" : ""}
                                 >
                                   <MapPin className="w-3 h-3" />
                                 </Button>

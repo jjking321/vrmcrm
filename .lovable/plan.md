@@ -1,131 +1,76 @@
 
-# Add Search and Filters to Mailing List Page
 
-## Overview
+# Fix Mailing List Deduplication by Address
 
-Add a search bar and filter module to the mailing list detail view, enabling users to quickly find specific contacts within large mailing lists.
+## Problem
 
-## Current State
+The mailing list deduplication is creating duplicate entries for the same physical mailing address. For example, two "6 Scarth Road" entries appear in the list despite having the same address.
 
-The mailing list detail view (`MailingListsView.tsx`) displays a table of contacts but has no search or filtering capabilities. Users must scroll through the entire list to find specific contacts.
+**Root cause**: The deduplication key is built from raw database fields without:
+1. Applying the `deriveMailingFields()` correction (which fixes PMB/PO Box in city field)
+2. Normalizing addresses (stripping punctuation, abbreviating suffixes like "Road" → "Rd")
+
+### Example of Bug
+
+| Property | Raw City | Dedupe Key Generated |
+|----------|----------|---------------------|
+| 6 Scarth Road | PMB 1033 FORT WORTH | `6 scarth road-pmb 1033 fort worth-tx-12345` |
+| 6 Scarth Road | FORT WORTH | `6 scarth road-fort worth-tx-12345` |
+
+These keys are different, so both records are added to the mailing list.
 
 ## Solution
 
-### 1. Add Search Bar
+Update `useAddToMailingList` in `src/hooks/useMailingLists.ts` to:
 
-Add a search input that filters the mailing list items by:
-- Contact Name (using the derived `getBestMailingName`)
-- Mailing Address
-- Mailing City  
-- Mailing State
-- Mailing ZIP
-- Property Address
+1. Use `deriveMailingFields()` to get corrected address components before building the dedupe key
+2. Apply address normalization (similar to property duplicate detection)
 
-Search will be client-side with debouncing since items are already loaded in memory.
+### Technical Changes
 
-### 2. Add Simplified Filter Bar
+**File: `src/hooks/useMailingLists.ts`**
 
-Create a simplified version of the filter module specifically for mailing lists with these filterable fields:
-- **State** - Filter by mailing state (equals, any_of)
-- **City** - Filter by mailing city (equals, contains, starts_with)
-- **ZIP** - Filter by mailing ZIP (equals, starts_with)
-- **Contact Name** - Filter by contact name (contains, starts_with)
-- **Is Canadian** - Filter Canadian addresses (is_true/is_false)
-
-### 3. UI Layout
-
-The mailing list detail view will include:
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ ← Back    List Name                         [Export CSV]     │
-│           123 addresses · Last exported Jan 15, 2025         │
-├──────────────────────────────────────────────────────────────┤
-│ [🔍 Search contacts...                    ] [Filter] [X of Y]│
-├──────────────────────────────────────────────────────────────┤
-│ (If filters active, show filter rules section)               │
-├──────────────────────────────────────────────────────────────┤
-│ Contact Name | Address | City | State | ZIP | Property       │
-│ ─────────────────────────────────────────────────────────────│
-│ John Smith   | 123...  | ...  | TX    | ... | ...            │
-└──────────────────────────────────────────────────────────────┘
+Add a normalization function for mailing addresses:
+```typescript
+function normalizeMailingAddress(
+  street: string,
+  city: string,
+  state: string,
+  zip: string
+): string {
+  return `${street} ${city} ${state} ${zip}`
+    .toLowerCase()
+    .replace(/[.,#\-']/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(street|st|avenue|ave|road|rd|drive|dr|...)\b/g, abbreviate)
+    .trim();
+}
 ```
 
-## Technical Implementation
+Update the deduplication logic:
+```typescript
+// Instead of raw fields:
+const key = `${owner.mailing_address}-${owner.mailing_city}-...`
 
-### Files to Create
+// Use derived + normalized:
+const derived = deriveMailingFields(owner, null);
+const key = normalizeMailingAddress(
+  derived.mailingAddress,
+  derived.mailingCity,
+  derived.mailingState,
+  derived.mailingZip
+);
+```
 
-| File | Purpose |
-|------|---------|
-| `src/components/crm/MailingListFilterBar.tsx` | Simplified filter bar for mailing lists |
-| `src/hooks/useMailingListFiltering.ts` | Hook for filtering/searching mailing list items |
+This ensures:
+- PMB/PO Box extracted from city before comparison
+- "Road" and "Rd" match as the same
+- Case-insensitive matching
+- Punctuation ignored
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/components/crm/MailingListsView.tsx` | Add search input, filter bar, integrate filtering logic |
+| `src/hooks/useMailingLists.ts` | Add normalization function, update dedupe logic in `useAddToMailingList` |
 
-### useMailingListFiltering Hook
-
-```typescript
-// Handles search and filter logic for mailing list items
-export function useMailingListFiltering(items: MailingListItem[]) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
-  const [matchType, setMatchType] = useState<'and' | 'or'>('and');
-  
-  // Derived mailing fields are computed for each item
-  // Search matches against: contactName, mailingAddress, mailingCity, 
-  //                         mailingState, mailingZip, propertyAddress
-  
-  // Filter rules evaluate against: state, city, zip, contactName, isCanadian
-  
-  const filteredItems = useMemo(() => {
-    // 1. Apply search filter
-    // 2. Apply filter rules
-    return filtered;
-  }, [items, searchTerm, filterRules, matchType]);
-  
-  return {
-    searchTerm, setSearchTerm,
-    filterRules, setFilterRules,
-    matchType, setMatchType,
-    filteredItems,
-    totalCount: items.length,
-    filteredCount: filteredItems.length,
-  };
-}
-```
-
-### MailingListFilterBar Component
-
-A simplified filter bar with:
-- Search input with debouncing
-- Filter button with rule count badge
-- Result count display
-- Filter rules section (expandable)
-- AND/OR toggle
-- Clear all button
-
-Available filter fields:
-```typescript
-const MAILING_FILTER_FIELDS = [
-  { id: 'state', label: 'State', type: 'text' },
-  { id: 'city', label: 'City', type: 'text' },
-  { id: 'zip', label: 'ZIP', type: 'text' },
-  { id: 'contactName', label: 'Contact Name', type: 'text' },
-  { id: 'isCanadian', label: 'Is Canadian', type: 'checkbox' },
-];
-```
-
-### Export Integration
-
-When exporting to CSV:
-- If filters are active, export only the filtered items
-- Show count in export button: "Export CSV (X)"
-
-## Edge Cases
-
-1. **Empty search/filter results** - Show "No matches found" message with option to clear filters
-2. **Large lists** - Client-side filtering is performant for lists up to 10k items
-3. **Filter persistence** - Filters reset when navigating away (unlike Properties which uses sessionStorage)

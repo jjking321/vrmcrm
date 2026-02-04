@@ -1,104 +1,97 @@
 
-# Add Canadian Address Parsing
+
+# Fix PO Box/PMB Parsing in Mailing Addresses
 
 ## Problem
 
-Canadian mailing addresses cannot be parsed by the current US-only address parser or verified by Geocodio (US-only service). These addresses sit in the database with `mailing_state: XX` or `null` values, and the full address crammed into `mailing_address`.
+The database contains records where PO Box or PMB (Private Mailbox) numbers are incorrectly stored in the `mailing_city` field instead of the street address. For example:
 
-**Examples from your data:**
-| mailing_address | Current State |
-|-----------------|---------------|
-| 6 SCARTH ROAD TORONTO ON M4W 2S6 CANADA | XX |
-| 206 WESTMINSTER AVE TORONTO M6R 1P1 ON CANADA | null |
-| 41 WARDEN LN STOUFFVILLE ON L4A 7X5 CANADA | null |
-| 331 PARKWOOD CIRCLE DORVAL QC H9S 3A4 CANADA | null |
+| Field | Current Value | Should Be |
+|-------|---------------|-----------|
+| Street | 1660 S UNIVERSITY DR | 1660 S University Dr, PMB 1033 |
+| City | PMB 1033 FORT WORTH | Fort Worth |
+| State | TX | TX |
+| ZIP | 76107 | 76107 |
+
+This causes mailing list exports and displays to show malformed city names.
 
 ## Solution
 
-Extend the address parser to recognize Canadian provinces and postal codes, enabling local parsing without Geocodio.
+Add detection and correction logic that:
+1. Identifies PO Box/PMB prefixes in the city field
+2. Appends the PO Box/PMB to the street address
+3. Cleans the city field to just the city name
+4. Flags these records in the Fix Mailing Addresses cleanup tool
 
 ## Technical Implementation
 
-### 1. Update `addressParser.ts`
+### 1. Update `src/lib/mailingAddress.ts`
 
-Add Canadian province mappings and postal code pattern:
+Add a helper function to detect and fix PO Box/PMB in city field:
 
 ```text
-Province Abbreviations:
-AB (Alberta), BC (British Columbia), MB (Manitoba), NB (New Brunswick),
-NL (Newfoundland), NS (Nova Scotia), NT (Northwest Territories),
-NU (Nunavut), ON (Ontario), PE (Prince Edward Island), QC (Quebec),
-SK (Saskatchewan), YT (Yukon)
-
-Postal Code Pattern: A1A 1A1 or A1A1A1
+Patterns to detect:
+- "PMB 1033 FORT WORTH" -> PMB 1033 / Fort Worth
+- "PO BOX 456 DALLAS" -> PO Box 456 / Dallas
+- "P.O. BOX 789 AUSTIN" -> P.O. Box 789 / Austin
+- "APT 5 NEW YORK" -> Apt 5 / New York
+- "UNIT 12 CHICAGO" -> Unit 12 / Chicago
+- "STE 100 HOUSTON" -> Ste 100 / Houston
+- "# 22 PHOENIX" -> # 22 / Phoenix
 ```
 
-**New detection logic:**
-1. Check for Canadian postal code pattern at end (before optional "CANADA")
-2. Strip "CANADA" suffix
-3. Find province code (2-letter) or full name
-4. Handle varying order: `CITY PROV POSTAL` or `CITY POSTAL PROV`
-5. Extract city and street components
+Update `deriveMailingFields()` to:
+1. Check if `mailingCity` starts with a unit/PO Box prefix
+2. Extract the prefix and number
+3. Append to `mailingAddress` (e.g., "1660 S University Dr, PMB 1033")
+4. Set `mailingCity` to the remaining city name
 
-### 2. Update `useMailingAddressFixer.ts`
+### 2. Update `src/hooks/useMailingAddressFixer.ts`
 
-Add Canadian detection to `hasEmbeddedAddressData()`:
-- Detect Canadian postal code pattern in `mailing_address`
-- Flag as malformed if postal code embedded but `mailing_zip` differs or is empty
+Extend `hasEmbeddedAddressData()` to also detect PO Box/PMB in city field:
+- Flag records where `mailing_city` starts with PMB, PO BOX, APT, UNIT, STE, or #
+- Mark as malformed so they appear in the cleanup tool
 
-Add Canadian parsing to `tryLocalMailingParse()`:
-- Call new `parseCanadianAddress()` function
-- Return parsed components if successful
+Extend `tryLocalMailingParse()` to handle this case:
+- When parsing, extract the PO Box/PMB from city
+- Return corrected street and city values
 
-### 3. UI Enhancement
-
-In the Fix Mailing Addresses tab, show a badge for Canadian addresses so users know Geocodio won't work for those (local parse only).
-
-## Files to Modify
+### 3. Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/lib/addressParser.ts` | Add Canadian provinces, postal code regex, `parseCanadianAddress()` function |
-| `src/hooks/useMailingAddressFixer.ts` | Update detection and parsing to handle Canadian addresses |
-| `src/components/crm/DataCleanupTool.tsx` | Add visual indicator for Canadian vs US addresses |
+| `src/lib/mailingAddress.ts` | Add PO Box detection/extraction logic in `deriveMailingFields()` |
+| `src/hooks/useMailingAddressFixer.ts` | Add PO Box detection to `hasEmbeddedAddressData()` and fix logic to `tryLocalMailingParse()` |
 
 ## Implementation Details
 
-### Canadian Province Mappings
+### PO Box/Unit Detection Pattern
 
 ```typescript
-const canadianProvinces: Record<string, string> = {
-  'alberta': 'AB', 'british columbia': 'BC', 'manitoba': 'MB',
-  'new brunswick': 'NB', 'newfoundland': 'NL', 'nova scotia': 'NS',
-  'northwest territories': 'NT', 'nunavut': 'NU', 'ontario': 'ON',
-  'prince edward island': 'PE', 'quebec': 'QC', 'saskatchewan': 'SK', 'yukon': 'YT',
-};
-const validProvinceAbbrs = new Set(['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT']);
-```
-
-### Canadian Postal Code Regex
-
-```typescript
-// Matches "M4W 2S6" or "M4W2S6" at end of string (before optional CANADA)
-const canadianPostalPattern = /\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i;
+// Matches patterns like "PMB 1033", "PO BOX 456", "APT 5A", "UNIT 12-B", "STE 100", "# 22"
+const UNIT_PREFIX_PATTERN = /^(PMB|P\.?O\.?\s*BOX|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*(\d+[A-Z]?[-]?\d*)\s+(.+)$/i;
 ```
 
 ### Parsing Flow
 
 ```text
-Input: "6 SCARTH ROAD TORONTO ON M4W 2S6 CANADA"
+Input:
+  street: "1660 S UNIVERSITY DR"
+  city: "PMB 1033 FORT WORTH"
 
-1. Strip "CANADA" suffix -> "6 SCARTH ROAD TORONTO ON M4W 2S6"
-2. Find postal code -> "M4W 2S6"
-3. Find province -> "ON"
-4. Extract city (word before province) -> "TORONTO"  
-5. Remaining = street -> "6 SCARTH ROAD"
-6. Apply Title Case -> "6 Scarth Road", "Toronto", "ON", "M4W 2S6"
+1. Detect unit prefix in city -> matches "PMB 1033"
+2. Extract unit -> "PMB 1033"
+3. Extract remaining city -> "FORT WORTH"
+4. Append unit to street -> "1660 S University Dr, PMB 1033"
+5. Apply Title Case to city -> "Fort Worth"
+
+Output:
+  street: "1660 S University Dr, PMB 1033"
+  city: "Fort Worth"
 ```
 
-## Edge Cases Handled
+### Display vs Persistence
 
-- Postal code before province: `TORONTO M6R 1P1 ON` 
-- Province spelled out: `STOUFFVILLE, ONTARIO L4A 7X5`
-- Missing spaces in postal: `I4Y0B3` (normalize to `I4Y 0B3`)
-- Trailing CANADA with typos: `CANAD`, `CANDA`
+- **Display/Export**: `deriveMailingFields()` will automatically show corrected values in Mailing Lists table and CSV exports
+- **Cleanup Tool**: Records will appear in "Fix Mailing Addresses" tab where users can click "Parse" then "Apply" to persist the corrected values to the database
+

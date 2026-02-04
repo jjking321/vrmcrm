@@ -134,49 +134,52 @@ serve(async (req) => {
         }
       }
 
-      if (!matchedProperty) {
+      // Try to find owner record - first by address match, then by owner name only
+      let ownerRecord: typeof owners[0] | undefined;
+      
+      if (matchedProperty) {
+        ownerRecord = ownerByPropertyId.get(matchedProperty.id);
+      }
+      
+      // If no address match or no owner for that property, try matching by owner last name only
+      if (!ownerRecord && record.ownerLastName) {
+        const ownerLastNameUpper = record.ownerLastName.toUpperCase().trim();
+        
+        for (const owner of owners || []) {
+          const ownersArray = owner.owners as any[] | null;
+          const firstOwnerLastName = (ownersArray?.[0]?.lastName || '').toUpperCase().trim();
+          const ownerName = (owner.name || '').toUpperCase().trim();
+          
+          // Check if last name matches (allow partial matches for long trust names)
+          const lastNameMatches = 
+            (firstOwnerLastName && (
+              firstOwnerLastName.includes(ownerLastNameUpper) ||
+              ownerLastNameUpper.includes(firstOwnerLastName)
+            )) ||
+            (ownerName && (
+              ownerName.includes(ownerLastNameUpper) ||
+              ownerLastNameUpper.includes(ownerName)
+            ));
+          
+          if (lastNameMatches) {
+            ownerRecord = owner;
+            console.log(`Matched by owner name only: "${record.ownerLastName}" -> owner id ${owner.id}, name="${ownerName || firstOwnerLastName}"`);
+            break;
+          }
+        }
+      }
+      
+      if (!ownerRecord) {
         results.push({
           ...record,
           status: "not_found",
-          message: `No property found matching address: ${record.address}`
+          message: `No match found for address: ${record.address}, owner: ${record.ownerLastName}`
         });
         notFound++;
         continue;
       }
 
       matched++;
-
-      // Get the owner record for this property
-      const ownerRecord = ownerByPropertyId.get(matchedProperty.id);
-      
-      if (!ownerRecord) {
-        results.push({
-          ...record,
-          status: "not_found",
-          message: `No owner record found for property: ${record.address}`
-        });
-        notFound++;
-        continue;
-      }
-
-      // Optional: Verify owner last name matches (if provided)
-      if (record.ownerLastName) {
-        const ownerLastNameUpper = record.ownerLastName.toUpperCase();
-        const ownersArray = ownerRecord.owners as any[] | null;
-        const firstOwnerLastName = ownersArray?.[0]?.lastName?.toUpperCase() || '';
-        const ownerName = (ownerRecord.name || '').toUpperCase();
-        
-        const lastNameMatches = 
-          firstOwnerLastName.includes(ownerLastNameUpper) ||
-          ownerLastNameUpper.includes(firstOwnerLastName) ||
-          ownerName.includes(ownerLastNameUpper) ||
-          ownerLastNameUpper.includes(ownerName);
-        
-        if (!lastNameMatches && firstOwnerLastName && ownerLastNameUpper) {
-          // Log mismatch but still update (address is primary match)
-          console.log(`Owner name mismatch for ${record.address}: CSV="${record.ownerLastName}", DB="${firstOwnerLastName || ownerName}"`);
-        }
-      }
 
       // Update the contact_name field
       const { error: updateError } = await supabase

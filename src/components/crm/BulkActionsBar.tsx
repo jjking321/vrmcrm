@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Property, PipelineStage, FilterRule } from '@/types';
-import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone, Plus, Check } from 'lucide-react';
+import { X, Tag, Trash2, RefreshCw, ArrowRight, Loader2, CheckSquare, ListFilter, Phone, Plus, Check, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { fetchZillowData, fetchAirbnbEstimateBatch, applyZillowDataWithStreetView, applyAirROIData } from '@/lib/enrichment';
 import { toast } from 'sonner';
 import { AddToCallListModal } from './AddToCallListModal';
+import { AddToMailingListModal } from './AddToMailingListModal';
 import { useUniqueTags } from '@/hooks/useUniqueTags';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -46,6 +47,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [isCallListModalOpen, setIsCallListModalOpen] = useState(false);
+  const [isMailingListModalOpen, setIsMailingListModalOpen] = useState(false);
   
   const { data: existingTags = [] } = useUniqueTags();
 
@@ -433,6 +435,17 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           </button>
         </div>
 
+        {/* Mailing List */}
+        <div className="border-l border-border pl-3">
+          <button
+            onClick={() => setIsMailingListModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
+          >
+            <Mail className="w-4 h-4" />
+            Mailing List
+          </button>
+        </div>
+
         {/* Delete */}
         <button
           onClick={handleDelete}
@@ -447,6 +460,13 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
       <AddToCallListModal
         isOpen={isCallListModalOpen}
         onClose={() => setIsCallListModalOpen(false)}
+        selectedProperties={selectedProperties}
+      />
+      
+      {/* Mailing List Modal */}
+      <AddToMailingListModal
+        isOpen={isMailingListModalOpen}
+        onClose={() => setIsMailingListModalOpen(false)}
         selectedProperties={selectedProperties}
       />
     </div>

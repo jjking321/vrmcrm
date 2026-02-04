@@ -1,0 +1,370 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { MailingList, MailingListItem, Property } from '@/types';
+import { toast } from 'sonner';
+
+// Transform database row to MailingList
+const transformMailingList = (row: any): MailingList => ({
+  id: row.id,
+  companyId: row.company_id,
+  name: row.name,
+  createdBy: row.created_by,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  exportedAt: row.exported_at,
+  exportCount: row.export_count || 0,
+});
+
+// Transform database row to MailingListItem
+const transformMailingListItem = (row: any): MailingListItem => ({
+  id: row.id,
+  mailingListId: row.mailing_list_id,
+  propertyId: row.property_id,
+  companyId: row.company_id,
+  status: row.status as 'pending' | 'sent',
+  createdAt: row.created_at,
+  sortOrder: row.sort_order,
+});
+
+// Fetch all mailing lists with counts
+export const useMailingLists = () => {
+  const { company } = useAuth();
+  
+  return useQuery({
+    queryKey: ['mailingLists', company?.id],
+    queryFn: async () => {
+      if (!company?.id) return [];
+      
+      const { data: lists, error } = await supabase
+        .from('mailing_lists')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Get counts for each list
+      const listsWithCounts = await Promise.all(
+        (lists || []).map(async (list) => {
+          const { count: totalCount } = await supabase
+            .from('mailing_list_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('mailing_list_id', list.id);
+          
+          return {
+            ...transformMailingList(list),
+            totalCount: totalCount || 0,
+          };
+        })
+      );
+      
+      return listsWithCounts;
+    },
+    enabled: !!company?.id,
+  });
+};
+
+// Fetch items for a specific mailing list with property and owner data
+export const useMailingListItems = (listId: string | null) => {
+  const { company } = useAuth();
+  
+  return useQuery({
+    queryKey: ['mailingListItems', listId],
+    queryFn: async () => {
+      if (!listId || !company?.id) return [];
+      
+      // Get mailing list items
+      const { data: items, error } = await supabase
+        .from('mailing_list_items')
+        .select('*')
+        .eq('mailing_list_id', listId)
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      
+      // Get unique property IDs
+      const propertyIds = [...new Set((items || []).map(item => item.property_id))];
+      
+      if (propertyIds.length === 0) return [];
+      
+      // Fetch properties
+      const { data: properties, error: propError } = await supabase
+        .from('properties')
+        .select('*')
+        .in('id', propertyIds);
+      
+      if (propError) throw propError;
+      
+      // Fetch owners for these properties
+      const { data: owners, error: ownerError } = await supabase
+        .from('owners')
+        .select('*')
+        .in('property_id', propertyIds);
+      
+      if (ownerError) throw ownerError;
+      
+      // Map owners to properties
+      const ownerMap = new Map();
+      owners?.forEach(owner => {
+        ownerMap.set(owner.property_id, owner);
+      });
+      
+      // Transform properties
+      const propertyMap = new Map<string, Property>();
+      properties?.forEach(prop => {
+        const owner = ownerMap.get(prop.id);
+        propertyMap.set(prop.id, {
+          id: prop.id,
+          companyId: prop.company_id,
+          address: prop.address,
+          city: prop.city,
+          state: prop.state,
+          zip: prop.zip,
+          bedrooms: prop.bedrooms,
+          bathrooms: Number(prop.bathrooms),
+          guests: prop.guests,
+          squareFeet: prop.square_feet,
+          yearBuilt: prop.year_built,
+          lotSize: prop.lot_size ? Number(prop.lot_size) : undefined,
+          propertyType: prop.property_type,
+          latitude: prop.latitude,
+          longitude: prop.longitude,
+          image: prop.image || '',
+          stageId: prop.stage_id || '',
+          tags: prop.tags || [],
+          marketData: (prop.market_data as any) || {},
+          customFields: prop.custom_fields as Record<string, any> || {},
+          airbnbUrl: prop.airbnb_url,
+          zillowUrl: prop.zillow_url,
+          propertyUrl: prop.property_url,
+          bookingLink: prop.booking_link,
+          listingTitle: prop.listing_title,
+          roomType: prop.room_type,
+          propertyManager: prop.property_manager,
+          host: prop.host,
+          activities: [],
+          owner: owner ? {
+            name: owner.name || '',
+            email: owner.email || '',
+            phone: owner.phone || '',
+            owners: (owner.owners as any[]) || [],
+            phones: (owner.phones as any[]) || [],
+            emails: (owner.emails as any[]) || [],
+            mailingAddress: owner.mailing_address,
+            mailingCity: owner.mailing_city,
+            mailingState: owner.mailing_state,
+            mailingZip: owner.mailing_zip,
+            ownershipLengthMonths: owner.ownership_length_months,
+            ownerType: owner.owner_type,
+            ownerOccupied: owner.owner_occupied,
+            litigator: owner.litigator,
+            contactName: owner.contact_name,
+            age: owner.age,
+            notes: owner.notes,
+          } : {
+            name: '',
+            email: '',
+            phone: '',
+          },
+        });
+      });
+      
+      // Attach properties to items
+      return (items || []).map(item => ({
+        ...transformMailingListItem(item),
+        property: propertyMap.get(item.property_id),
+      }));
+    },
+    enabled: !!listId && !!company?.id,
+  });
+};
+
+// Create a new mailing list
+export const useCreateMailingList = () => {
+  const queryClient = useQueryClient();
+  const { company, user } = useAuth();
+  
+  return useMutation({
+    mutationFn: async (name: string) => {
+      if (!company?.id) throw new Error('No company');
+      
+      const { data, error } = await supabase
+        .from('mailing_lists')
+        .insert({
+          company_id: company.id,
+          name,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return transformMailingList(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+    },
+  });
+};
+
+// Add properties to a mailing list
+export const useAddToMailingList = () => {
+  const queryClient = useQueryClient();
+  const { company } = useAuth();
+  
+  return useMutation({
+    mutationFn: async ({ 
+      listId, 
+      properties,
+      dedupeByAddress = true,
+    }: { 
+      listId: string; 
+      properties: Property[];
+      dedupeByAddress?: boolean;
+    }) => {
+      if (!company?.id) throw new Error('No company');
+      
+      // If deduping, get existing items in the list
+      let existingAddresses = new Set<string>();
+      if (dedupeByAddress) {
+        const { data: existingItems } = await supabase
+          .from('mailing_list_items')
+          .select('property_id')
+          .eq('mailing_list_id', listId);
+        
+        if (existingItems && existingItems.length > 0) {
+          // Get the properties to check mailing addresses
+          const { data: existingProps } = await supabase
+            .from('owners')
+            .select('mailing_address, mailing_city, mailing_state, mailing_zip')
+            .in('property_id', existingItems.map(i => i.property_id));
+          
+          existingProps?.forEach(owner => {
+            const key = `${owner.mailing_address || ''}-${owner.mailing_city || ''}-${owner.mailing_state || ''}-${owner.mailing_zip || ''}`.toLowerCase();
+            existingAddresses.add(key);
+          });
+        }
+      }
+      
+      const items: any[] = [];
+      let sortOrder = 0;
+      let skippedCount = 0;
+      
+      properties.forEach(property => {
+        // Check if mailing address already exists
+        if (dedupeByAddress) {
+          const key = `${property.owner.mailingAddress || ''}-${property.owner.mailingCity || ''}-${property.owner.mailingState || ''}-${property.owner.mailingZip || ''}`.toLowerCase();
+          if (existingAddresses.has(key)) {
+            skippedCount++;
+            return;
+          }
+          existingAddresses.add(key);
+        }
+        
+        items.push({
+          mailing_list_id: listId,
+          property_id: property.id,
+          company_id: company.id,
+          status: 'pending',
+          sort_order: sortOrder++,
+        });
+      });
+      
+      if (items.length === 0) {
+        return { added: 0, skipped: skippedCount };
+      }
+      
+      const { error } = await supabase
+        .from('mailing_list_items')
+        .insert(items);
+      
+      if (error) throw error;
+      
+      return { added: items.length, skipped: skippedCount };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+      queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
+      const skippedMsg = result.skipped > 0 ? ` (${result.skipped} duplicates skipped)` : '';
+      toast.success(`Added ${result.added} addresses to mailing list${skippedMsg}`);
+    },
+    onError: (error) => {
+      toast.error(`Failed to add to mailing list: ${error.message}`);
+    },
+  });
+};
+
+// Update export tracking on a mailing list
+export const useUpdateMailingListExport = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (listId: string) => {
+      // Get current export count
+      const { data: current, error: fetchError } = await supabase
+        .from('mailing_lists')
+        .select('export_count')
+        .eq('id', listId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      const { error } = await supabase
+        .from('mailing_lists')
+        .update({
+          exported_at: new Date().toISOString(),
+          export_count: (current?.export_count || 0) + 1,
+        })
+        .eq('id', listId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+    },
+  });
+};
+
+// Delete a mailing list
+export const useDeleteMailingList = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('mailing_lists')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+      toast.success('Mailing list deleted');
+    },
+    onError: () => {
+      toast.error('Failed to delete mailing list');
+    },
+  });
+};
+
+// Remove item from mailing list
+export const useRemoveMailingListItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase
+        .from('mailing_list_items')
+        .delete()
+        .eq('id', itemId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+    },
+  });
+};

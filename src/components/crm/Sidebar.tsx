@@ -3,7 +3,7 @@ import { ViewMode, SavedList } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Building, Users, LayoutGrid, Settings, LogOut, 
-  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone
+  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users, count: ownerCount },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
     { id: 'callLists' as ViewMode, label: 'Call Lists', icon: Phone },
+    { id: 'mailingLists' as ViewMode, label: 'Mailing Lists', icon: Mail },
     { id: 'dataCleanup' as ViewMode, label: 'Data Tools', icon: Wrench },
     { id: 'exclusions' as ViewMode, label: 'Exclusion List', icon: Ban },
     { id: 'settings' as ViewMode, label: 'Settings', icon: Settings },

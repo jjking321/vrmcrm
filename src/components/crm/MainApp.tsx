@@ -30,6 +30,7 @@ import { DataCleanupTool } from './DataCleanupTool';
 import { ExclusionListManager } from './ExclusionListManager';
 import { CallListsView } from './CallListsView';
 import { CallDialer } from './CallDialer';
+import { MailingListsView } from './MailingListsView';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -539,6 +540,10 @@ const MainApp: React.FC = () => {
           onOpenDialer={(listId) => setDialerListId(listId)} 
         />
       );
+    }
+
+    if (view === 'mailingLists') {
+      return <MailingListsView />;
     }
 
     if (view === 'owners') {

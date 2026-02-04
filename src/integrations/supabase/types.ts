@@ -273,6 +273,77 @@ export type Database = {
         }
         Relationships: []
       }
+      mailing_list_items: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          mailing_list_id: string
+          property_id: string
+          sort_order: number | null
+          status: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          mailing_list_id: string
+          property_id: string
+          sort_order?: number | null
+          status?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          mailing_list_id?: string
+          property_id?: string
+          sort_order?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mailing_list_items_mailing_list_id_fkey"
+            columns: ["mailing_list_id"]
+            isOneToOne: false
+            referencedRelation: "mailing_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mailing_lists: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          export_count: number | null
+          exported_at: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          export_count?: number | null
+          exported_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          export_count?: number | null
+          exported_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       owners: {
         Row: {
           age: number | null

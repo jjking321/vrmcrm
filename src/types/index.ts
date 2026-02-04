@@ -253,8 +253,33 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
-export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer';
+export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer' | 'mailingLists';
 export type ListViewMode = 'table' | 'kanban';
+
+export type MailingListStatus = 'pending' | 'sent';
+
+export interface MailingList {
+  id: string;
+  companyId: string;
+  name: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  exportedAt?: string;
+  exportCount: number;
+}
+
+export interface MailingListItem {
+  id: string;
+  mailingListId: string;
+  propertyId: string;
+  companyId: string;
+  status: MailingListStatus;
+  createdAt: string;
+  sortOrder: number;
+  // Joined data
+  property?: Property;
+}
 
 export type CallOutcome = 'answered' | 'voicemail' | 'no_answer' | 'wrong_number' | 'callback' | 'dnc_skipped';
 export type CallItemStatus = 'pending' | 'completed' | 'skipped';

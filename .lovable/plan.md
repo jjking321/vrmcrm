@@ -1,76 +1,89 @@
 
 
-# Fix Mailing List Deduplication by Address
+# Fix Real-Time UI Update When Deleting Mailing List Contact
 
 ## Problem
 
-The mailing list deduplication is creating duplicate entries for the same physical mailing address. For example, two "6 Scarth Road" entries appear in the list despite having the same address.
+When deleting a contact from a mailing list, the row doesn't disappear immediately. The user has to wait for the query to refetch before seeing the change.
 
-**Root cause**: The deduplication key is built from raw database fields without:
-1. Applying the `deriveMailingFields()` correction (which fixes PMB/PO Box in city field)
-2. Normalizing addresses (stripping punctuation, abbreviating suffixes like "Road" → "Rd")
-
-### Example of Bug
-
-| Property | Raw City | Dedupe Key Generated |
-|----------|----------|---------------------|
-| 6 Scarth Road | PMB 1033 FORT WORTH | `6 scarth road-pmb 1033 fort worth-tx-12345` |
-| 6 Scarth Road | FORT WORTH | `6 scarth road-fort worth-tx-12345` |
-
-These keys are different, so both records are added to the mailing list.
+**Root cause**: The current implementation invalidates the query after deletion, which triggers a refetch. During the refetch, the old data is still displayed until the new data arrives.
 
 ## Solution
 
-Update `useAddToMailingList` in `src/hooks/useMailingLists.ts` to:
+Implement **optimistic updates** using React Query's `setQueryData` to immediately remove the deleted item from the cached data before the server responds.
 
-1. Use `deriveMailingFields()` to get corrected address components before building the dedupe key
-2. Apply address normalization (similar to property duplicate detection)
+## Technical Implementation
 
-### Technical Changes
+### File: `src/hooks/useMailingLists.ts`
 
-**File: `src/hooks/useMailingLists.ts`**
+Update `useRemoveMailingListItem` to:
 
-Add a normalization function for mailing addresses:
+1. Use `onMutate` to optimistically remove the item from the cache
+2. Store the previous data for rollback on error
+3. Use `onError` to restore the previous data if the deletion fails
+4. Keep `onSettled` to invalidate queries for consistency (ensures server state is reflected)
+
 ```typescript
-function normalizeMailingAddress(
-  street: string,
-  city: string,
-  state: string,
-  zip: string
-): string {
-  return `${street} ${city} ${state} ${zip}`
-    .toLowerCase()
-    .replace(/[.,#\-']/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/\b(street|st|avenue|ave|road|rd|drive|dr|...)\b/g, abbreviate)
-    .trim();
-}
+export const useRemoveMailingListItem = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase
+        .from('mailing_list_items')
+        .delete()
+        .eq('id', itemId);
+      
+      if (error) throw error;
+      return itemId;
+    },
+    onMutate: async (itemId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['mailingListItems'] });
+      
+      // Snapshot all mailingListItems queries
+      const previousData = queryClient.getQueriesData({ queryKey: ['mailingListItems'] });
+      
+      // Optimistically remove from all matching queries
+      queryClient.setQueriesData(
+        { queryKey: ['mailingListItems'] },
+        (old: any[]) => old?.filter(item => item.id !== itemId) ?? []
+      );
+      
+      return { previousData };
+    },
+    onError: (err, itemId, context) => {
+      // Rollback on error
+      context?.previousData?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      toast.error('Failed to remove from mailing list');
+    },
+    onSettled: () => {
+      // Always refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
+      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
+    },
+  });
+};
 ```
 
-Update the deduplication logic:
-```typescript
-// Instead of raw fields:
-const key = `${owner.mailing_address}-${owner.mailing_city}-...`
+### Why This Works
 
-// Use derived + normalized:
-const derived = deriveMailingFields(owner, null);
-const key = normalizeMailingAddress(
-  derived.mailingAddress,
-  derived.mailingCity,
-  derived.mailingState,
-  derived.mailingZip
-);
-```
-
-This ensures:
-- PMB/PO Box extracted from city before comparison
-- "Road" and "Rd" match as the same
-- Case-insensitive matching
-- Punctuation ignored
+| Before | After |
+|--------|-------|
+| Delete → Wait for refetch → UI updates | Delete → UI updates immediately → Refetch in background |
+| User sees stale data for 1-2 seconds | User sees instant feedback |
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/hooks/useMailingLists.ts` | Add normalization function, update dedupe logic in `useAddToMailingList` |
+| `src/hooks/useMailingLists.ts` | Add optimistic update logic to `useRemoveMailingListItem` |
+
+### Edge Cases Handled
+
+1. **Network failure**: If deletion fails, the item reappears in the list with an error toast
+2. **Multiple deletions**: Each deletion optimistically updates the cache independently
+3. **Filter/search active**: The optimistic removal happens on the raw data, which then flows through the filtering logic
 

@@ -182,13 +182,35 @@ export function formatOwnershipLength(months?: number): string {
 }
 
 /**
+ * Check if a name looks like a corporate/LLC name
+ */
+export function isCorporateName(name: string): boolean {
+  if (!name) return false;
+  const corporateKeywords = /\b(LLC|L\.L\.C|INC|CORP|CORPORATION|TRUST|LP|LLP|PARTNERSHIP|ESTATE|REVOCABLE|IRREVOCABLE|PROPERTIES|INVESTMENTS|HOLDINGS|ENTERPRISES|GROUP|COMPANY|CO\.|FOUNDATION|ASSOCIATION|FUND)\b/i;
+  return corporateKeywords.test(name);
+}
+
+/**
  * Get the best mailing name for an owner
+ * Prefers individual names over LLC/corporate names
  * Prefers "First Last" format from structured owners array
  * Falls back to legacy name field, normalizing "LAST, FIRST" format
  */
 export function getBestMailingName(owner: Owner): string {
-  // Check structured owners array first
+  // Check structured owners array first - prefer individual over corporate
   if (owner.owners && owner.owners.length > 0) {
+    // First, try to find an individual (non-corporate) owner
+    for (const o of owner.owners) {
+      const firstName = (o.firstName || '').trim();
+      const lastName = (o.lastName || '').trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+      
+      if (fullName && !isCorporateName(fullName)) {
+        return normalizeOwnerName(fullName);
+      }
+    }
+    
+    // If all owners are corporate, fall back to first one
     const firstOwner = owner.owners[0];
     const firstName = (firstOwner.firstName || '').trim();
     const lastName = (firstOwner.lastName || '').trim();
@@ -211,13 +233,7 @@ export function getBestMailingName(owner: Owner): string {
       return normalizeOwnerName(`${commaMatch[2]} ${commaMatch[1]}`);
     }
     
-    // Check if it looks like a company/trust name (contains LLC, Inc, Trust, etc.)
-    const corporateKeywords = /\b(LLC|INC|CORP|TRUST|LP|LLP|PARTNERSHIP|ESTATE|REVOCABLE|IRREVOCABLE)\b/i;
-    if (corporateKeywords.test(name)) {
-      // Still return the name, but it's a company name
-      return normalizeOwnerName(name);
-    }
-    
+    // Still return the name even if it's a company
     return normalizeOwnerName(name);
   }
   
@@ -227,6 +243,69 @@ export function getBestMailingName(owner: Owner): string {
   }
   
   return 'Current Resident';
+}
+
+/**
+ * Get all available mailing name options for manual selection
+ * Returns individual names first, then corporate names
+ */
+export function getAllMailingNameOptions(owner: Owner): { name: string; isCorporate: boolean; source?: string }[] {
+  const options: { name: string; isCorporate: boolean; source?: string }[] = [];
+  const seen = new Set<string>();
+  
+  // Add from structured owners array
+  if (owner.owners && owner.owners.length > 0) {
+    for (const o of owner.owners) {
+      const firstName = (o.firstName || '').trim();
+      const lastName = (o.lastName || '').trim();
+      const fullName = normalizeOwnerName(`${firstName} ${lastName}`.trim());
+      
+      if (fullName && !seen.has(fullName.toLowerCase())) {
+        seen.add(fullName.toLowerCase());
+        options.push({
+          name: fullName,
+          isCorporate: isCorporateName(fullName),
+          source: o.source,
+        });
+      }
+    }
+  }
+  
+  // Add from legacy name field if different
+  if (owner.name) {
+    const name = normalizeOwnerName(owner.name.trim());
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      options.push({
+        name,
+        isCorporate: isCorporateName(name),
+        source: undefined,
+      });
+    }
+  }
+  
+  // Add contact name if different
+  if (owner.contactName) {
+    const name = normalizeOwnerName(owner.contactName.trim());
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      options.push({
+        name,
+        isCorporate: isCorporateName(name),
+        source: undefined,
+      });
+    }
+  }
+  
+  // Sort: individuals first, then corporate
+  options.sort((a, b) => {
+    if (a.isCorporate !== b.isCorporate) {
+      return a.isCorporate ? 1 : -1;
+    }
+    return 0;
+  });
+  
+  return options;
 }
 /**
  * Get phone type badge color

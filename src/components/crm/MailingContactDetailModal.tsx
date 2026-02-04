@@ -11,8 +11,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SourceBadge } from './SourceBadge';
-import { getBestMailingName } from '@/lib/ownerUtils';
-import { Pencil, Phone, Mail, User, MapPin, Building2 } from 'lucide-react';
+import { getBestMailingName, getAllMailingNameOptions, isCorporateName } from '@/lib/ownerUtils';
+import { Pencil, Phone, Mail, User, MapPin, Building2, ChevronDown, Check } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface MailingContactDetailModalProps {
   isOpen: boolean;
@@ -35,19 +42,25 @@ export const MailingContactDetailModal: React.FC<MailingContactDetailModalProps>
     mailingCity: '',
     mailingState: '',
     mailingZip: '',
+    contactName: '',
   });
 
   const property = item.property;
   const owner = property?.owner;
 
+  // Get all available name options for the dropdown
+  const nameOptions = owner ? getAllMailingNameOptions(owner) : [];
+
   // Reset form when modal opens or item changes
   useEffect(() => {
     if (owner) {
+      const bestName = getBestMailingName(owner);
       setFormData({
         mailingAddress: owner.mailingAddress || property?.address || '',
         mailingCity: owner.mailingCity || property?.city || '',
         mailingState: owner.mailingState || property?.state || '',
         mailingZip: owner.mailingZip || property?.zip || '',
+        contactName: owner.contactName || bestName,
       });
     }
     setIsEditing(false);
@@ -57,11 +70,18 @@ export const MailingContactDetailModal: React.FC<MailingContactDetailModalProps>
     return null;
   }
 
-  const contactName = getBestMailingName(owner);
+  // Display name: use saved contactName if set, otherwise derive it
+  const displayContactName = owner.contactName || getBestMailingName(owner);
   const owners: OwnerContact[] = owner.owners || [];
   const phones: PhoneContact[] = owner.phones || [];
   const emails: EmailContact[] = owner.emails || [];
   const propertyManager = property.propertyManager;
+
+  // Get source for the display name
+  const getSourceForName = (name: string): string | undefined => {
+    const option = nameOptions.find(o => o.name.toLowerCase() === name.toLowerCase());
+    return option?.source;
+  };
 
   const handleSave = () => {
     onSave(property.id, {
@@ -69,17 +89,20 @@ export const MailingContactDetailModal: React.FC<MailingContactDetailModalProps>
       mailingCity: formData.mailingCity,
       mailingState: formData.mailingState,
       mailingZip: formData.mailingZip,
+      contactName: formData.contactName,
     });
   };
 
   const handleCancel = () => {
     if (isEditing) {
       // Reset form to original values
+      const bestName = getBestMailingName(owner);
       setFormData({
         mailingAddress: owner.mailingAddress || property?.address || '',
         mailingCity: owner.mailingCity || property?.city || '',
         mailingState: owner.mailingState || property?.state || '',
         mailingZip: owner.mailingZip || property?.zip || '',
+        contactName: owner.contactName || bestName,
       });
       setIsEditing(false);
     } else {
@@ -88,7 +111,7 @@ export const MailingContactDetailModal: React.FC<MailingContactDetailModalProps>
   };
 
   // Get source for the primary owner name
-  const primaryOwnerSource = owners.length > 0 ? owners[0].source : undefined;
+  const primaryOwnerSource = getSourceForName(displayContactName);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -112,14 +135,61 @@ export const MailingContactDetailModal: React.FC<MailingContactDetailModalProps>
 
         <div className="space-y-6 py-4">
           {/* Contact Name */}
-          <div className="space-y-1">
+          <div className="space-y-2">
             <Label className="text-xs uppercase text-muted-foreground tracking-wide">
               Contact Name
             </Label>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-medium">{contactName}</span>
-              <SourceBadge source={primaryOwnerSource} />
-            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                {nameOptions.length > 1 ? (
+                  <Select
+                    value={formData.contactName}
+                    onValueChange={(value) => setFormData({ ...formData, contactName: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select contact name" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nameOptions.map((option, idx) => (
+                        <SelectItem key={idx} value={option.name}>
+                          <div className="flex items-center gap-2">
+                            <span className={option.isCorporate ? 'text-muted-foreground' : ''}>
+                              {option.name}
+                            </span>
+                            {option.isCorporate && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                LLC
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formData.contactName}
+                    onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                    placeholder="Contact name"
+                  />
+                )}
+                {isCorporateName(formData.contactName) && nameOptions.some(o => !o.isCorporate) && (
+                  <p className="text-xs text-amber-600">
+                    An individual name is available. Consider selecting it for better mailing response rates.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-medium">{displayContactName}</span>
+                <SourceBadge source={primaryOwnerSource} />
+                {isCorporateName(displayContactName) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                    LLC
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Mailing Address */}

@@ -41,7 +41,26 @@ const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
 const DIRECTIONAL_IN_CITY_PATTERN = /^(NE|NW|SE|SW|N|S|E|W)\s+(.+)$/i;
 
 /**
+ * Common city word abbreviations that should be expanded
+ */
+const CITY_ABBREVIATION_EXPANSIONS: Record<string, string> = {
+  'bch': 'Beach',
+  'hts': 'Heights',
+  'spgs': 'Springs',
+  'vlg': 'Village',
+  'hbr': 'Harbor',
+  'lk': 'Lake',
+  'mt': 'Mount',
+  'pt': 'Point',
+  'jct': 'Junction',
+  'vly': 'Valley',
+  'ctr': 'Center',
+  'twp': 'Township',
+};
+
+/**
  * Helper: Title Case conversion for addresses
+ * Also expands common city abbreviations (Bch -> Beach, etc.)
  */
 function toTitleCase(str: string): string {
   if (!str) return '';
@@ -50,7 +69,12 @@ function toTitleCase(str: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase())
     // Keep common abbreviations uppercase
     .replace(/\b(Nw|Ne|Sw|Se|Po|Apt|Ste|Fl|Pmb)\b/gi, (match) => match.toUpperCase())
-    .replace(/\b(Ii|Iii|Iv)\b/gi, (match) => match.toUpperCase());
+    .replace(/\b(Ii|Iii|Iv)\b/gi, (match) => match.toUpperCase())
+    // Expand common city abbreviations
+    .replace(/\b(Bch|Hts|Spgs|Vlg|Hbr|Lk|Mt|Pt|Jct|Vly|Ctr|Twp)\b/gi, (match) => {
+      const key = match.toLowerCase();
+      return CITY_ABBREVIATION_EXPANSIONS[key] || match;
+    });
 }
 
 /**

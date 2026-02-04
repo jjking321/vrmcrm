@@ -182,6 +182,53 @@ export function formatOwnershipLength(months?: number): string {
 }
 
 /**
+ * Get the best mailing name for an owner
+ * Prefers "First Last" format from structured owners array
+ * Falls back to legacy name field, normalizing "LAST, FIRST" format
+ */
+export function getBestMailingName(owner: Owner): string {
+  // Check structured owners array first
+  if (owner.owners && owner.owners.length > 0) {
+    const firstOwner = owner.owners[0];
+    const firstName = (firstOwner.firstName || '').trim();
+    const lastName = (firstOwner.lastName || '').trim();
+    
+    if (firstName && lastName) {
+      return normalizeOwnerName(`${firstName} ${lastName}`);
+    }
+    if (firstName || lastName) {
+      return normalizeOwnerName(firstName || lastName);
+    }
+  }
+  
+  // Fallback to legacy name field
+  if (owner.name) {
+    const name = owner.name.trim();
+    
+    // Check if it's "LAST, FIRST" format and flip it
+    const commaMatch = name.match(/^([A-Za-z]+),\s*([A-Za-z]+)$/);
+    if (commaMatch) {
+      return normalizeOwnerName(`${commaMatch[2]} ${commaMatch[1]}`);
+    }
+    
+    // Check if it looks like a company/trust name (contains LLC, Inc, Trust, etc.)
+    const corporateKeywords = /\b(LLC|INC|CORP|TRUST|LP|LLP|PARTNERSHIP|ESTATE|REVOCABLE|IRREVOCABLE)\b/i;
+    if (corporateKeywords.test(name)) {
+      // Still return the name, but it's a company name
+      return normalizeOwnerName(name);
+    }
+    
+    return normalizeOwnerName(name);
+  }
+  
+  // Use contact name if available
+  if (owner.contactName) {
+    return normalizeOwnerName(owner.contactName);
+  }
+  
+  return 'Current Resident';
+}
+/**
  * Get phone type badge color
  */
 export function getPhoneTypeBadgeClass(type: string): string {

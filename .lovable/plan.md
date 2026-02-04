@@ -1,89 +1,104 @@
 
-# Fix Mailing Addresses Tool
+# Add Canadian Address Parsing
 
 ## Problem
 
-Mailing addresses imported from CSV data often have the complete address stuffed into the `mailingAddress` field while `mailingCity`, `mailingState`, and `mailingZip` contain incorrect values (often duplicated from the property address). Examples from your data:
+Canadian mailing addresses cannot be parsed by the current US-only address parser or verified by Geocodio (US-only service). These addresses sit in the database with `mailing_state: XX` or `null` values, and the full address crammed into `mailing_address`.
 
-| mailingAddress | city | state | zip | (expected) |
-|----------------|------|-------|-----|------------|
-| 135 E 54TH ST APT 9K NEW YORK, NY 10022 | Cocoa Beach | FL | 32931 | New York, NY 10022 |
-| 1800 MINUTEMEN CSWY APT 12 COCOA BEACH, FL 32931 | Cocoa Beach | FL | 32931 | (parse correctly) |
-| 84773 A OLD | HWY ISLAMORADA | FL | 33036 | (needs Geocodio) |
+**Examples from your data:**
+| mailing_address | Current State |
+|-----------------|---------------|
+| 6 SCARTH ROAD TORONTO ON M4W 2S6 CANADA | XX |
+| 206 WESTMINSTER AVE TORONTO M6R 1P1 ON CANADA | null |
+| 41 WARDEN LN STOUFFVILLE ON L4A 7X5 CANADA | null |
+| 331 PARKWOOD CIRCLE DORVAL QC H9S 3A4 CANADA | null |
 
 ## Solution
 
-Add a new **"Fix Mailing Addresses"** tab to the Data Cleanup Tool that:
-
-1. **Detects malformed mailing addresses** - Scans for owners where the mailing address field contains a parseable full address (has city/state/zip embedded)
-2. **Local parsing first** - Uses the existing `parseFullAddress()` function to extract components
-3. **Geocodio fallback** - For unparseable addresses, sends to Geocodio for standardization
-4. **Title Case normalization** - Converts ALL CAPS addresses to proper casing
-5. **Manual edit option** - Allow editing individual addresses that can't be auto-fixed
+Extend the address parser to recognize Canadian provinces and postal codes, enabling local parsing without Geocodio.
 
 ## Technical Implementation
 
-### New Hook: `useMailingAddressFixer.ts`
+### 1. Update `addressParser.ts`
 
-```typescript
-interface MalformedMailingAddress {
-  propertyId: string;
-  ownerId?: string;
-  mailingAddress: string;
-  mailingCity: string;
-  mailingState: string;
-  mailingZip: string;
-}
-
-// Query to find addresses where mailingAddress contains full address pattern
-// (has state abbreviation + zip embedded in the address field)
-function useMalformedMailingAddresses() {
-  // Fetch all properties
-  // Filter where mailingAddress matches pattern like "... NY 10022" or ", City, ST ZIP"
-  // and mailingCity/mailingState/mailingZip appear wrong
-}
-```
-
-### Detection Logic
-
-An address is considered malformed if:
-1. `mailingAddress` contains a ZIP code pattern at the end (5 digits)
-2. `mailingAddress` contains a state abbreviation before the ZIP
-3. OR the existing `mailingCity/State/Zip` don't match what's embedded in `mailingAddress`
-
-### Data Cleanup Tool Tab
-
-Add new tab to existing tool at `src/components/crm/DataCleanupTool.tsx`:
+Add Canadian province mappings and postal code pattern:
 
 ```text
-Tabs: [CSV Cleanup] [Fix Addresses] [Verify Addresses] [Fix Mailing Addresses] [Duplicates] [Fix Owner Names]
+Province Abbreviations:
+AB (Alberta), BC (British Columbia), MB (Manitoba), NB (New Brunswick),
+NL (Newfoundland), NS (Nova Scotia), NT (Northwest Territories),
+NU (Nunavut), ON (Ontario), PE (Prince Edward Island), QC (Quebec),
+SK (Saskatchewan), YT (Yukon)
+
+Postal Code Pattern: A1A 1A1 or A1A1A1
 ```
 
-UI will show:
-- Count of malformed mailing addresses found
-- Preview table with current values vs. parsed values
-- "Fix All" button for batch processing
-- Individual row actions: Parse, Geocodio, Edit
+**New detection logic:**
+1. Check for Canadian postal code pattern at end (before optional "CANADA")
+2. Strip "CANADA" suffix
+3. Find province code (2-letter) or full name
+4. Handle varying order: `CITY PROV POSTAL` or `CITY POSTAL PROV`
+5. Extract city and street components
 
-### Update Flow
+### 2. Update `useMailingAddressFixer.ts`
 
-When fixing an address like `135 E 54TH ST APT 9K NEW YORK, NY 10022`:
+Add Canadian detection to `hasEmbeddedAddressData()`:
+- Detect Canadian postal code pattern in `mailing_address`
+- Flag as malformed if postal code embedded but `mailing_zip` differs or is empty
 
-1. Parse extracts: `street: "135 E 54th St Apt 9K"`, `city: "New York"`, `state: "NY"`, `zip: "10022"`
-2. Apply Title Case to street and city
-3. Update database: `owner.mailingAddress`, `owner.mailingCity`, `owner.mailingState`, `owner.mailingZip`
+Add Canadian parsing to `tryLocalMailingParse()`:
+- Call new `parseCanadianAddress()` function
+- Return parsed components if successful
 
-## Files to Create/Modify
+### 3. UI Enhancement
 
-| File | Action | Description |
-|------|--------|-------------|
-| `src/hooks/useMailingAddressFixer.ts` | Create | Hook to detect and fix malformed mailing addresses |
-| `src/components/crm/DataCleanupTool.tsx` | Modify | Add new "Fix Mailing Addresses" tab |
+In the Fix Mailing Addresses tab, show a badge for Canadian addresses so users know Geocodio won't work for those (local parse only).
 
-## Implementation Steps
+## Files to Modify
 
-1. Create the `useMailingAddressFixer` hook with detection logic
-2. Add query to find properties with malformed mailing addresses
-3. Create mutation to update owner mailing fields
-4. Add new tab UI to DataCleanupTool
-5. Wire up Parse/Geocodio/Edit actions using existing patterns
+| File | Changes |
+|------|---------|
+| `src/lib/addressParser.ts` | Add Canadian provinces, postal code regex, `parseCanadianAddress()` function |
+| `src/hooks/useMailingAddressFixer.ts` | Update detection and parsing to handle Canadian addresses |
+| `src/components/crm/DataCleanupTool.tsx` | Add visual indicator for Canadian vs US addresses |
+
+## Implementation Details
+
+### Canadian Province Mappings
+
+```typescript
+const canadianProvinces: Record<string, string> = {
+  'alberta': 'AB', 'british columbia': 'BC', 'manitoba': 'MB',
+  'new brunswick': 'NB', 'newfoundland': 'NL', 'nova scotia': 'NS',
+  'northwest territories': 'NT', 'nunavut': 'NU', 'ontario': 'ON',
+  'prince edward island': 'PE', 'quebec': 'QC', 'saskatchewan': 'SK', 'yukon': 'YT',
+};
+const validProvinceAbbrs = new Set(['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT']);
+```
+
+### Canadian Postal Code Regex
+
+```typescript
+// Matches "M4W 2S6" or "M4W2S6" at end of string (before optional CANADA)
+const canadianPostalPattern = /\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i;
+```
+
+### Parsing Flow
+
+```text
+Input: "6 SCARTH ROAD TORONTO ON M4W 2S6 CANADA"
+
+1. Strip "CANADA" suffix -> "6 SCARTH ROAD TORONTO ON M4W 2S6"
+2. Find postal code -> "M4W 2S6"
+3. Find province -> "ON"
+4. Extract city (word before province) -> "TORONTO"  
+5. Remaining = street -> "6 SCARTH ROAD"
+6. Apply Title Case -> "6 Scarth Road", "Toronto", "ON", "M4W 2S6"
+```
+
+## Edge Cases Handled
+
+- Postal code before province: `TORONTO M6R 1P1 ON` 
+- Province spelled out: `STOUFFVILLE, ONTARIO L4A 7X5`
+- Missing spaces in postal: `I4Y0B3` (normalize to `I4Y 0B3`)
+- Trailing CANADA with typos: `CANAD`, `CANDA`

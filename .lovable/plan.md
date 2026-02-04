@@ -1,103 +1,125 @@
 
-# Backend Update: Populate Contact Names from CSV
 
-## Overview
+# Fix: Improve Address Matching for Exclusion List
 
-Create a backend function to batch update ~500 property records with contact names from your CSV. The matching will use **Address** + **Owner 1 Last Name** to find the correct property, then set the **Name 1** value as `contact_name`.
+## The Problem
 
-## Matching Logic
+The exclusion list has `104 W Leon Ln, Cocoa Beach, FL 32931, USA` but the database has `104 Leon Ln W`. These don't match because:
 
-| CSV Column | Database Match |
-|------------|----------------|
-| `Address` | `properties.address` (case-insensitive, fuzzy match on unit numbers) |
-| `Owner 1 Last Name` | `owners.owners[0].lastName` (case-insensitive) |
-| `Name 1` | → `owners.contact_name` |
+| Source | Normalized Address |
+|--------|-------------------|
+| Database | `104 leon ln w cocoa beach fl` |
+| Exclusion | `104 w leon ln cocoa beach fl 32931 usa` |
 
-### Example Matches
+**Two issues:**
+1. **Direction position**: `W` appears at different locations
+2. **Extra data**: Exclusion has zip code and "USA" that database doesn't have
 
-| CSV Address | CSV Owner 1 Last Name | Name 1 → contact_name |
-|------------|----------------------|----------------------|
-| 410 STRAND DR | PROPERTY INVESTMENTS LEGACY CORP | Aleksej Bockar |
-| 7520 RIDGEWOOD AVE APT 909 | PITKANEN,MOSES FAMILY LAND TRUST | Alison Moses |
-| 5200 OCEAN BEACH BLVD # 22C | NEWPORT FINANCIAL GROUP LLC | Amanda Francoeur |
+## Solution
+
+Enhance `normalizeAddressForMatch()` to:
+1. **Normalize directional prefixes/suffixes** - Move all directions (N, S, E, W, NE, NW, SE, SW) to a consistent position
+2. **Extract core address components** - Compare just street number + street name + suffix + city + state (ignore zip and country)
 
 ## Implementation
 
-### Step 1: Create Edge Function
+### File: `src/lib/exclusionUtils.ts`
 
-**File:** `supabase/functions/batch-update-contact-names/index.ts`
+Update `normalizeAddressForMatch()` function:
 
-The function will:
-1. Accept CSV data as JSON array in the request body
-2. Loop through each row
-3. Match property by normalized address + owner last name
-4. Update the `contact_name` field in the `owners` table
-5. Return a summary of matched/updated/skipped records
+```typescript
+export const normalizeAddressForMatch = (
+  address: string,
+  city: string,
+  state: string
+): string => {
+  if (!address) return '';
+  
+  // Direction mappings
+  const directions: Record<string, string> = {
+    'north': 'n', 'n': 'n',
+    'south': 's', 's': 's', 
+    'east': 'e', 'e': 'e',
+    'west': 'w', 'w': 'w',
+    'northeast': 'ne', 'ne': 'ne',
+    'northwest': 'nw', 'nw': 'nw',
+    'southeast': 'se', 'se': 'se',
+    'southwest': 'sw', 'sw': 'sw',
+  };
 
-```text
-Request Body Structure:
-{
-  "records": [
-    { "address": "8600 RIDGEWOOD AVE # 1205", "ownerLastName": "MATHEWS", "contactName": "Alan Mathews" },
-    { "address": "410 STRAND DR", "ownerLastName": "PROPERTY INVESTMENTS LEGACY CORP", "contactName": "Aleksej Bockar" },
-    ...
-  ]
-}
+  const streetSuffixes: Record<string, string> = {
+    'street': 'st', 'st': 'st',
+    'avenue': 'ave', 'ave': 'ave',
+    'drive': 'dr', 'dr': 'dr',
+    'road': 'rd', 'rd': 'rd',
+    'lane': 'ln', 'ln': 'ln',
+    'boulevard': 'blvd', 'blvd': 'blvd',
+    'court': 'ct', 'ct': 'ct',
+    'circle': 'cir', 'cir': 'cir',
+    'place': 'pl', 'pl': 'pl',
+    'way': 'way',
+    'trail': 'trl', 'trl': 'trl',
+  };
 
-Response:
-{
-  "total": 499,
-  "matched": 485,
-  "updated": 485,
-  "skipped": 14,
-  "errors": [...]
-}
+  // Start with just address (ignore city/state from exclusion if embedded)
+  let normalized = address
+    .toLowerCase()
+    .replace(/[.,#\-']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Remove zip codes (5 or 9 digit)
+  normalized = normalized.replace(/\b\d{5}(-\d{4})?\b/g, '');
+  
+  // Remove country names
+  normalized = normalized.replace(/\b(usa|united states|us)\b/gi, '');
+
+  // Normalize street suffixes
+  for (const [full, abbr] of Object.entries(streetSuffixes)) {
+    normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
+  }
+
+  // Extract and normalize direction
+  let direction = '';
+  for (const [full, abbr] of Object.entries(directions)) {
+    const regex = new RegExp(`\\b${full}\\b`, 'gi');
+    if (regex.test(normalized)) {
+      direction = abbr;
+      normalized = normalized.replace(regex, '');
+      break;
+    }
+  }
+
+  // Clean up and rebuild with direction at consistent position (end of street)
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+  
+  // Add city and state
+  if (city) normalized += ` ${city.toLowerCase()}`;
+  if (state) normalized += ` ${state.toLowerCase()}`;
+  
+  // Append direction at the end for consistent comparison
+  if (direction) normalized += ` ${direction}`;
+
+  return normalized.replace(/\s+/g, ' ').trim();
+};
 ```
 
-### Step 2: Call the Function
+### Result After Fix
 
-After the function is deployed, I'll parse your CSV and call the function with the data to update all records.
+| Source | New Normalized Address |
+|--------|----------------------|
+| Database (`104 Leon Ln W`) | `104 leon ln cocoa beach fl w` |
+| Exclusion (`104 W Leon Ln, Cocoa Beach, FL 32931, USA`) | `104 leon ln cocoa beach fl w` |
 
-## Technical Details
+**Now they match!**
 
-### Address Normalization
+## Files to Modify
 
-The function will normalize addresses for matching:
-- Remove commas, extra spaces
-- Handle unit variations: `# 1205` = `APT 1205` = `UNIT 1205`
-- Case-insensitive comparison
-
-### Database Query
-
-```sql
-UPDATE owners 
-SET contact_name = $contactName
-WHERE property_id IN (
-  SELECT p.id FROM properties p
-  WHERE UPPER(REPLACE(p.address, ',', '')) LIKE UPPER($normalizedAddress || '%')
-)
-AND (
-  UPPER(owners.owners->0->>'lastName') = UPPER($ownerLastName)
-  OR UPPER(owners.name) LIKE UPPER('%' || $ownerLastName || '%')
-)
-```
-
-## Files to Create
-
-| File | Purpose |
+| File | Changes |
 |------|---------|
-| `supabase/functions/batch-update-contact-names/index.ts` | Edge function to batch update records |
+| `src/lib/exclusionUtils.ts` | Update `normalizeAddressForMatch()` to handle directional variations and strip zip/country |
 
-## Expected Results
+## Testing
 
-After running this update:
-- **~485+ records** will have their `contact_name` populated
-- Properties owned by LLCs/Trusts will now display the individual contact name for mailing
-- The priority logic (already updated) will use `contact_name` first
+After implementation, the property at `104 Leon Ln W, Cocoa Beach` will correctly match the exclusion list entry for `104 W Leon Ln, Cocoa Beach, FL 32931, USA`.
 
-## Next Steps After Approval
-
-1. I'll create the edge function
-2. Parse your uploaded CSV into the required format
-3. Call the function to update all matching records
-4. Report back with the results (matched, updated, skipped)

@@ -37,6 +37,7 @@ const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
  * Pattern to detect directional prefix at start of city field
  * Matches: "NE Minneapolis", "SW Portland", "N Chicago"
  * Captures: [1] directional, [2] remaining city name
+ * Note: Longer directionals (NE, NW, SE, SW) listed first to ensure correct matching
  */
 const DIRECTIONAL_IN_CITY_PATTERN = /^(NE|NW|SE|SW|N|S|E|W)\s+(.+)$/i;
 
@@ -196,11 +197,13 @@ export function deriveMailingFields(
 
   // Check for directional prefix in city: "NE Minneapolis" -> "Minneapolis"
   const directionalMatch = mailingCity.match(DIRECTIONAL_IN_CITY_PATTERN);
+  console.log('[deriveMailingFields] Directional check:', { mailingCity, directionalMatch });
   if (directionalMatch) {
     const [, directional, cleanCityName] = directionalMatch;
     // Append directional to street address
     mailingAddress = `${mailingAddress} ${directional.toUpperCase()}`;
     mailingCity = toTitleCase(cleanCityName.trim());
+    console.log('[deriveMailingFields] Extracted directional:', { directional, cleanCityName, newAddress: mailingAddress, newCity: mailingCity });
   }
 
   return {

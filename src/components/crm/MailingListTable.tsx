@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { MailingListItem, Owner } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { getBestMailingName } from '@/lib/ownerUtils';
+import { deriveMailingFields } from '@/lib/mailingAddress';
 import { useRemoveMailingListItem } from '@/hooks/useMailingLists';
 import { useUpdateProperty } from '@/hooks/useProperties';
 import { Trash2 } from 'lucide-react';
@@ -83,12 +85,9 @@ export const MailingListTable: React.FC<MailingListTableProps> = ({ items }) => 
               
               const owner = property.owner;
               const contactName = getBestMailingName(owner);
-              
-              // Use mailing address if available, otherwise fall back to property address
-              const mailingAddress = owner.mailingAddress || property.address;
-              const mailingCity = owner.mailingCity || property.city;
-              const mailingState = owner.mailingState || property.state;
-              const mailingZip = owner.mailingZip || property.zip;
+
+              const { mailingAddress, mailingCity, mailingState, mailingZip, isCanadian } =
+                deriveMailingFields(owner, property);
               
               return (
                 <TableRow 
@@ -99,7 +98,16 @@ export const MailingListTable: React.FC<MailingListTableProps> = ({ items }) => 
                   <TableCell className="font-medium">{contactName}</TableCell>
                   <TableCell>{mailingAddress}</TableCell>
                   <TableCell>{mailingCity}</TableCell>
-                  <TableCell>{mailingState}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span>{mailingState}</span>
+                      {isCanadian && (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                          CA
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{mailingZip}</TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {property.address}, {property.city}

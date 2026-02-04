@@ -21,6 +21,19 @@ export type DerivedMailingFields = {
 const UNIT_IN_CITY_PATTERN = /^(PMB|P\.?O\.?\s*BOX|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*([A-Z0-9]+(?:[-][A-Z0-9]+)?)\s+(.+)$/i;
 
 /**
+ * Pattern to check if street address ends with a unit prefix (without number)
+ * Matches: "PO Box", "PO BOX", "PMB", "Apt", "Suite", "Unit", "#"
+ */
+const STREET_ENDS_WITH_UNIT_PATTERN = /(PO\s*BOX|P\.?O\.?\s*BOX|PMB|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*$/i;
+
+/**
+ * Pattern to detect number at start of city when street ends with unit prefix
+ * Matches: "2699 Springfield", "123 Main City Name"
+ * Captures: [1] number, [2] remaining city name
+ */
+const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
+
+/**
  * Helper: Title Case conversion for addresses
  */
 function toTitleCase(str: string): string {
@@ -130,13 +143,24 @@ export function deriveMailingFields(
       : unitExtraction.unit;
     mailingCity = unitExtraction.cleanCity;
   } else {
-    // Apply title case to address if no unit extraction happened
-    mailingAddress = toTitleCase(mailingAddress);
-  }
-
-  // Ensure city is title cased
-  if (mailingCity && !unitExtraction) {
-    mailingCity = toTitleCase(mailingCity);
+    // Check for split PO Box: street ends with prefix, city starts with number
+    // e.g., Address: "PO Box", City: "2699 Springfield"
+    const streetEndsWithUnit = mailingAddress.match(STREET_ENDS_WITH_UNIT_PATTERN);
+    const cityStartsWithNumber = mailingCity.match(NUMBER_IN_CITY_PATTERN);
+    
+    if (streetEndsWithUnit && cityStartsWithNumber) {
+      const [, unitNumber, cleanCityName] = cityStartsWithNumber;
+      // Append number to street address
+      mailingAddress = `${toTitleCase(mailingAddress)} ${unitNumber}`;
+      mailingCity = toTitleCase(cleanCityName.trim());
+    } else {
+      // Apply title case to address if no extraction happened
+      mailingAddress = toTitleCase(mailingAddress);
+      // Ensure city is title cased
+      if (mailingCity) {
+        mailingCity = toTitleCase(mailingCity);
+      }
+    }
   }
 
   return {

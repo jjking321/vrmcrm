@@ -84,7 +84,8 @@ const AUTO_MAP_PATTERNS: Record<string, string[]> = {
   ownerOccupied: ['owner occupied', 'owner occ', 'oo', 'occupied'],
   
   // Contact Person (for Cocoa Beach format - splits into first/last)
-  contactPerson: ['contact person', 'contact name', 'primary contact'],
+  // Also maps "Name 1", "Name 2" etc. from lead lists that have specific contact names
+  contactPerson: ['contact person', 'contact name', 'primary contact', 'name 1', 'name one', 'name1', 'name 2', 'name two', 'name2'],
   email: ['email', 'owner email', 'e-mail', 'applicant email'],
   age: ['age', 'owner age'],
   

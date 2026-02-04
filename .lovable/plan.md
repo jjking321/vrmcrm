@@ -1,89 +1,97 @@
 
-
-# Fix Real-Time UI Update When Deleting Mailing List Contact
+# Fix PO Box Number Extraction from City Field
 
 ## Problem
 
-When deleting a contact from a mailing list, the row doesn't disappear immediately. The user has to wait for the query to refetch before seeing the change.
+A new malformed data pattern was discovered where:
+- **Street address**: `"PO Box"` (just the prefix, no number)
+- **City field**: `"2699 Springfield"` (the PO Box number + actual city)
 
-**Root cause**: The current implementation invalidates the query after deletion, which triggers a refetch. During the refetch, the old data is still displayed until the new data arrives.
+The current `UNIT_IN_CITY_PATTERN` regex only matches when the city **starts with** a recognized prefix (PMB, PO BOX, APT, etc.). It doesn't handle the case where the street address already contains the prefix and the city contains the number.
+
+### Current Pattern Limitation
+
+```text
+Current regex: /^(PMB|P\.?O\.?\s*BOX|APT\.?|...)\s*([A-Z0-9]+)\s+(.+)$/i
+
+Matches:     "PMB 1033 FORT WORTH"  → ✓ Extracts PMB 1033
+Matches:     "PO BOX 456 ORLANDO"   → ✓ Extracts PO Box 456
+Does NOT:    "2699 Springfield"     → ✗ No prefix detected
+```
 
 ## Solution
 
-Implement **optimistic updates** using React Query's `setQueryData` to immediately remove the deleted item from the cached data before the server responds.
+Add logic to detect when the **street address ends with a unit prefix** and the **city starts with a number**. In this case, extract the number from the city and append it to the street address.
 
-## Technical Implementation
+### Detection Pattern
 
-### File: `src/hooks/useMailingLists.ts`
-
-Update `useRemoveMailingListItem` to:
-
-1. Use `onMutate` to optimistically remove the item from the cache
-2. Store the previous data for rollback on error
-3. Use `onError` to restore the previous data if the deletion fails
-4. Keep `onSettled` to invalidate queries for consistency (ensures server state is reflected)
-
-```typescript
-export const useRemoveMailingListItem = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (itemId: string) => {
-      const { error } = await supabase
-        .from('mailing_list_items')
-        .delete()
-        .eq('id', itemId);
-      
-      if (error) throw error;
-      return itemId;
-    },
-    onMutate: async (itemId) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['mailingListItems'] });
-      
-      // Snapshot all mailingListItems queries
-      const previousData = queryClient.getQueriesData({ queryKey: ['mailingListItems'] });
-      
-      // Optimistically remove from all matching queries
-      queryClient.setQueriesData(
-        { queryKey: ['mailingListItems'] },
-        (old: any[]) => old?.filter(item => item.id !== itemId) ?? []
-      );
-      
-      return { previousData };
-    },
-    onError: (err, itemId, context) => {
-      // Rollback on error
-      context?.previousData?.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
-      toast.error('Failed to remove from mailing list');
-    },
-    onSettled: () => {
-      // Always refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
-      queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
-    },
-  });
-};
+```text
+Street ends with: "PO Box", "PO BOX", "PMB", "Apt", "Suite", "Unit", "#"
+City starts with: Number followed by space and remaining city name
 ```
 
-### Why This Works
+### Example Fix
 
 | Before | After |
 |--------|-------|
-| Delete → Wait for refetch → UI updates | Delete → UI updates immediately → Refetch in background |
-| User sees stale data for 1-2 seconds | User sees instant feedback |
+| Address: `PO Box`, City: `2699 Springfield` | Address: `PO Box 2699`, City: `Springfield` |
+
+## Technical Implementation
+
+### File: `src/lib/mailingAddress.ts`
+
+Add a new pattern and extraction function:
+
+```typescript
+/**
+ * Pattern to detect number at start of city when street ends with unit prefix
+ * Matches: "2699 Springfield", "123 Main City Name"
+ * Captures: [1] number, [2] remaining city name
+ */
+const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
+
+/**
+ * Pattern to check if street address ends with a unit prefix (without number)
+ */
+const STREET_ENDS_WITH_UNIT_PATTERN = /(PO\s*BOX|P\.?O\.?\s*BOX|PMB|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*$/i;
+```
+
+Update `deriveMailingFields()` to handle this case:
+
+```typescript
+// After existing unit extraction logic, add:
+
+// Check for split PO Box: street ends with prefix, city starts with number
+if (!unitExtraction) {
+  const streetEndsWithUnit = mailingAddress.match(STREET_ENDS_WITH_UNIT_PATTERN);
+  const cityStartsWithNumber = mailingCity.match(NUMBER_IN_CITY_PATTERN);
+  
+  if (streetEndsWithUnit && cityStartsWithNumber) {
+    const [, unitNumber, cleanCityName] = cityStartsWithNumber;
+    // Append number to street address
+    mailingAddress = `${toTitleCase(mailingAddress)} ${unitNumber}`;
+    mailingCity = toTitleCase(cleanCityName.trim());
+  }
+}
+```
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/hooks/useMailingLists.ts` | Add optimistic update logic to `useRemoveMailingListItem` |
+| `src/lib/mailingAddress.ts` | Add split PO Box detection pattern and extraction logic |
 
-### Edge Cases Handled
+### Test Cases
 
-1. **Network failure**: If deletion fails, the item reappears in the list with an error toast
-2. **Multiple deletions**: Each deletion optimistically updates the cache independently
-3. **Filter/search active**: The optimistic removal happens on the raw data, which then flows through the filtering logic
+| Street Input | City Input | Expected Address | Expected City |
+|--------------|------------|------------------|---------------|
+| `PO Box` | `2699 Springfield` | `PO Box 2699` | `Springfield` |
+| `PO BOX` | `123 Orlando` | `PO Box 123` | `Orlando` |
+| `PMB` | `456 Fort Worth` | `PMB 456` | `Fort Worth` |
+| `123 Main St` | `Springfield` | `123 Main St` | `Springfield` (no change) |
 
+### Edge Cases
+
+1. **Street has complete PO Box**: If street is `"PO Box 123"` and city is `"456 Springfield"`, don't extract - the PO Box already has a number
+2. **City is just a number**: If city is `"12345"` (a ZIP code in wrong field), don't extract
+3. **Preserves existing logic**: The new check only runs if the existing `extractUnitFromCity()` didn't find anything

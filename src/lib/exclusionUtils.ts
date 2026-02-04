@@ -49,6 +49,18 @@ export const normalizeAddressForMatch = (
 ): string => {
   if (!address) return '';
   
+  // Direction mappings
+  const directions: Record<string, string> = {
+    'north': 'n', 'n': 'n',
+    'south': 's', 's': 's', 
+    'east': 'e', 'e': 'e',
+    'west': 'w', 'w': 'w',
+    'northeast': 'ne', 'ne': 'ne',
+    'northwest': 'nw', 'nw': 'nw',
+    'southeast': 'se', 'se': 'se',
+    'southwest': 'sw', 'sw': 'sw',
+  };
+
   const streetSuffixes: Record<string, string> = {
     'street': 'st', 'st': 'st',
     'avenue': 'ave', 'ave': 'ave',
@@ -63,17 +75,46 @@ export const normalizeAddressForMatch = (
     'trail': 'trl', 'trl': 'trl',
   };
 
-  let normalized = `${address} ${city || ''} ${state || ''}`
+  // Start with just address (ignore city/state from exclusion if embedded)
+  let normalized = address
     .toLowerCase()
     .replace(/[.,#\-']/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Remove zip codes (5 or 9 digit)
+  normalized = normalized.replace(/\b\d{5}(-\d{4})?\b/g, '');
+  
+  // Remove country names
+  normalized = normalized.replace(/\b(usa|united states|us)\b/gi, '');
+
+  // Normalize street suffixes
   for (const [full, abbr] of Object.entries(streetSuffixes)) {
     normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
   }
 
-  return normalized;
+  // Extract and normalize direction
+  let direction = '';
+  for (const [full, abbr] of Object.entries(directions)) {
+    const regex = new RegExp(`\\b${full}\\b`, 'gi');
+    if (regex.test(normalized)) {
+      direction = abbr;
+      normalized = normalized.replace(regex, '');
+      break;
+    }
+  }
+
+  // Clean up and rebuild with direction at consistent position (end of street)
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+  
+  // Add city and state
+  if (city) normalized += ` ${city.toLowerCase()}`;
+  if (state) normalized += ` ${state.toLowerCase()}`;
+  
+  // Append direction at the end for consistent comparison
+  if (direction) normalized += ` ${direction}`;
+
+  return normalized.replace(/\s+/g, ' ').trim();
 };
 
 /**

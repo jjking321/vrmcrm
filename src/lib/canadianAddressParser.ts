@@ -31,6 +31,25 @@ const CANADIAN_POSTAL_REGEX = /\b([ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z])\s?(\d[
 // while still requiring the overall A1A1A1 structure.
 const CANADIAN_POSTAL_REGEX_LENIENT = /\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i;
 
+// Partial postal code: A1A 1A (5 chars - missing final digit)
+const CANADIAN_POSTAL_PARTIAL = /\b([A-Z]\d[A-Z])\s?(\d[A-Z])\b/i;
+
+/**
+ * Check if string contains a province keyword (name or abbreviation)
+ */
+function containsProvinceKeyword(str: string): boolean {
+  const upper = str.toUpperCase();
+  // Check abbreviations
+  for (const abbr of validProvinceAbbrs) {
+    if (new RegExp(`\\b${abbr}\\b`).test(upper)) return true;
+  }
+  // Check full names
+  for (const name of Object.keys(canadianProvinces)) {
+    if (upper.toLowerCase().includes(name)) return true;
+  }
+  return false;
+}
+
 export interface ParsedCanadianAddress {
   street: string;
   city: string;
@@ -130,12 +149,24 @@ export function parseCanadianAddress(fullAddress: string): ParsedCanadianAddress
   // Step 2: Extract postal code
   // Prefer strict match; fallback to lenient for dirty data that still looks like a postal code.
   let postalMatch = working.match(CANADIAN_POSTAL_REGEX);
+  let isPartialPostal = false;
+  
   if (!postalMatch) {
     postalMatch = working.match(CANADIAN_POSTAL_REGEX_LENIENT);
   }
+  if (!postalMatch) {
+    // Try partial postal code (5 chars) if address contains province indicator
+    if (containsProvinceKeyword(working)) {
+      postalMatch = working.match(CANADIAN_POSTAL_PARTIAL);
+      if (postalMatch) {
+        isPartialPostal = true;
+      }
+    }
+  }
   if (!postalMatch) return result;
 
-  result.postalCode = normalizePostalCode(postalMatch[1] + postalMatch[2]);
+  // Mark partial postal codes with ? suffix to indicate incomplete data
+  result.postalCode = normalizePostalCode(postalMatch[1] + postalMatch[2]) + (isPartialPostal ? '?' : '');
   
   // Remove postal code from working string
   const postalStart = postalMatch.index!;

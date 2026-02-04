@@ -3,6 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { parseFullAddress } from '@/lib/addressParser';
+import { 
+  isCanadianAddress, 
+  parseCanadianAddress, 
+  containsCanadianPostalCode,
+  validProvinceAbbrs 
+} from '@/lib/canadianAddressParser';
 
 export interface MalformedMailingAddress {
   ownerId: string;
@@ -14,6 +20,7 @@ export interface MalformedMailingAddress {
   propertyAddress: string; // For context
   propertyCity: string;
   propertyState: string;
+  isCanadian?: boolean; // Flag for Canadian addresses
 }
 
 export interface FixMailingAddressesResult {
@@ -60,16 +67,30 @@ const directionalSuffixes = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW']
  * Check if a mailing address field contains embedded city/state/zip
  * that differs from the stored city/state/zip values.
  * Unlike isFullAddressField(), this checks REGARDLESS of whether city/state are populated.
+ * Also detects Canadian addresses with embedded postal codes.
  */
 function hasEmbeddedAddressData(
   mailingAddress: string,
   storedCity: string,
   storedState: string,
   storedZip: string
-): boolean {
-  if (!mailingAddress) return false;
+): { hasMalformed: boolean; isCanadian: boolean } {
+  if (!mailingAddress) return { hasMalformed: false, isCanadian: false };
   
   const addr = mailingAddress.trim();
+  
+  // Check for Canadian address first
+  if (isCanadianAddress(addr) || containsCanadianPostalCode(addr)) {
+    // If it has a Canadian postal code embedded, it needs parsing
+    const parsed = parseCanadianAddress(addr);
+    if (parsed.isValid) {
+      return { hasMalformed: true, isCanadian: true };
+    }
+    // Even if parsing failed, if it has a Canadian postal code, flag it
+    if (containsCanadianPostalCode(addr)) {
+      return { hasMalformed: true, isCanadian: true };
+    }
+  }
   
   // Pattern 1: Check for "STATE ZIP" at end (e.g., "135 E 54TH ST NEW YORK, NY 10022")
   // This is the most reliable pattern - if there's a ZIP code, it's definitely an address
@@ -87,12 +108,12 @@ function hasEmbeddedAddressData(
       
       // If embedded values differ from stored, it's malformed
       if (embeddedState !== storedStateNorm || embeddedZip !== storedZipNorm) {
-        return true;
+        return { hasMalformed: true, isCanadian: false };
       }
       
       // Even if they match, if the address has a comma (city embedded), it's malformed
       if (addr.includes(',')) {
-        return true;
+        return { hasMalformed: true, isCanadian: false };
       }
     }
   }
@@ -108,7 +129,7 @@ function hasEmbeddedAddressData(
       
       // If parsed city/state differs from stored, it's malformed
       if (parsedCityLower !== storedCityLower || parsedStateLower !== storedStateLower) {
-        return true;
+        return { hasMalformed: true, isCanadian: false };
       }
     }
   }
@@ -118,14 +139,33 @@ function hasEmbeddedAddressData(
   // Skip this check entirely - too many false positives with street suffixes
   // We only reliably detect embedded addresses when there's a ZIP code or comma delimiter
   
-  return false;
+  return { hasMalformed: false, isCanadian: false };
 }
 
-// Try to parse a mailing address locally
+// Try to parse a mailing address locally (handles both US and Canadian)
 export function tryLocalMailingParse(address: MalformedMailingAddress): { 
   success: boolean; 
-  parsed: { street: string; city: string; state: string; zip: string } 
+  parsed: { street: string; city: string; state: string; zip: string };
+  isCanadian: boolean;
 } {
+  // Try Canadian parsing first if it looks like a Canadian address
+  if (address.isCanadian || isCanadianAddress(address.mailingAddress) || containsCanadianPostalCode(address.mailingAddress)) {
+    const canadianParsed = parseCanadianAddress(address.mailingAddress);
+    if (canadianParsed.isValid) {
+      return {
+        success: true,
+        parsed: {
+          street: canadianParsed.street,
+          city: canadianParsed.city,
+          state: canadianParsed.province,
+          zip: canadianParsed.postalCode,
+        },
+        isCanadian: true,
+      };
+    }
+  }
+  
+  // Try US parsing
   const parsed = parseFullAddress(address.mailingAddress);
   
   if (parsed.isValid && parsed.city && parsed.state && parsed.zip) {
@@ -137,12 +177,14 @@ export function tryLocalMailingParse(address: MalformedMailingAddress): {
         state: parsed.state.toUpperCase(),
         zip: parsed.zip,
       },
+      isCanadian: false,
     };
   }
   
   return { 
     success: false, 
-    parsed: { street: '', city: '', state: '', zip: '' } 
+    parsed: { street: '', city: '', state: '', zip: '' },
+    isCanadian: false,
   };
 }
 
@@ -192,7 +234,8 @@ export function useMalformedMailingAddresses() {
         const propertyState = property?.state || '';
 
         // Check if this looks like a full address with embedded city/state/zip
-        if (hasEmbeddedAddressData(mailingAddress, mailingCity, mailingState, mailingZip)) {
+        const { hasMalformed, isCanadian } = hasEmbeddedAddressData(mailingAddress, mailingCity, mailingState, mailingZip);
+        if (hasMalformed) {
           malformed.push({
             ownerId: owner.id,
             propertyId: owner.property_id,
@@ -203,6 +246,7 @@ export function useMalformedMailingAddresses() {
             propertyAddress: property?.address || '',
             propertyCity: propertyCity,
             propertyState: propertyState,
+            isCanadian: isCanadian,
           });
         }
       }

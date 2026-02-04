@@ -1,142 +1,89 @@
 
-# Mailing List Contact Detail Modal
+# Fix Mailing Addresses Tool
 
-## Overview
+## Problem
 
-Add the ability to click on a contact row in the mailing list table to open a popup modal that displays full contact details, allows editing of addresses and contact information, shows all owners/contacts for that property, displays the source of information, and shows the property manager if applicable.
+Mailing addresses imported from CSV data often have the complete address stuffed into the `mailingAddress` field while `mailingCity`, `mailingState`, and `mailingZip` contain incorrect values (often duplicated from the property address). Examples from your data:
 
-## UI/UX Flow
+| mailingAddress | city | state | zip | (expected) |
+|----------------|------|-------|-----|------------|
+| 135 E 54TH ST APT 9K NEW YORK, NY 10022 | Cocoa Beach | FL | 32931 | New York, NY 10022 |
+| 1800 MINUTEMEN CSWY APT 12 COCOA BEACH, FL 32931 | Cocoa Beach | FL | 32931 | (parse correctly) |
+| 84773 A OLD | HWY ISLAMORADA | FL | 33036 | (needs Geocodio) |
 
-1. User clicks anywhere on a contact row in the MailingListTable
-2. A Dialog modal opens showing the full contact details
-3. Modal has two modes: View and Edit (toggle with button)
-4. In Edit mode, user can modify mailing address and contact details
-5. Save button persists changes, Cancel discards
+## Solution
 
-## Modal Content Structure
+Add a new **"Fix Mailing Addresses"** tab to the Data Cleanup Tool that:
 
-```text
-+------------------------------------------------------------------+
-| Contact Details                                           [Edit] |
-+------------------------------------------------------------------+
-|                                                                  |
-| CONTACT NAME                                                     |
-| John Smith                                         [SourceBadge] |
-|                                                                  |
-| MAILING ADDRESS                                                  |
-| 123 Main Street                                                  |
-| Orlando, FL 32801                                  [SourceBadge] |
-|                                                                  |
-| ALL OWNERS (2)                              Section if multiple  |
-| +----------------------------------------------------------+    |
-| | 1. John Smith           [SourceBadge: absentee]          |    |
-| |    (407) 555-1234       [SourceBadge: propwire]          |    |
-| |    john@example.com     [SourceBadge: manual]            |    |
-| +----------------------------------------------------------+    |
-| | 2. Jane Smith           [SourceBadge: absentee]          |    |
-| |    (407) 555-5678       [SourceBadge: propwire]          |    |
-| +----------------------------------------------------------+    |
-|                                                                  |
-| PROPERTY MANAGER (if applicable)                                 |
-| Vacation Rentals Inc.                                            |
-|                                                                  |
-| PROPERTY REFERENCE                                               |
-| 226 Magnolia Ave, Orlando, FL 32801                              |
-|                                                                  |
-+------------------------------------------------------------------+
-|                                              [Cancel]   [Save]   |
-+------------------------------------------------------------------+
-```
+1. **Detects malformed mailing addresses** - Scans for owners where the mailing address field contains a parseable full address (has city/state/zip embedded)
+2. **Local parsing first** - Uses the existing `parseFullAddress()` function to extract components
+3. **Geocodio fallback** - For unparseable addresses, sends to Geocodio for standardization
+4. **Title Case normalization** - Converts ALL CAPS addresses to proper casing
+5. **Manual edit option** - Allow editing individual addresses that can't be auto-fixed
 
 ## Technical Implementation
 
-### New Component: `MailingContactDetailModal.tsx`
+### New Hook: `useMailingAddressFixer.ts`
 
 ```typescript
-interface MailingContactDetailModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  item: MailingListItem & { property?: Property };
-  onSave: (propertyId: string, ownerUpdates: Partial<Owner>) => void;
+interface MalformedMailingAddress {
+  propertyId: string;
+  ownerId?: string;
+  mailingAddress: string;
+  mailingCity: string;
+  mailingState: string;
+  mailingZip: string;
+}
+
+// Query to find addresses where mailingAddress contains full address pattern
+// (has state abbreviation + zip embedded in the address field)
+function useMalformedMailingAddresses() {
+  // Fetch all properties
+  // Filter where mailingAddress matches pattern like "... NY 10022" or ", City, ST ZIP"
+  // and mailingCity/mailingState/mailingZip appear wrong
 }
 ```
 
-**Features:**
-- Display mode: Shows all contact info with source badges
-- Edit mode: Form inputs for mailing address fields
-- Shows all owners from `owner.owners[]` with their phones and emails
-- Shows source badges next to each piece of data
-- Shows property manager from `property.propertyManager`
-- Property address as reference (not editable here)
+### Detection Logic
 
-### MailingListTable Changes
+An address is considered malformed if:
+1. `mailingAddress` contains a ZIP code pattern at the end (5 digits)
+2. `mailingAddress` contains a state abbreviation before the ZIP
+3. OR the existing `mailingCity/State/Zip` don't match what's embedded in `mailingAddress`
 
-- Make each row clickable (cursor-pointer styling)
-- Add state to track selected item
-- Render the modal when an item is selected
+### Data Cleanup Tool Tab
 
-### Hook Integration
+Add new tab to existing tool at `src/components/crm/DataCleanupTool.tsx`:
 
-Use existing `useUpdateProperty` mutation to save owner changes:
-```typescript
-const updateProperty = useUpdateProperty();
-
-const handleSave = (propertyId: string, ownerUpdates: Partial<Owner>) => {
-  updateProperty.mutate({
-    id: propertyId,
-    updates: { owner: ownerUpdates }
-  });
-};
+```text
+Tabs: [CSV Cleanup] [Fix Addresses] [Verify Addresses] [Fix Mailing Addresses] [Duplicates] [Fix Owner Names]
 ```
 
-## File Structure
+UI will show:
+- Count of malformed mailing addresses found
+- Preview table with current values vs. parsed values
+- "Fix All" button for batch processing
+- Individual row actions: Parse, Geocodio, Edit
+
+### Update Flow
+
+When fixing an address like `135 E 54TH ST APT 9K NEW YORK, NY 10022`:
+
+1. Parse extracts: `street: "135 E 54th St Apt 9K"`, `city: "New York"`, `state: "NY"`, `zip: "10022"`
+2. Apply Title Case to street and city
+3. Update database: `owner.mailingAddress`, `owner.mailingCity`, `owner.mailingState`, `owner.mailingZip`
+
+## Files to Create/Modify
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/components/crm/MailingContactDetailModal.tsx` | Create | New modal component |
-| `src/components/crm/MailingListTable.tsx` | Modify | Add click handler and modal state |
+| `src/hooks/useMailingAddressFixer.ts` | Create | Hook to detect and fix malformed mailing addresses |
+| `src/components/crm/DataCleanupTool.tsx` | Modify | Add new "Fix Mailing Addresses" tab |
 
-## Data Sources for Display
+## Implementation Steps
 
-| Field | Source | Editable |
-|-------|--------|----------|
-| Contact Name | `getBestMailingName(owner)` | No (read from owners array) |
-| Mailing Address | `owner.mailingAddress` | Yes |
-| Mailing City | `owner.mailingCity` | Yes |
-| Mailing State | `owner.mailingState` | Yes |
-| Mailing ZIP | `owner.mailingZip` | Yes |
-| All Owners | `owner.owners[]` array | View only |
-| All Phones | `owner.phones[]` with source badges | View only |
-| All Emails | `owner.emails[]` with source badges | View only |
-| Property Manager | `property.propertyManager` | View only |
-| Property Address | `property.address, city, state, zip` | View only |
-
-## Source Badge Display
-
-Each piece of contact data will show its source using the existing `SourceBadge` component:
-- Owner names: `owner.owners[].source`
-- Phone numbers: `owner.phones[].source`
-- Emails: `owner.emails[].source`
-
-Example display:
-```text
-(407) 555-1234  [mobile]  [propwire]
-```
-
-## Edit Mode Fields
-
-When in edit mode, user can modify:
-1. **Mailing Address** - Text input
-2. **Mailing City** - Text input
-3. **Mailing State** - Text input (2-letter code)
-4. **Mailing ZIP** - Text input
-
-These map to the existing owner mailing fields that are already supported by `useUpdateProperty`.
-
-## Modal Behavior
-
-1. Click row -> Opens modal in view mode
-2. Click Edit button -> Switches to edit mode with form inputs
-3. Cancel -> Reverts to view mode (or closes if was view mode)
-4. Save -> Calls `useUpdateProperty`, shows toast, closes modal
-5. Click outside or X -> Closes modal
+1. Create the `useMailingAddressFixer` hook with detection logic
+2. Add query to find properties with malformed mailing addresses
+3. Create mutation to update owner mailing fields
+4. Add new tab UI to DataCleanupTool
+5. Wire up Parse/Geocodio/Edit actions using existing patterns

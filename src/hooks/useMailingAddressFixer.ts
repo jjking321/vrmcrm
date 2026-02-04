@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { parseFullAddress, isFullAddressField } from '@/lib/addressParser';
+import { parseFullAddress } from '@/lib/addressParser';
 
 export interface MalformedMailingAddress {
   ownerId: string;
@@ -23,6 +23,15 @@ export interface FixMailingAddressesResult {
   geocodioFixed: number;
 }
 
+// Valid US state abbreviations
+const validStateAbbrs = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+]);
+
 // Helper: Title Case conversion
 function toTitleCase(str: string): string {
   if (!str) return '';
@@ -32,6 +41,78 @@ function toTitleCase(str: string): string {
     // Keep common abbreviations uppercase
     .replace(/\b(Nw|Ne|Sw|Se|Po|Apt|Ste|Fl)\b/gi, (match) => match.toUpperCase())
     .replace(/\b(Ii|Iii|Iv)\b/gi, (match) => match.toUpperCase());
+}
+
+/**
+ * Check if a mailing address field contains embedded city/state/zip
+ * that differs from the stored city/state/zip values.
+ * Unlike isFullAddressField(), this checks REGARDLESS of whether city/state are populated.
+ */
+function hasEmbeddedAddressData(
+  mailingAddress: string,
+  storedCity: string,
+  storedState: string,
+  storedZip: string
+): boolean {
+  if (!mailingAddress) return false;
+  
+  const addr = mailingAddress.trim();
+  
+  // Pattern 1: Check for "STATE ZIP" at end (e.g., "135 E 54TH ST NEW YORK, NY 10022")
+  const stateZipPattern = /\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\s*$/i;
+  const stateZipMatch = addr.match(stateZipPattern);
+  
+  if (stateZipMatch) {
+    const embeddedState = stateZipMatch[1].toUpperCase();
+    const embeddedZip = stateZipMatch[2];
+    
+    if (validStateAbbrs.has(embeddedState)) {
+      // Found embedded state+zip - check if it differs from stored values
+      const storedStateNorm = storedState?.trim().toUpperCase() || '';
+      const storedZipNorm = storedZip?.trim().slice(0, 5) || '';
+      
+      // If embedded values differ from stored, it's malformed
+      if (embeddedState !== storedStateNorm || embeddedZip !== storedZipNorm) {
+        return true;
+      }
+      
+      // Even if they match, if the address has a comma (city embedded), it's malformed
+      if (addr.includes(',')) {
+        return true;
+      }
+    }
+  }
+  
+  // Pattern 2: Check for comma-delimited full address (e.g., "123 Main St, City, NY 10022")
+  if (addr.includes(',')) {
+    const parsed = parseFullAddress(addr);
+    if (parsed.isValid && parsed.city && parsed.state) {
+      const parsedCityLower = parsed.city.toLowerCase().trim();
+      const storedCityLower = storedCity?.toLowerCase().trim() || '';
+      const parsedStateLower = parsed.state.toLowerCase().trim();
+      const storedStateLower = storedState?.toLowerCase().trim() || '';
+      
+      // If parsed city/state differs from stored, it's malformed
+      if (parsedCityLower !== storedCityLower || parsedStateLower !== storedStateLower) {
+        return true;
+      }
+    }
+  }
+  
+  // Pattern 3: Check for STATE at end without ZIP (e.g., "123 MAIN ST CITY FL")
+  const stateOnlyPattern = /\b([A-Z]{2})\s*$/i;
+  const stateOnlyMatch = addr.match(stateOnlyPattern);
+  if (stateOnlyMatch) {
+    const embeddedState = stateOnlyMatch[1].toUpperCase();
+    if (validStateAbbrs.has(embeddedState)) {
+      const storedStateNorm = storedState?.trim().toUpperCase() || '';
+      if (embeddedState !== storedStateNorm) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 }
 
 // Try to parse a mailing address locally
@@ -104,41 +185,19 @@ export function useMalformedMailingAddresses() {
         const propertyCity = property?.city || '';
         const propertyState = property?.state || '';
 
-        // Check if this looks like a full address stuffed into the address field
-        if (isFullAddressField(mailingAddress, mailingCity, mailingState)) {
-          // Parse it to see if it contains valid city/state/zip
-          const parsed = parseFullAddress(mailingAddress);
-          
-          if (parsed.isValid && parsed.city && parsed.state) {
-            // Check if the parsed city/state differs from what's stored
-            const storedCityLower = mailingCity.toLowerCase().trim();
-            const parsedCityLower = parsed.city.toLowerCase().trim();
-            const storedStateLower = mailingState.toLowerCase().trim();
-            const parsedStateLower = parsed.state.toLowerCase().trim();
-            
-            // It's malformed if:
-            // 1. Parsed values exist AND
-            // 2. Either stored values are empty/wrong OR they match property address (copied by mistake)
-            const isStoredEmpty = !mailingCity.trim() || !mailingState.trim();
-            const doesMismatch = storedCityLower !== parsedCityLower || storedStateLower !== parsedStateLower;
-            const matchesPropertyAddress = storedCityLower === propertyCity.toLowerCase() && 
-                                           storedStateLower === propertyState.toLowerCase() &&
-                                           parsedCityLower !== propertyCity.toLowerCase();
-
-            if (isStoredEmpty || doesMismatch || matchesPropertyAddress) {
-              malformed.push({
-                ownerId: owner.id,
-                propertyId: owner.property_id,
-                mailingAddress: mailingAddress,
-                mailingCity: mailingCity,
-                mailingState: mailingState,
-                mailingZip: mailingZip,
-                propertyAddress: property?.address || '',
-                propertyCity: propertyCity,
-                propertyState: propertyState,
-              });
-            }
-          }
+        // Check if this looks like a full address with embedded city/state/zip
+        if (hasEmbeddedAddressData(mailingAddress, mailingCity, mailingState, mailingZip)) {
+          malformed.push({
+            ownerId: owner.id,
+            propertyId: owner.property_id,
+            mailingAddress: mailingAddress,
+            mailingCity: mailingCity,
+            mailingState: mailingState,
+            mailingZip: mailingZip,
+            propertyAddress: property?.address || '',
+            propertyCity: propertyCity,
+            propertyState: propertyState,
+          });
         }
       }
 

@@ -34,6 +34,13 @@ const STREET_ENDS_WITH_UNIT_PATTERN = /(PO\s*BOX|P\.?O\.?\s*BOX|PMB|APT\.?|APART
 const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
 
 /**
+ * Pattern to detect directional prefix at start of city field
+ * Matches: "NE Minneapolis", "SW Portland", "N Chicago"
+ * Captures: [1] directional, [2] remaining city name
+ */
+const DIRECTIONAL_IN_CITY_PATTERN = /^(NE|NW|SE|SW|N|S|E|W)\s+(.+)$/i;
+
+/**
  * Helper: Title Case conversion for addresses
  */
 function toTitleCase(str: string): string {
@@ -161,6 +168,15 @@ export function deriveMailingFields(
         mailingCity = toTitleCase(mailingCity);
       }
     }
+  }
+
+  // Check for directional prefix in city: "NE Minneapolis" -> "Minneapolis"
+  const directionalMatch = mailingCity.match(DIRECTIONAL_IN_CITY_PATTERN);
+  if (directionalMatch) {
+    const [, directional, cleanCityName] = directionalMatch;
+    // Append directional to street address
+    mailingAddress = `${mailingAddress} ${directional.toUpperCase()}`;
+    mailingCity = toTitleCase(cleanCityName.trim());
   }
 
   return {

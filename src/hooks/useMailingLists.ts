@@ -74,45 +74,65 @@ export const useMailingListItems = (listId: string | null) => {
     queryFn: async () => {
       if (!listId || !company?.id) return [];
       
-      // Get mailing list items
-      const { data: items, error } = await supabase
-        .from('mailing_list_items')
-        .select('*')
-        .eq('mailing_list_id', listId)
-        .order('sort_order', { ascending: true });
+      // Fetch all mailing list items in batches (bypass 1000-row limit)
+      let allItems: any[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
       
-      if (error) throw error;
+      while (hasMore) {
+        const { data: batch, error } = await supabase
+          .from('mailing_list_items')
+          .select('*')
+          .eq('mailing_list_id', listId)
+          .order('sort_order', { ascending: true })
+          .range(offset, offset + batchSize - 1);
+        
+        if (error) throw error;
+        allItems.push(...(batch || []));
+        hasMore = (batch?.length || 0) === batchSize;
+        offset += batchSize;
+      }
       
       // Get unique property IDs
-      const propertyIds = [...new Set((items || []).map(item => item.property_id))];
+      const propertyIds = [...new Set(allItems.map(item => item.property_id))];
       
       if (propertyIds.length === 0) return [];
       
-      // Fetch properties
-      const { data: properties, error: propError } = await supabase
-        .from('properties')
-        .select('*')
-        .in('id', propertyIds);
+      // Batch fetch properties (chunk .in() to avoid limits)
+      const chunkSize = 100;
+      const allProperties: any[] = [];
+      for (let i = 0; i < propertyIds.length; i += chunkSize) {
+        const chunk = propertyIds.slice(i, i + chunkSize);
+        const { data, error: propError } = await supabase
+          .from('properties')
+          .select('*')
+          .in('id', chunk);
+        if (propError) throw propError;
+        allProperties.push(...(data || []));
+      }
       
-      if (propError) throw propError;
-      
-      // Fetch owners for these properties
-      const { data: owners, error: ownerError } = await supabase
-        .from('owners')
-        .select('*')
-        .in('property_id', propertyIds);
-      
-      if (ownerError) throw ownerError;
+      // Batch fetch owners (chunk .in() to avoid limits)
+      const allOwners: any[] = [];
+      for (let i = 0; i < propertyIds.length; i += chunkSize) {
+        const chunk = propertyIds.slice(i, i + chunkSize);
+        const { data, error: ownerError } = await supabase
+          .from('owners')
+          .select('*')
+          .in('property_id', chunk);
+        if (ownerError) throw ownerError;
+        allOwners.push(...(data || []));
+      }
       
       // Map owners to properties
       const ownerMap = new Map();
-      owners?.forEach(owner => {
+      allOwners.forEach(owner => {
         ownerMap.set(owner.property_id, owner);
       });
       
       // Transform properties
       const propertyMap = new Map<string, Property>();
-      properties?.forEach(prop => {
+      allProperties.forEach(prop => {
         const owner = ownerMap.get(prop.id);
         propertyMap.set(prop.id, {
           id: prop.id,
@@ -171,7 +191,7 @@ export const useMailingListItems = (listId: string | null) => {
       });
       
       // Attach properties to items
-      return (items || []).map(item => ({
+      return allItems.map(item => ({
         ...transformMailingListItem(item),
         property: propertyMap.get(item.property_id),
       }));

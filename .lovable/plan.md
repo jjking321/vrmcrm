@@ -1,161 +1,99 @@
 
-# Mailing Lists Feature
+# Fix Mailing List Items Not Loading
 
-## Overview
+## Problem Identified
 
-Create a dedicated Mailing Lists feature similar to Call Lists, optimized for exporting to mailing services like Click2Mail or Postalytics. The system will persist lists for tracking what was mailed and when, display a clean table view without images, and intelligently select the best contact name format.
+The mailing list shows "1125 addresses" in the count (from `useMailingLists`) but displays "No addresses" because the `useMailingListItems` hook is hitting Supabase's default 1000-row limit in multiple places:
 
-## Database Design
+1. **Fetching items**: Only returns first 1000 of 1125 items
+2. **Fetching properties**: Uses `.in(propertyIds)` which can fail with large arrays
+3. **Fetching owners**: Same issue with `.in(propertyIds)`
 
-Create two new tables following the Call Lists pattern:
+## Solution
 
-```text
-+------------------+     +----------------------+
-| mailing_lists    |     | mailing_list_items   |
-+------------------+     +----------------------+
-| id (uuid PK)     |     | id (uuid PK)         |
-| company_id       |<----| mailing_list_id      |
-| name             |     | property_id          |
-| created_by       |     | company_id           |
-| created_at       |     | status (pending/sent)|
-| exported_at      |     | created_at           |
-+------------------+     +----------------------+
-```
+Implement batch fetching to bypass the 1000-row limit, following the existing pattern used elsewhere in the codebase (per the architecture memory about `supabase-data-retrieval-patterns`).
 
-Both tables will have RLS policies matching the existing Call Lists pattern.
+## Technical Changes
 
-## Contact Name Logic
+### Update `useMailingListItems` in `src/hooks/useMailingLists.ts`
 
-Create a smart function to select the best available name:
-
-1. **First choice**: Individual owner names in "First Last" format from the `owners[]` array
-2. **Fallback**: The legacy `name` field if no structured owners exist
-3. **Normalize**: Always display as "First Last" (never "LAST, FIRST" or company names when individual names are available)
+Add batch fetching logic for all three queries:
 
 ```typescript
-function getBestMailingName(owner: Owner): string {
-  // Check structured owners array first
-  if (owner.owners?.length > 0) {
-    const firstOwner = owner.owners[0];
-    const firstName = firstOwner.firstName?.trim() || '';
-    const lastName = firstOwner.lastName?.trim() || '';
-    
-    if (firstName && lastName) {
-      return `${firstName} ${lastName}`;
-    }
-    if (firstName || lastName) {
-      return firstName || lastName;
-    }
+// Helper to fetch in batches of 1000
+async function fetchAllInBatches<T>(
+  query: () => Promise<{ data: T[] | null; error: any }>,
+  batchSize = 1000
+): Promise<T[]> {
+  const allData: T[] = [];
+  let offset = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    // Modify query with range
+    const { data, error } = await query();
+    if (error) throw error;
+    if (!data || data.length < batchSize) hasMore = false;
+    allData.push(...(data || []));
+    offset += batchSize;
   }
   
-  // Fallback to legacy name field
-  if (owner.name) {
-    // Check if it's "LAST, FIRST" format and flip it
-    const commaMatch = owner.name.match(/^(\w+),\s*(\w+)$/);
-    if (commaMatch) {
-      return `${commaMatch[2]} ${commaMatch[1]}`;
-    }
-    return owner.name;
-  }
-  
-  return 'Current Resident';
+  return allData;
 }
 ```
 
-## UI Components
+For the items query, use range-based pagination:
+```typescript
+// Fetch all items in batches
+let allItems: any[] = [];
+let offset = 0;
+const batchSize = 1000;
+let hasMore = true;
 
-### 1. Sidebar Navigation
-
-Add "Mailing Lists" to the sidebar navigation under Call Lists:
-
-```text
-- Call Lists
-- Mailing Lists  <-- NEW
+while (hasMore) {
+  const { data: batch, error } = await supabase
+    .from('mailing_list_items')
+    .select('*')
+    .eq('mailing_list_id', listId)
+    .order('sort_order', { ascending: true })
+    .range(offset, offset + batchSize - 1);
+  
+  if (error) throw error;
+  allItems.push(...(batch || []));
+  hasMore = (batch?.length || 0) === batchSize;
+  offset += batchSize;
+}
 ```
 
-### 2. MailingListsView Component
+For properties and owners, batch the `.in()` calls:
+```typescript
+// Batch fetch properties (in chunks of 100 for .in() operator)
+const chunkSize = 100;
+const propertyChunks = [];
+for (let i = 0; i < propertyIds.length; i += chunkSize) {
+  propertyChunks.push(propertyIds.slice(i, i + chunkSize));
+}
 
-A dedicated view showing all saved mailing lists with:
-- List name and creation date
-- Count of addresses in each list
-- Export count and last export date
-- Actions: Export CSV, View List, Delete
-
-### 3. MailingListTable Component
-
-A specialized table for viewing list contents with mailing-specific columns:
-
-| Column | Source |
-|--------|--------|
-| Contact Name | Smart getBestMailingName() function |
-| Mailing Address | owner.mailingAddress |
-| City | owner.mailingCity |
-| State | owner.mailingState |
-| ZIP | owner.mailingZip |
-| Property Address | property.address (reference only) |
-
-Key differences from PropertyTable:
-- No property images
-- No checkboxes (list is already curated)
-- Mailing address fields as separate columns
-- Clean, export-ready format
-
-### 4. Add to Mailing List Modal
-
-New modal triggered from BulkActionsBar:
-- Select existing mailing list or create new one
-- Dedupe option (skip if mailing address already in list)
-- Preview count of addresses to add
-
-### 5. Export Functionality
-
-CSV export with columns formatted for mailing services:
-- Name, Address, City, State, ZIP
-- Optional: Property Address (for internal reference)
-- Updates `exported_at` timestamp on list
-
-## File Structure
-
-```text
-src/
-  components/crm/
-    MailingListsView.tsx       (main view)
-    MailingListTable.tsx       (specialized table)
-    AddToMailingListModal.tsx  (bulk action modal)
-  hooks/
-    useMailingLists.ts         (CRUD operations)
-  lib/
-    ownerUtils.ts              (add getBestMailingName)
+const allProperties: any[] = [];
+for (const chunk of propertyChunks) {
+  const { data, error } = await supabase
+    .from('properties')
+    .select('*')
+    .in('id', chunk);
+  if (error) throw error;
+  allProperties.push(...(data || []));
+}
 ```
 
-## Workflow
+## Files to Modify
 
-1. **Create List**: Select properties in PropertyTable, click "Mailing List" in bulk actions, name the list
-2. **View Lists**: Navigate to Mailing Lists in sidebar, see all lists with stats
-3. **Review**: Click a list to see the mailing-optimized table view
-4. **Export**: Click "Export CSV" to download formatted file for mailing service
-5. **Track**: List shows export history (when exported, how many times)
-
-## Technical Changes Summary
-
-| Area | Change |
+| File | Change |
 |------|--------|
-| Database | Create `mailing_lists` and `mailing_list_items` tables with RLS |
-| Types | Add `MailingList` and `MailingListItem` types |
-| Sidebar | Add "Mailing Lists" navigation item |
-| ViewMode | Add `'mailingLists'` to ViewMode type |
-| BulkActionsBar | Add "Mailing List" button and modal |
-| MainApp | Add routing for mailing lists view |
-| ownerUtils | Add `getBestMailingName()` function |
-| New components | MailingListsView, MailingListTable, AddToMailingListModal |
-| New hooks | useMailingLists (following useCallLists pattern) |
+| `src/hooks/useMailingLists.ts` | Update `useMailingListItems` to use batch fetching for items, properties, and owners |
 
-## Export CSV Format
+## Expected Result
 
-Standard format compatible with most mailing services:
-
-```csv
-Name,Address,City,State,ZIP,Property_Address
-John Smith,8797 Atwater Loop,Oviedo,FL,32765,226 Magnolia Ave
-Charles Grentner,401 S ATLANTIC AVE,COCOA BEACH,FL,32931,449 S Atlantic Ave
-```
+After this fix:
+- All 1125 mailing list items will load correctly
+- The table will display all addresses with their contact names and mailing information
+- Export CSV will include all addresses

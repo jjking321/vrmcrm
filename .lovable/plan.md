@@ -1,77 +1,65 @@
 
-# Fix PO Box Number Extraction from City Field
+
+# Fix Directional Suffix Extraction from City Field
 
 ## Problem
 
 A new malformed data pattern was discovered where:
-- **Street address**: `"PO Box"` (just the prefix, no number)
-- **City field**: `"2699 Springfield"` (the PO Box number + actual city)
+- **Street address**: `125 121st Ave` (missing directional suffix)
+- **City field**: `NE Minneapolis` (directional + actual city)
 
-The current `UNIT_IN_CITY_PATTERN` regex only matches when the city **starts with** a recognized prefix (PMB, PO BOX, APT, etc.). It doesn't handle the case where the street address already contains the prefix and the city contains the number.
+The directional suffix "NE" should be part of the address (`125 121st Ave NE`), but it got incorrectly placed at the start of the city field.
 
-### Current Pattern Limitation
+### Current Behavior
 
 ```text
-Current regex: /^(PMB|P\.?O\.?\s*BOX|APT\.?|...)\s*([A-Z0-9]+)\s+(.+)$/i
+Input:   Address: "125 121st Ave", City: "NE Minneapolis"
+Output:  Address: "125 121st Ave", City: "NE Minneapolis" (unchanged - bug)
+```
 
-Matches:     "PMB 1033 FORT WORTH"  → ✓ Extracts PMB 1033
-Matches:     "PO BOX 456 ORLANDO"   → ✓ Extracts PO Box 456
-Does NOT:    "2699 Springfield"     → ✗ No prefix detected
+### Expected Behavior
+
+```text
+Input:   Address: "125 121st Ave", City: "NE Minneapolis"
+Output:  Address: "125 121st Ave NE", City: "Minneapolis"
 ```
 
 ## Solution
 
-Add logic to detect when the **street address ends with a unit prefix** and the **city starts with a number**. In this case, extract the number from the city and append it to the street address.
+Add logic to detect when the **city field starts with a directional prefix** (N, S, E, W, NE, NW, SE, SW) followed by a space and city name. When detected, move the directional to the end of the street address.
 
 ### Detection Pattern
 
 ```text
-Street ends with: "PO Box", "PO BOX", "PMB", "Apt", "Suite", "Unit", "#"
-City starts with: Number followed by space and remaining city name
+City starts with: N, S, E, W, NE, NW, SE, SW (case-insensitive)
+Followed by: Space and remaining city name
 ```
-
-### Example Fix
-
-| Before | After |
-|--------|-------|
-| Address: `PO Box`, City: `2699 Springfield` | Address: `PO Box 2699`, City: `Springfield` |
 
 ## Technical Implementation
 
 ### File: `src/lib/mailingAddress.ts`
 
-Add a new pattern and extraction function:
+Add a new pattern to detect directional prefixes in city:
 
 ```typescript
 /**
- * Pattern to detect number at start of city when street ends with unit prefix
- * Matches: "2699 Springfield", "123 Main City Name"
- * Captures: [1] number, [2] remaining city name
+ * Pattern to detect directional prefix at start of city field
+ * Matches: "NE Minneapolis", "SW Portland", "N Chicago"
+ * Captures: [1] directional, [2] remaining city name
  */
-const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
-
-/**
- * Pattern to check if street address ends with a unit prefix (without number)
- */
-const STREET_ENDS_WITH_UNIT_PATTERN = /(PO\s*BOX|P\.?O\.?\s*BOX|PMB|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*$/i;
+const DIRECTIONAL_IN_CITY_PATTERN = /^(NE|NW|SE|SW|N|S|E|W)\s+(.+)$/i;
 ```
 
-Update `deriveMailingFields()` to handle this case:
+Update `deriveMailingFields()` to handle this case after the existing extraction logic:
 
 ```typescript
-// After existing unit extraction logic, add:
-
-// Check for split PO Box: street ends with prefix, city starts with number
-if (!unitExtraction) {
-  const streetEndsWithUnit = mailingAddress.match(STREET_ENDS_WITH_UNIT_PATTERN);
-  const cityStartsWithNumber = mailingCity.match(NUMBER_IN_CITY_PATTERN);
-  
-  if (streetEndsWithUnit && cityStartsWithNumber) {
-    const [, unitNumber, cleanCityName] = cityStartsWithNumber;
-    // Append number to street address
-    mailingAddress = `${toTitleCase(mailingAddress)} ${unitNumber}`;
-    mailingCity = toTitleCase(cleanCityName.trim());
-  }
+// Check for directional prefix in city: "NE Minneapolis" -> "Minneapolis"
+const directionalMatch = mailingCity.match(DIRECTIONAL_IN_CITY_PATTERN);
+if (directionalMatch) {
+  const [, directional, cleanCityName] = directionalMatch;
+  // Append directional to street address
+  mailingAddress = `${mailingAddress} ${directional.toUpperCase()}`;
+  mailingCity = toTitleCase(cleanCityName.trim());
 }
 ```
 
@@ -79,19 +67,28 @@ if (!unitExtraction) {
 
 | File | Changes |
 |------|---------|
-| `src/lib/mailingAddress.ts` | Add split PO Box detection pattern and extraction logic |
+| `src/lib/mailingAddress.ts` | Add directional detection pattern and extraction logic |
 
 ### Test Cases
 
 | Street Input | City Input | Expected Address | Expected City |
 |--------------|------------|------------------|---------------|
-| `PO Box` | `2699 Springfield` | `PO Box 2699` | `Springfield` |
-| `PO BOX` | `123 Orlando` | `PO Box 123` | `Orlando` |
-| `PMB` | `456 Fort Worth` | `PMB 456` | `Fort Worth` |
-| `123 Main St` | `Springfield` | `123 Main St` | `Springfield` (no change) |
+| `125 121st Ave` | `NE Minneapolis` | `125 121st Ave NE` | `Minneapolis` |
+| `500 Main St` | `SW Portland` | `500 Main St SW` | `Portland` |
+| `100 Oak Dr` | `N Chicago` | `100 Oak Dr N` | `Chicago` |
+| `200 Elm St` | `Minneapolis` | `200 Elm St` | `Minneapolis` (no change) |
 
 ### Edge Cases
 
-1. **Street has complete PO Box**: If street is `"PO Box 123"` and city is `"456 Springfield"`, don't extract - the PO Box already has a number
-2. **City is just a number**: If city is `"12345"` (a ZIP code in wrong field), don't extract
-3. **Preserves existing logic**: The new check only runs if the existing `extractUnitFromCity()` didn't find anything
+1. **City name starts with directional-like word**: Need to ensure we don't incorrectly match cities like "Newport" or "Easton" - the pattern requires a space after the directional
+2. **Already has directional in address**: If address is `"125 121st Ave NE"` and city is `"NE Minneapolis"`, we should still extract to avoid duplication (will result in `"125 121st Ave NE NE"` which is a data quality issue upstream)
+3. **Works with other fixes**: This check runs after the PO Box and unit extraction logic
+
+### Processing Order
+
+The extraction checks will run in this order:
+1. Unit/PO Box prefix in city (e.g., `"PMB 1033 Fort Worth"`)
+2. Split PO Box number in city (e.g., Address: `"PO Box"`, City: `"2699 Springfield"`)
+3. Directional prefix in city (e.g., `"NE Minneapolis"`) - **NEW**
+4. Apply title case if no extraction happened
+

@@ -42,6 +42,13 @@ const NUMBER_IN_CITY_PATTERN = /^(\d+)\s+(.+)$/;
 const DIRECTIONAL_IN_CITY_PATTERN = /^(NE|NW|SE|SW|N|S|E|W)\s+(.+)$/i;
 
 /**
+ * Pattern to detect highway/route suffix at start of city field
+ * Matches: "Hwy Islamorada", "Highway Tampa", "Rte Boston"
+ * Captures: [1] highway suffix, [2] remaining city name
+ */
+const HIGHWAY_IN_CITY_PATTERN = /^(HIGHWAY|HWY|ROUTE|RTE)\s+(.+)$/i;
+
+/**
  * Common city word abbreviations that should be expanded
  */
 const CITY_ABBREVIATION_EXPANSIONS: Record<string, string> = {
@@ -204,6 +211,17 @@ export function deriveMailingFields(
     mailingAddress = `${mailingAddress} ${directional.toUpperCase()}`;
     mailingCity = toTitleCase(cleanCityName.trim());
     console.log('[deriveMailingFields] Extracted directional:', { directional, cleanCityName, newAddress: mailingAddress, newCity: mailingCity });
+  }
+
+  // Check for highway suffix in city: "Hwy Islamorada" -> "Islamorada"
+  const highwayMatch = mailingCity.match(HIGHWAY_IN_CITY_PATTERN);
+  if (highwayMatch) {
+    const [, highwaySuffix, cleanCityName] = highwayMatch;
+    // Append highway suffix to street address (Title Case: "Hwy", "Highway", "Rte", "Route")
+    const formattedSuffix = highwaySuffix.charAt(0).toUpperCase() + highwaySuffix.slice(1).toLowerCase();
+    mailingAddress = `${mailingAddress} ${formattedSuffix}`;
+    mailingCity = toTitleCase(cleanCityName.trim());
+    console.log('[deriveMailingFields] Extracted highway suffix:', { highwaySuffix, cleanCityName, newAddress: mailingAddress, newCity: mailingCity });
   }
 
   return {

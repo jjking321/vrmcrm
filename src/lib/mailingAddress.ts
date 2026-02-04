@@ -27,6 +27,12 @@ const UNIT_IN_CITY_PATTERN = /^(PMB|P\.?O\.?\s*BOX|APT\.?|APARTMENT|UNIT|STE\.?|
 const STREET_ENDS_WITH_UNIT_PATTERN = /(PO\s*BOX|P\.?O\.?\s*BOX|PMB|APT\.?|APARTMENT|UNIT|STE\.?|SUITE|#)\s*$/i;
 
 /**
+ * Pattern to check if street address ends with a road suffix (without route number)
+ * Matches: "420 County Road", "11988 State Route", "21998 Business Highway"
+ */
+const STREET_ENDS_WITH_ROAD_SUFFIX_PATTERN = /(HIGHWAY|HWY|ROUTE|RTE|ROAD|RD|COUNTY\s+ROAD|STATE\s+ROUTE|BUSINESS\s+HIGHWAY)\s*$/i;
+
+/**
  * Pattern to detect number at start of city when street ends with unit prefix
  * Matches: "2699 Springfield", "123 Main City Name"
  * Captures: [1] number, [2] remaining city name
@@ -193,24 +199,31 @@ export function deriveMailingFields(
       mailingAddress = `${toTitleCase(mailingAddress)} ${unitNumber}`;
       mailingCity = toTitleCase(cleanCityName.trim());
     } else {
-      // Apply title case to address if no extraction happened
-      mailingAddress = toTitleCase(mailingAddress);
-      // Ensure city is title cased
-      if (mailingCity) {
-        mailingCity = toTitleCase(mailingCity);
+      // Check for split route/road: street ends with road suffix, city starts with number
+      // e.g., Address: "420 COUNTY ROAD", City: "793 BROOKLAND"
+      const streetEndsWithRoadSuffix = mailingAddress.match(STREET_ENDS_WITH_ROAD_SUFFIX_PATTERN);
+      if (streetEndsWithRoadSuffix && cityStartsWithNumber) {
+        const [, routeNumber, cleanCityName] = cityStartsWithNumber;
+        mailingAddress = `${toTitleCase(mailingAddress)} ${routeNumber}`;
+        mailingCity = toTitleCase(cleanCityName.trim());
+      } else {
+        // Apply title case to address if no extraction happened
+        mailingAddress = toTitleCase(mailingAddress);
+        // Ensure city is title cased
+        if (mailingCity) {
+          mailingCity = toTitleCase(mailingCity);
+        }
       }
     }
   }
 
   // Check for directional prefix in city: "NE Minneapolis" -> "Minneapolis"
   const directionalMatch = mailingCity.match(DIRECTIONAL_IN_CITY_PATTERN);
-  console.log('[deriveMailingFields] Directional check:', { mailingCity, directionalMatch });
   if (directionalMatch) {
     const [, directional, cleanCityName] = directionalMatch;
     // Append directional to street address
     mailingAddress = `${mailingAddress} ${directional.toUpperCase()}`;
     mailingCity = toTitleCase(cleanCityName.trim());
-    console.log('[deriveMailingFields] Extracted directional:', { directional, cleanCityName, newAddress: mailingAddress, newCity: mailingCity });
   }
 
   // Check for highway suffix in city: "Hwy Islamorada" -> "Islamorada"
@@ -221,7 +234,6 @@ export function deriveMailingFields(
     const formattedSuffix = highwaySuffix.charAt(0).toUpperCase() + highwaySuffix.slice(1).toLowerCase();
     mailingAddress = `${mailingAddress} ${formattedSuffix}`;
     mailingCity = toTitleCase(cleanCityName.trim());
-    console.log('[deriveMailingFields] Extracted highway suffix:', { highwaySuffix, cleanCityName, newAddress: mailingAddress, newCity: mailingCity });
   }
 
   return {

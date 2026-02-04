@@ -27,6 +27,10 @@ export const validProvinceAbbrs = new Set([
 // First letter cannot be D, F, I, O, Q, U, W, Z
 const CANADIAN_POSTAL_REGEX = /\b([ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z])\s?(\d[ABCEGHJ-NPRSTV-Z]\d)\b/i;
 
+// Lenient fallback: accepts any leading letter to handle dirty/typo data (e.g. I4Y0B3)
+// while still requiring the overall A1A1A1 structure.
+const CANADIAN_POSTAL_REGEX_LENIENT = /\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i;
+
 export interface ParsedCanadianAddress {
   street: string;
   city: string;
@@ -124,11 +128,12 @@ export function parseCanadianAddress(fullAddress: string): ParsedCanadianAddress
   }
 
   // Step 2: Extract postal code
-  const postalMatch = working.match(CANADIAN_POSTAL_REGEX);
+  // Prefer strict match; fallback to lenient for dirty data that still looks like a postal code.
+  let postalMatch = working.match(CANADIAN_POSTAL_REGEX);
   if (!postalMatch) {
-    // No Canadian postal code found - can't reliably parse
-    return result;
+    postalMatch = working.match(CANADIAN_POSTAL_REGEX_LENIENT);
   }
+  if (!postalMatch) return result;
 
   result.postalCode = normalizePostalCode(postalMatch[1] + postalMatch[2]);
   

@@ -5,6 +5,7 @@ import { Mail, Trash2, Download, Eye, Loader2, ArrowLeft, X } from 'lucide-react
 import { cn } from '@/lib/utils';
 import { MailingListTable } from './MailingListTable';
 import { getBestMailingName } from '@/lib/ownerUtils';
+import { deriveMailingFields } from '@/lib/mailingAddress';
 import { format } from 'date-fns';
 
 export const MailingListsView: React.FC = () => {
@@ -41,10 +42,9 @@ export const MailingListsView: React.FC = () => {
       const owner = property.owner;
       
       const contactName = getBestMailingName(owner);
-      const mailingAddress = owner.mailingAddress || property.address;
-      const mailingCity = owner.mailingCity || property.city;
-      const mailingState = owner.mailingState || property.state;
-      const mailingZip = owner.mailingZip || property.zip;
+
+      const { mailingAddress, mailingCity, mailingState, mailingZip } =
+        deriveMailingFields(owner, property);
       const propertyAddress = `${property.address}, ${property.city}, ${property.state} ${property.zip}`;
       
       // Escape fields that might contain commas

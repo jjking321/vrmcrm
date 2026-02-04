@@ -508,6 +508,7 @@ export const useUpdateProperty = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['properties'] });
+      queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
     },
     onError: (error) => {
       toast.error(`Failed to update: ${error.message}`);

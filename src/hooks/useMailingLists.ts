@@ -425,7 +425,7 @@ export const useDeleteMailingList = () => {
   });
 };
 
-// Remove item from mailing list
+// Remove item from mailing list with optimistic update
 export const useRemoveMailingListItem = () => {
   const queryClient = useQueryClient();
   
@@ -437,8 +437,32 @@ export const useRemoveMailingListItem = () => {
         .eq('id', itemId);
       
       if (error) throw error;
+      return itemId;
     },
-    onSuccess: () => {
+    onMutate: async (itemId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['mailingListItems'] });
+      
+      // Snapshot all mailingListItems queries
+      const previousData = queryClient.getQueriesData({ queryKey: ['mailingListItems'] });
+      
+      // Optimistically remove from all matching queries
+      queryClient.setQueriesData(
+        { queryKey: ['mailingListItems'] },
+        (old: any[] | undefined) => old?.filter(item => item.id !== itemId) ?? []
+      );
+      
+      return { previousData };
+    },
+    onError: (_err, _itemId, context) => {
+      // Rollback on error
+      context?.previousData?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      toast.error('Failed to remove from mailing list');
+    },
+    onSettled: () => {
+      // Always refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['mailingListItems'] });
       queryClient.invalidateQueries({ queryKey: ['mailingLists'] });
     },

@@ -23,11 +23,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, Download, ArrowRight, Trash2, Merge, Edit, 
-  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy, User
+  ChevronDown, Undo, Check, AlertCircle, Sparkles, MapPin, Wrench, RefreshCw, CheckCircle2, Circle, Copy, User, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useMalformedAddresses, useFixAddresses, useFixSingleAddress, useUpdatePropertyAddress, useApplyLocalParse, tryLocalParse, MalformedProperty, FixAddressesResult } from '@/hooks/useAddressFixer';
+import { useMalformedMailingAddresses, useFixMailingAddresses, useFixSingleMailingAddress, useUpdateOwnerMailingAddress, useApplyLocalMailingParse, tryLocalMailingParse, MalformedMailingAddress } from '@/hooks/useMailingAddressFixer';
 import { useUnverifiedAddresses, useBulkVerifyAddresses } from '@/hooks/useAddressVerification';
 import { useDuplicates, useAutoMergeDuplicates, DuplicateGroup } from '@/hooks/useDuplicateDetection';
 import { DuplicateMergeModal } from './DuplicateMergeModal';
@@ -46,7 +47,7 @@ type TransformAction = {
 };
 
 export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport }) => {
-  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates' | 'fix-owner-names'>('duplicates');
+  const [activeTab, setActiveTab] = useState<'csv' | 'fix-addresses' | 'verify-addresses' | 'fix-mailing-addresses' | 'duplicates' | 'fix-owner-names'>('duplicates');
   const [step, setStep] = useState<'upload' | 'transform' | 'preview'>('upload');
   const [rawData, setRawData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -90,6 +91,18 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
   const { data: ownerNameVariations = [], isLoading: isLoadingOwnerNames, refetch: refetchOwnerNames } = useOwnerNameVariations();
   const normalizeAllMutation = useNormalizeOwnerNames();
   const normalizeSingleMutation = useNormalizeSingleGroup();
+
+  // Mailing address fixer hooks
+  const { data: malformedMailingAddresses = [], isLoading: isLoadingMailingAddresses, refetch: refetchMailingAddresses } = useMalformedMailingAddresses();
+  const fixMailingAddressesMutation = useFixMailingAddresses();
+  const fixSingleMailingMutation = useFixSingleMailingAddress();
+  const updateMailingAddressMutation = useUpdateOwnerMailingAddress();
+  const applyLocalMailingParseMutation = useApplyLocalMailingParse();
+  const [failedMailingAddresses, setFailedMailingAddresses] = useState<MalformedMailingAddress[]>([]);
+  
+  // Mailing address edit modal state
+  const [editingMailingAddress, setEditingMailingAddress] = useState<MalformedMailingAddress | null>(null);
+  const [editMailingForm, setEditMailingForm] = useState({ address: '', city: '', state: '', zip: '' });
 
   const totalDuplicateProperties = duplicateGroups.reduce((sum, g) => sum + g.properties.length, 0);
 
@@ -454,6 +467,88 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
     );
   };
 
+  // ==================== MAILING ADDRESS FIXER HANDLERS ====================
+  
+  // Handle fix all mailing addresses
+  const handleFixMailingAddresses = async (addresses: MalformedMailingAddress[]) => {
+    const result = await fixMailingAddressesMutation.mutateAsync(addresses);
+    if (result.failed.length > 0) {
+      setFailedMailingAddresses(result.failed);
+    } else {
+      setFailedMailingAddresses([]);
+    }
+  };
+
+  // Handle local parse attempt for single mailing address
+  const handleTryMailingParse = (addr: MalformedMailingAddress) => {
+    const { success, parsed } = tryLocalMailingParse(addr);
+    if (success) {
+      toast.success(
+        `Parsed: ${parsed.street}, ${parsed.city}, ${parsed.state} ${parsed.zip}`,
+        {
+          action: {
+            label: 'Apply',
+            onClick: () => {
+              applyLocalMailingParseMutation.mutate(
+                { ownerId: addr.ownerId, parsed },
+                {
+                  onSuccess: () => toast.success('Mailing address updated'),
+                  onError: (err) => toast.error(`Failed: ${err.message}`),
+                }
+              );
+            },
+          },
+        }
+      );
+    } else {
+      toast.error('Could not parse locally - try Geocodio or edit manually');
+    }
+  };
+
+  // Handle Geocodio for single mailing address
+  const handleSendMailingToGeocodio = (addr: MalformedMailingAddress) => {
+    fixSingleMailingMutation.mutate(addr, {
+      onSuccess: (standardized) => {
+        toast.success(`Fixed: ${standardized.street}, ${standardized.city}, ${standardized.state} ${standardized.zip}`);
+      },
+      onError: (err) => {
+        toast.error(`Geocodio failed: ${err.message}`);
+      },
+    });
+  };
+
+  // Open mailing address edit modal
+  const handleOpenMailingEdit = (addr: MalformedMailingAddress) => {
+    setEditingMailingAddress(addr);
+    setEditMailingForm({
+      address: addr.mailingAddress,
+      city: addr.mailingCity,
+      state: addr.mailingState,
+      zip: addr.mailingZip,
+    });
+  };
+
+  // Save mailing address manual edit
+  const handleSaveMailingEdit = () => {
+    if (!editingMailingAddress) return;
+    updateMailingAddressMutation.mutate(
+      { 
+        ownerId: editingMailingAddress.ownerId, 
+        mailingAddress: editMailingForm.address,
+        mailingCity: editMailingForm.city,
+        mailingState: editMailingForm.state,
+        mailingZip: editMailingForm.zip,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Mailing address updated');
+          setEditingMailingAddress(null);
+        },
+        onError: (err) => toast.error(`Failed: ${err.message}`),
+      }
+    );
+  };
+
   // Render Address Fixer Tab
   const renderAddressFixer = () => (
     <div>
@@ -725,6 +820,289 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
             <Button variant="outline" onClick={() => setEditingProperty(null)}>Cancel</Button>
             <Button onClick={handleSaveEdit} disabled={updateAddressMutation.isPending}>
               {updateAddressMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  // Render Mailing Address Fixer Tab
+  const renderMailingAddressFixer = () => (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Fix Mailing Addresses</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Parse and fix mailing addresses that have city/state/zip embedded in the street field
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { refetchMailingAddresses(); setFailedMailingAddresses([]); }}>
+          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+        </Button>
+      </div>
+
+      {isLoadingMailingAddresses ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Scanning for malformed mailing addresses...
+          </CardContent>
+        </Card>
+      ) : malformedMailingAddresses.length === 0 && failedMailingAddresses.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Check className="w-12 h-12 mx-auto text-green-500 mb-4" />
+            <p className="text-lg font-medium text-foreground">All mailing addresses are properly formatted!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              No addresses found with embedded city/state/zip that need fixing.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Malformed mailing addresses to fix */}
+          {malformedMailingAddresses.length > 0 && (
+            <>
+              <Card className="mb-4 border-amber-500/30 bg-amber-500/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-500" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Found {malformedMailingAddresses.length} mailing addresses with embedded city/state/zip
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          These addresses have full address data in the street field
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => handleFixMailingAddresses(malformedMailingAddresses)}
+                      disabled={fixMailingAddressesMutation.isPending}
+                    >
+                      <Wrench className="w-4 h-4 mr-1" />
+                      Fix All {malformedMailingAddresses.length}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="mb-4">
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[40vh]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableRow>
+                          <TableHead>Mailing Address (Full)</TableHead>
+                          <TableHead>Current City</TableHead>
+                          <TableHead>Current State</TableHead>
+                          <TableHead>Current Zip</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {malformedMailingAddresses.map((addr) => (
+                          <TableRow key={addr.ownerId}>
+                            <TableCell className="font-mono text-sm max-w-[300px]">
+                              <div className="truncate" title={addr.mailingAddress}>
+                                {addr.mailingAddress}
+                              </div>
+                            </TableCell>
+                            <TableCell className={cn("text-sm", addr.mailingCity === addr.propertyCity && "text-amber-600 font-medium")}>
+                              {addr.mailingCity || <span className="text-muted-foreground italic">(empty)</span>}
+                              {addr.mailingCity === addr.propertyCity && (
+                                <span className="ml-1 text-xs">(= property)</span>
+                              )}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", addr.mailingState === addr.propertyState && "text-amber-600 font-medium")}>
+                              {addr.mailingState || <span className="text-muted-foreground italic">(empty)</span>}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {addr.mailingZip || <span className="text-muted-foreground italic">(empty)</span>}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1 justify-end">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleTryMailingParse(addr)}
+                                  disabled={applyLocalMailingParseMutation.isPending}
+                                  title="Try local parse"
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleSendMailingToGeocodio(addr)}
+                                  disabled={fixSingleMailingMutation.isPending}
+                                  title="Send to Geocodio"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenMailingEdit(addr)}
+                                  title="Edit manually"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Failed mailing addresses - could not be fixed */}
+          {failedMailingAddresses.length > 0 && (
+            <>
+              <Card className="mb-4 border-destructive/30 bg-destructive/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {failedMailingAddresses.length} mailing addresses could not be parsed
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Try editing manually or retry with Geocodio
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      onClick={() => handleFixMailingAddresses(failedMailingAddresses)}
+                      disabled={fixMailingAddressesMutation.isPending}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-1" />
+                      Retry All
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-auto max-h-[30vh]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-card z-10">
+                        <TableRow>
+                          <TableHead>Mailing Address</TableHead>
+                          <TableHead>City</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Zip</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {failedMailingAddresses.map((addr) => (
+                          <TableRow key={addr.ownerId}>
+                            <TableCell className="font-mono text-sm text-destructive">
+                              {addr.mailingAddress}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !addr.mailingCity && "text-muted-foreground italic")}>
+                              {addr.mailingCity || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !addr.mailingState && "text-muted-foreground italic")}>
+                              {addr.mailingState || '(empty)'}
+                            </TableCell>
+                            <TableCell className={cn("text-sm", !addr.mailingZip && "text-muted-foreground italic")}>
+                              {addr.mailingZip || '(empty)'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1 justify-end">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleSendMailingToGeocodio(addr)}
+                                  disabled={fixSingleMailingMutation.isPending}
+                                  title="Retry Geocodio"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenMailingEdit(addr)}
+                                  title="Edit manually"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Edit Mailing Address Modal */}
+      <Dialog open={!!editingMailingAddress} onOpenChange={(open) => !open && setEditingMailingAddress(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Mailing Address</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-mailing-address">Street Address</Label>
+              <Input
+                id="edit-mailing-address"
+                value={editMailingForm.address}
+                onChange={(e) => setEditMailingForm(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="123 Main St"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="edit-mailing-city">City</Label>
+                <Input
+                  id="edit-mailing-city"
+                  value={editMailingForm.city}
+                  onChange={(e) => setEditMailingForm(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="City"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-mailing-state">State</Label>
+                <Input
+                  id="edit-mailing-state"
+                  value={editMailingForm.state}
+                  onChange={(e) => setEditMailingForm(prev => ({ ...prev, state: e.target.value }))}
+                  placeholder="FL"
+                  maxLength={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-mailing-zip">Zip</Label>
+                <Input
+                  id="edit-mailing-zip"
+                  value={editMailingForm.zip}
+                  onChange={(e) => setEditMailingForm(prev => ({ ...prev, zip: e.target.value }))}
+                  placeholder="12345"
+                  maxLength={10}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMailingAddress(null)}>Cancel</Button>
+            <Button onClick={handleSaveMailingEdit} disabled={updateMailingAddressMutation.isPending}>
+              {updateMailingAddressMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1156,7 +1534,7 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
         Clean CSV data before import or fix existing database records
       </p>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses' | 'duplicates' | 'fix-owner-names')} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'csv' | 'fix-addresses' | 'verify-addresses' | 'fix-mailing-addresses' | 'duplicates' | 'fix-owner-names')} className="space-y-6">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="duplicates" className="gap-2">
             <Copy className="w-4 h-4" /> Find Duplicates
@@ -1171,6 +1549,14 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
             {ownerNameVariations.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
                 {ownerNameVariations.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="fix-mailing-addresses" className="gap-2">
+            <Mail className="w-4 h-4" /> Fix Mailing Addresses
+            {malformedMailingAddresses.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-500/20 text-amber-600 rounded">
+                {malformedMailingAddresses.length}
               </span>
             )}
           </TabsTrigger>
@@ -1201,6 +1587,10 @@ export const DataCleanupTool: React.FC<DataCleanupToolProps> = ({ onSendToImport
 
         <TabsContent value="fix-owner-names">
           {renderOwnerNameFixer()}
+        </TabsContent>
+
+        <TabsContent value="fix-mailing-addresses">
+          {renderMailingAddressFixer()}
         </TabsContent>
 
         <TabsContent value="fix-addresses">

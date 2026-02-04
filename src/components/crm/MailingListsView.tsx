@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useMailingLists, useDeleteMailingList, useMailingListItems, useUpdateMailingListExport } from '@/hooks/useMailingLists';
 import { Button } from '@/components/ui/button';
-import { Mail, Trash2, Download, Eye, Loader2, ArrowLeft, X } from 'lucide-react';
+import { Mail, Trash2, Download, Eye, Loader2, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MailingListTable } from './MailingListTable';
+import { MailingListFilterBar } from './MailingListFilterBar';
 import { getBestMailingName } from '@/lib/ownerUtils';
 import { deriveMailingFields } from '@/lib/mailingAddress';
+import { useMailingListFiltering } from '@/hooks/useMailingListFiltering';
 import { format } from 'date-fns';
 
 export const MailingListsView: React.FC = () => {
@@ -18,6 +20,23 @@ export const MailingListsView: React.FC = () => {
   
   const selectedList = mailingLists.find(l => l.id === selectedListId);
   
+  // Initialize filtering hook
+  const {
+    searchTerm,
+    setSearchTerm,
+    filterRules,
+    matchType,
+    setMatchType,
+    filteredItems,
+    totalCount,
+    filteredCount,
+    addFilterRule,
+    updateFilterRule,
+    removeFilterRule,
+    clearFilters,
+    hasActiveFilters,
+  } = useMailingListFiltering(listItems);
+  
   const handleDelete = (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm(`Are you sure you want to delete "${name}"? This cannot be undone.`)) {
@@ -29,24 +48,16 @@ export const MailingListsView: React.FC = () => {
   };
   
   const handleExportCSV = (listId: string, listName: string) => {
-    const items = listItems.filter(item => item.property);
+    // Use filtered items for export
+    const itemsToExport = hasActiveFilters ? filteredItems : filteredItems;
     
-    if (items.length === 0) {
+    if (itemsToExport.length === 0) {
       return;
     }
     
     // Build CSV content
     const headers = ['Name', 'Address', 'City', 'State', 'ZIP', 'Property_Address'];
-    const rows = items.map(item => {
-      const property = item.property!;
-      const owner = property.owner;
-      
-      const contactName = getBestMailingName(owner);
-
-      const { mailingAddress, mailingCity, mailingState, mailingZip } =
-        deriveMailingFields(owner, property);
-      const propertyAddress = `${property.address}, ${property.city}, ${property.state} ${property.zip}`;
-      
+    const rows = itemsToExport.map(derived => {
       // Escape fields that might contain commas
       const escapeField = (field: string) => {
         if (field.includes(',') || field.includes('"')) {
@@ -56,12 +67,12 @@ export const MailingListsView: React.FC = () => {
       };
       
       return [
-        escapeField(contactName),
-        escapeField(mailingAddress),
-        escapeField(mailingCity),
-        escapeField(mailingState),
-        escapeField(mailingZip),
-        escapeField(propertyAddress),
+        escapeField(derived.contactName),
+        escapeField(derived.mailingAddress),
+        escapeField(derived.mailingCity),
+        escapeField(derived.mailingState),
+        escapeField(derived.mailingZip),
+        escapeField(derived.propertyAddress),
       ].join(',');
     });
     
@@ -94,7 +105,7 @@ export const MailingListsView: React.FC = () => {
   if (selectedListId && selectedList) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => setSelectedListId(null)}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -112,19 +123,44 @@ export const MailingListsView: React.FC = () => {
           </div>
           <Button 
             onClick={() => handleExportCSV(selectedListId, selectedList.name)}
-            disabled={listItems.length === 0}
+            disabled={filteredItems.length === 0}
           >
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            Export CSV{hasActiveFilters && ` (${filteredCount})`}
           </Button>
+        </div>
+        
+        {/* Search and filter bar */}
+        <div className="mb-4">
+          <MailingListFilterBar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            filterRules={filterRules}
+            onAddRule={addFilterRule}
+            onUpdateRule={updateFilterRule}
+            onRemoveRule={removeFilterRule}
+            matchType={matchType}
+            onMatchTypeChange={setMatchType}
+            onClearFilters={clearFilters}
+            totalCount={totalCount}
+            filteredCount={filteredCount}
+            hasActiveFilters={hasActiveFilters}
+          />
         </div>
         
         {itemsLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
+        ) : filteredItems.length === 0 && hasActiveFilters ? (
+          <div className="bg-card border border-border rounded-lg p-12 text-center">
+            <p className="text-muted-foreground mb-4">No contacts match your search or filters</p>
+            <Button variant="outline" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </div>
         ) : (
-          <MailingListTable items={listItems} />
+          <MailingListTable items={filteredItems.map(d => d.item)} />
         )}
       </div>
     );

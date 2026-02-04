@@ -1,93 +1,125 @@
 
-# Fix Route/Highway Number Extraction from City Field
 
-## Problem
+# Update Contact Names & Fix Priority Logic
 
-**3 records** have highway/route addresses where the route number is incorrectly stored in the city field:
+## What We're Doing
 
-| Name | Current Address | Current City | Expected Address | Expected City |
-|------|-----------------|--------------|------------------|---------------|
-| Joel Althoff | `21998 BUSINESS HIGHWAY` | `151 MONTICELLO` | `21998 Business Highway 151` | `Monticello` |
-| Michael Leach | `11988 STATE ROUTE` | `23 WINDHAM` | `11988 State Route 23` | `Windham` |
-| Tiffany Sharp | `420 COUNTY ROAD` | `793 BROOKLAND` | `420 County Road 793` | `Brookland` |
+**Two changes:**
+1. **Update 500 existing records** - Populate the `contactName` field from your CSV's "Name 1" column
+2. **Fix the priority logic** - Make `contactName` the #1 choice for mailing addresses when it exists
 
-The existing split PO Box logic only handles unit prefixes (PO BOX, PMB, etc.), not highway/road suffixes.
+## Current vs. New Behavior
 
-## Solution
+| Scenario | Current Result | New Result |
+|----------|----------------|------------|
+| Property owned by "Friling M Elaine Tr" with contactName "John Friling" | Uses trust name | Uses **John Friling** |
+| Property owned by "Property Investments Legacy Corp" with contactName "Aleksej Bockar" | Uses LLC name | Uses **Aleksej Bockar** |
 
-Extend the split detection logic to also handle addresses ending with road-type suffixes (HIGHWAY, ROUTE, ROAD, STREET, etc.) when the city starts with a number.
+The legal owner (Trust/LLC) stays in the database - we're just adding a **preferred contact person** for mailing.
 
-## Technical Implementation
+## Implementation Steps
 
-### File: `src/lib/mailingAddress.ts`
+### Step 1: Update Database Records
 
-**Add new pattern after `STREET_ENDS_WITH_UNIT_PATTERN` (line 27):**
+Match each property from your CSV using the property address and populate the `contactName` field:
 
-```typescript
-/**
- * Pattern to check if street address ends with a road suffix (without route number)
- * Matches: "420 County Road", "11988 State Route", "21998 Business Highway"
- */
-const STREET_ENDS_WITH_ROAD_SUFFIX_PATTERN = /(HIGHWAY|HWY|ROUTE|RTE|ROAD|RD|STREET|ST)\s*$/i;
+| CSV Column | Database Field |
+|------------|----------------|
+| Address + City | → Match property |
+| Name 1 | → `owner.contactName` |
+
+**Sample mappings from your CSV:**
+
+| Property Address | Name 1 → contactName |
+|-----------------|----------------------|
+| 410 STRAND DR, MELBOURNE BEACH | Aleksej Bockar |
+| 7520 RIDGEWOOD AVE APT 909, CAPE CANAVERAL | Alison Moses |
+| 5200 OCEAN BEACH BLVD # 22C, COCOA BEACH | Amanda Francoeur |
+
+### Step 2: Update Priority Logic
+
+**File:** `src/lib/ownerUtils.ts`
+
+Change `getBestMailingName()` to check `contactName` FIRST:
+
+```text
+Current Priority:
+1. Individual from owners[] array
+2. Corporate from owners[] array
+3. Legacy name field
+4. contactName  ← Currently LAST
+5. "Current Resident"
+
+New Priority:
+1. contactName  ← Move to FIRST when set
+2. Individual from owners[] array
+3. Corporate from owners[] array
+4. Legacy name field
+5. "Current Resident"
 ```
 
-**Update the extraction logic (around lines 185-202):**
+### Step 3: Update Import Wizard (for future imports)
 
-Add handling for the road suffix case alongside the existing unit prefix case:
+**File:** `src/components/crm/ImportWizard.tsx`
+
+Add "name 1", "name one", "name1" to the `contactPerson` field mappings so future imports auto-detect this column.
+
+## Technical Details
+
+### Database Update Query
+
+We'll use a backend function to batch update properties:
+
+```sql
+-- For each property matching address/city:
+UPDATE properties 
+SET owner = jsonb_set(owner, '{contactName}', '"John Friling"')
+WHERE address ILIKE '123 Main St%' AND city ILIKE 'Miami%';
+```
+
+### Code Change: `src/lib/ownerUtils.ts`
 
 ```typescript
-// Check for split PO Box: street ends with prefix, city starts with number
-// e.g., Address: "PO Box", City: "2699 Springfield"
-const streetEndsWithUnit = mailingAddress.match(STREET_ENDS_WITH_UNIT_PATTERN);
-const cityStartsWithNumber = mailingCity.match(NUMBER_IN_CITY_PATTERN);
-
-if (streetEndsWithUnit && cityStartsWithNumber) {
-  const [, unitNumber, cleanCityName] = cityStartsWithNumber;
-  mailingAddress = `${toTitleCase(mailingAddress)} ${unitNumber}`;
-  mailingCity = toTitleCase(cleanCityName.trim());
-} else {
-  // Check for split route/road: street ends with road suffix, city starts with number
-  // e.g., Address: "420 COUNTY ROAD", City: "793 BROOKLAND"
-  const streetEndsWithRoadSuffix = mailingAddress.match(STREET_ENDS_WITH_ROAD_SUFFIX_PATTERN);
-  if (streetEndsWithRoadSuffix && cityStartsWithNumber) {
-    const [, routeNumber, cleanCityName] = cityStartsWithNumber;
-    mailingAddress = `${toTitleCase(mailingAddress)} ${routeNumber}`;
-    mailingCity = toTitleCase(cleanCityName.trim());
-  } else {
-    // Apply title case if no extraction happened
-    mailingAddress = toTitleCase(mailingAddress);
-    if (mailingCity) {
-      mailingCity = toTitleCase(mailingCity);
-    }
+export function getBestMailingName(owner: Owner): string {
+  // NEW: Check contactName FIRST - this is the explicit preferred contact
+  if (owner.contactName) {
+    return normalizeOwnerName(owner.contactName);
   }
+  
+  // Then check structured owners array - prefer individual over corporate
+  if (owner.owners && owner.owners.length > 0) {
+    // ... existing logic unchanged
+  }
+  
+  // ... rest of existing logic
 }
 ```
 
-### Processing Order (Updated)
+### Code Change: `src/components/crm/ImportWizard.tsx`
 
-1. Unit/PO Box prefix in city (e.g., `"PMB 1033 Fort Worth"`)
-2. Split PO Box number in city (e.g., Address: `"PO Box"`, City: `"2699 Springfield"`)
-3. **Split Route number in city** (e.g., Address: `"420 County Road"`, City: `"793 Brookland"`) - **NEW**
-4. Directional prefix in city (e.g., `"NE Minneapolis"`)
-5. Highway suffix in city (e.g., `"Hwy Islamorada"`)
-6. Apply title case if no extraction happened
+Add to `fieldNameMappings`:
 
-### Files to Modify
+```typescript
+contactPerson: [
+  'contact person', 'contact name', 'primary contact',
+  'name 1', 'name one', 'name1',  // ← NEW
+  'name 2', 'name two', 'name2',  // ← NEW
+],
+```
+
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/lib/mailingAddress.ts` | Add road suffix pattern and extraction logic |
+| `src/lib/ownerUtils.ts` | Move `contactName` check to top of `getBestMailingName()` |
+| `src/components/crm/ImportWizard.tsx` | Add "name 1" patterns to `contactPerson` mappings |
+| Database | Batch update 500 properties with contactName values |
 
-### Test Cases
+## Result
 
-| Street Input | City Input | Expected Address | Expected City |
-|--------------|------------|------------------|---------------|
-| `21998 BUSINESS HIGHWAY` | `151 MONTICELLO` | `21998 Business Highway 151` | `Monticello` |
-| `11988 STATE ROUTE` | `23 WINDHAM` | `11988 State Route 23` | `Windham` |
-| `420 COUNTY ROAD` | `793 BROOKLAND` | `420 County Road 793` | `Brookland` |
-| `PO BOX` | `2699 SPRINGFIELD` | `PO Box 2699` | `Springfield` (existing) |
-| `200 Main St` | `Miami` | `200 Main St` | `Miami` (no change) |
+After this change:
+- **John Friling** will appear on mail for the Friling Trust property
+- **Aleksej Bockar** will appear on mail for Property Investments Legacy Corp
+- Legal owners remain unchanged in the database
+- Future imports will auto-detect "Name 1" columns
 
-### Bonus: Cleanup Debug Logs
-
-The plan also includes removing the `console.log` debug statements added for directional and highway suffix detection (lines 207, 213, 224) once the fix is verified.

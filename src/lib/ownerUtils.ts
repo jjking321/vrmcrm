@@ -197,7 +197,13 @@ export function isCorporateName(name: string): boolean {
  * Falls back to legacy name field, normalizing "LAST, FIRST" format
  */
 export function getBestMailingName(owner: Owner): string {
-  // Check structured owners array first - prefer individual over corporate
+  // NEW: Check contactName FIRST - this is the explicit preferred contact person
+  // Used when user has manually set a contact or imported a specific "Name 1" value
+  if (owner.contactName) {
+    return normalizeOwnerName(owner.contactName);
+  }
+  
+  // Then check structured owners array - prefer individual over corporate
   if (owner.owners && owner.owners.length > 0) {
     // First, try to find an individual (non-corporate) owner
     for (const o of owner.owners) {
@@ -235,11 +241,6 @@ export function getBestMailingName(owner: Owner): string {
     
     // Still return the name even if it's a company
     return normalizeOwnerName(name);
-  }
-  
-  // Use contact name if available
-  if (owner.contactName) {
-    return normalizeOwnerName(owner.contactName);
   }
   
   return 'Current Resident';

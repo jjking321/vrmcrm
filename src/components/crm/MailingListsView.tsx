@@ -56,7 +56,7 @@ export const MailingListsView: React.FC = () => {
     }
     
     // Build CSV content
-    const headers = ['Name', 'Address', 'City', 'State', 'ZIP', 'Property_Address'];
+    const headers = ['Name', 'Address', 'City', 'State', 'ZIP', 'Property_Address', 'ContactID'];
     const rows = itemsToExport.map(derived => {
       // Escape fields that might contain commas
       const escapeField = (field: string) => {
@@ -73,6 +73,7 @@ export const MailingListsView: React.FC = () => {
         escapeField(derived.mailingState),
         escapeField(derived.mailingZip),
         escapeField(derived.propertyAddress),
+        derived.ownerId || '',
       ].join(',');
     });
     

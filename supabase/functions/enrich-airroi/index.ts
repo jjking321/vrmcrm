@@ -1,13 +1,56 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BATCH_SIZE = 25; // AirROI batch limit
+const BATCH_SIZE = 25;
 
-// Normalize listing endpoint response to common format
+async function getApiKey(req: Request, serviceName: string, envVarName: string): Promise<string | null> {
+  const authHeader = req.headers.get("authorization");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (authHeader && supabaseUrl && serviceRoleKey) {
+    try {
+      const token = authHeader.replace("Bearer ", "");
+      const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || "", {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      
+      if (user) {
+        const adminClient = createClient(supabaseUrl, serviceRoleKey);
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("company_id")
+          .eq("id", user.id)
+          .single();
+        
+        if (profile?.company_id) {
+          const { data: keyRow } = await adminClient
+            .from("company_api_keys")
+            .select("api_key")
+            .eq("company_id", profile.company_id)
+            .eq("service_name", serviceName)
+            .single();
+          
+          if (keyRow?.api_key) {
+            console.log(`Using company-level ${serviceName} API key`);
+            return keyRow.api_key;
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Could not fetch company API key for ${serviceName}, falling back to env var:`, e);
+    }
+  }
+
+  return Deno.env.get(envVarName) || null;
+}
+
 function normalizeListingResponse(data: any) {
   const performanceMetrics = data.performance_metrics || {};
   const ratings = data.ratings || {};
@@ -15,7 +58,6 @@ function normalizeListingResponse(data: any) {
   const hostInfo = data.host_info || {};
   const comparables = data.comparable_listings || [];
   
-  // Calculate market averages from comparable listings
   let marketAvgADR = null;
   let marketAvgOccupancy = null;
   let marketAvgRevenue = null;
@@ -35,21 +77,16 @@ function normalizeListingResponse(data: any) {
   }
   
   return {
-    // Actual listing performance
     average_daily_rate: performanceMetrics.ttm_avg_rate || performanceMetrics.l90d_avg_rate,
     occupancy: performanceMetrics.ttm_occupancy || performanceMetrics.l90d_occupancy,
     estimated_annual_revenue: performanceMetrics.ttm_revenue,
     airbnb_rating: ratings.rating_overall,
     review_count: ratings.num_reviews,
-    
-    // Market estimates from comparables
     market_avg_adr: marketAvgADR,
     market_avg_occupancy: marketAvgOccupancy,
     market_avg_revenue: marketAvgRevenue,
     comparable_count: comparables.length,
-    
     data_source: "airroi_listing",
-    // Extended fields from listing endpoint
     listing_name: listingInfo.listing_name,
     cover_photo_url: listingInfo.cover_photo_url,
     host_name: hostInfo.host_name,
@@ -68,10 +105,10 @@ serve(async (req) => {
   }
 
   try {
-    const AIRROI_API_KEY = Deno.env.get("AIRROI_API_KEY");
+    const AIRROI_API_KEY = await getApiKey(req, "airroi", "AIRROI_API_KEY");
     if (!AIRROI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "AIRROI_API_KEY is not configured. Please add it in Settings." }),
+        JSON.stringify({ error: "AirROI API key is not configured. Please add it in Settings > Integrations." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -79,7 +116,7 @@ serve(async (req) => {
     const body = await req.json();
     const { airbnbListingId, airbnbListingIds, lat, lng, bedrooms, baths, guests, mode } = body;
 
-    // Mode: Monthly metrics for actuals (uses /listings/metrics/all)
+    // Mode: Monthly metrics for actuals
     if (airbnbListingId && mode === 'metrics') {
       console.log("Fetching AirROI monthly metrics for ID:", airbnbListingId);
       
@@ -94,15 +131,12 @@ serve(async (req) => {
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "x-api-key": AIRROI_API_KEY,
-        },
+        headers: { "x-api-key": AIRROI_API_KEY },
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("AirROI Metrics API error:", response.status, errorText);
-        // Return 200 with error field so frontend can handle gracefully
         const errorMessage = response.status === 404 
           ? 'Listing not found in AirROI database. The listing may be new or not yet indexed.'
           : `AirROI API error: ${response.status}`;
@@ -115,10 +149,7 @@ serve(async (req) => {
       const data = await response.json();
       console.log("AirROI metrics raw response:", JSON.stringify(data));
       
-      // Extract monthly data from results array
       const monthlyData = data.results || [];
-      
-      // Compute TTM rollup
       const ttmRevenue = monthlyData.reduce((sum: number, m: any) => sum + (m.revenue || 0), 0);
       const ttmAvgOccupancy = monthlyData.length > 0 
         ? monthlyData.reduce((sum: number, m: any) => sum + (m.occupancy || 0), 0) / monthlyData.length 
@@ -163,15 +194,12 @@ serve(async (req) => {
       
       const response = await fetch(apiUrl, {
         method: "GET",
-        headers: {
-          "x-api-key": AIRROI_API_KEY,
-        },
+        headers: { "x-api-key": AIRROI_API_KEY },
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("AirROI API error:", response.status, errorText);
-        // Return 200 with error field so frontend can handle gracefully
         const errorMessage = response.status === 404 
           ? 'Listing not found in AirROI database. The listing may be new or not yet indexed.'
           : `AirROI API error: ${response.status}`;
@@ -199,7 +227,6 @@ serve(async (req) => {
       
       const allResults: Record<string, any> = {};
       
-      // Process in chunks of BATCH_SIZE
       for (let i = 0; i < airbnbListingIds.length; i += BATCH_SIZE) {
         const chunk = airbnbListingIds.slice(i, i + BATCH_SIZE);
         console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, IDs:`, chunk);
@@ -219,7 +246,6 @@ serve(async (req) => {
         if (!response.ok) {
           const errorText = await response.text();
           console.error("AirROI batch API error:", response.status, errorText);
-          // Continue processing other batches, mark failed ones
           chunk.forEach(id => {
             allResults[id] = { error: `API error: ${response.status}` };
           });
@@ -229,11 +255,9 @@ serve(async (req) => {
         const data = await response.json();
         console.log("AirROI batch raw response:", JSON.stringify(data));
         
-        // Process results - match by listing_id prefix to handle precision loss
         if (data.results && Array.isArray(data.results)) {
           data.results.forEach((listing: any) => {
             const returnedId = listing.listing_info?.listing_id?.toString() || '';
-            // Find original ID that matches the returned ID (first 15 chars to avoid precision issues)
             const originalId = chunk.find(id => 
               id === returnedId || 
               id.startsWith(returnedId.slice(0, 15)) ||
@@ -245,11 +269,9 @@ serve(async (req) => {
           });
         }
         
-        // Handle errors array if present
         if (data.errors && Array.isArray(data.errors)) {
           data.errors.forEach((error: any) => {
             const errorId = error.listing_id?.toString() || error.id?.toString();
-            // Try to find matching original ID (prefix match)
             const matchingOriginalId = chunk.find(id => 
               id === errorId || 
               id.startsWith(errorId?.slice(0, 15)) ||
@@ -270,7 +292,7 @@ serve(async (req) => {
       );
     }
 
-    // Mode 3: Calculator fallback (existing behavior)
+    // Mode 3: Calculator fallback
     if (!lat || !lng) {
       return new Response(
         JSON.stringify({ error: "Latitude and longitude are required for calculator estimates, or provide airbnbListingId for listing data" }),
@@ -280,7 +302,6 @@ serve(async (req) => {
 
     console.log("Fetching AirROI calculator data for coordinates:", lat, lng, "bedrooms:", bedrooms, "baths:", baths, "guests:", guests);
 
-    // Build query parameters for GET request
     const params = new URLSearchParams({
       lat: String(lat),
       lng: String(lng),
@@ -295,15 +316,12 @@ serve(async (req) => {
     
     const response = await fetch(apiUrl, {
       method: "GET",
-      headers: {
-        "x-api-key": AIRROI_API_KEY,
-      },
+      headers: { "x-api-key": AIRROI_API_KEY },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AirROI API error:", response.status, errorText);
-      // Return 200 with error field so frontend can handle gracefully
       const errorMessage = response.status === 404 
         ? 'No market data available for this location.'
         : `AirROI API error: ${response.status}`;
@@ -316,14 +334,10 @@ serve(async (req) => {
     const data = await response.json();
     console.log("AirROI raw response:", JSON.stringify(data));
     
-    // Extract ADR and occupancy from response
     const adr = data.average_daily_rate || data.adr;
     const occupancy = data.occupancy || data.occupancy_rate;
-    
-    // Calculate annual revenue: ADR × occupancy × 365
     const annualRevenue = adr && occupancy ? Math.round(adr * occupancy * 365) : null;
     
-    // Map AirROI response fields to our format
     const result = {
       average_daily_rate: adr,
       occupancy: occupancy,

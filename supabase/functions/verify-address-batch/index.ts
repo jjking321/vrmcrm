@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,16 +29,59 @@ interface StandardizedResult {
   error?: string;
 }
 
+async function getApiKey(req: Request, serviceName: string, envVarName: string): Promise<string | null> {
+  const authHeader = req.headers.get("authorization");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (authHeader && supabaseUrl && serviceRoleKey) {
+    try {
+      const token = authHeader.replace("Bearer ", "");
+      const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || "", {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      
+      if (user) {
+        const adminClient = createClient(supabaseUrl, serviceRoleKey);
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("company_id")
+          .eq("id", user.id)
+          .single();
+        
+        if (profile?.company_id) {
+          const { data: keyRow } = await adminClient
+            .from("company_api_keys")
+            .select("api_key")
+            .eq("company_id", profile.company_id)
+            .eq("service_name", serviceName)
+            .single();
+          
+          if (keyRow?.api_key) {
+            console.log(`Using company-level ${serviceName} API key`);
+            return keyRow.api_key;
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Could not fetch company API key for ${serviceName}, falling back to env var:`, e);
+    }
+  }
+
+  return Deno.env.get(envVarName) || null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const GEOCODIO_API_KEY = Deno.env.get("GEOCODIO_API_KEY");
+    const GEOCODIO_API_KEY = await getApiKey(req, "geocodio", "GEOCODIO_API_KEY");
     if (!GEOCODIO_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "GEOCODIO_API_KEY is not configured" }),
+        JSON.stringify({ error: "Geocodio API key is not configured. Please add it in Settings > Integrations." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -53,8 +97,6 @@ serve(async (req) => {
 
     console.log(`Batch verifying ${addresses.length} addresses`);
 
-    // Geocodio batch API supports up to 10,000 addresses per request
-    // Format addresses for batch request
     const formattedAddresses = addresses.map(a => 
       [a.address, a.city, a.state, a.zip].filter(Boolean).join(", ")
     );
@@ -71,7 +113,6 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("Geocodio batch API error:", response.status, errorText);
       
-      // Try to extract specific error message from Geocodio
       let errorMessage = "Batch address verification failed";
       let errorCode = "GEOCODIO_ERROR";
       
@@ -84,7 +125,6 @@ serve(async (req) => {
           }
         }
       } catch {
-        // If not JSON, use the raw error text if available
         if (errorText && errorText.length < 200) {
           errorMessage = errorText;
         }
@@ -99,7 +139,6 @@ serve(async (req) => {
     const data = await response.json();
     const results: StandardizedResult[] = [];
 
-    // Process each result, matching back to original indices
     if (data.results && Array.isArray(data.results)) {
       data.results.forEach((item: any, idx: number) => {
         const originalIndex = addresses[idx].index;
@@ -118,7 +157,6 @@ serve(async (req) => {
         const addressComponents = result.address_components;
         const location = result.location;
 
-        // Only consider valid if accuracy >= 0.8
         if (accuracy < 0.8) {
           results.push({
             index: originalIndex,
@@ -129,7 +167,6 @@ serve(async (req) => {
           return;
         }
 
-        // Build full street address
         const streetNumber = addressComponents.number || '';
         const streetName = addressComponents.formatted_street || addressComponents.street || '';
         const unitType = addressComponents.secondaryunit || '';

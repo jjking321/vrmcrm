@@ -175,6 +175,41 @@ export type Database = {
         }
         Relationships: []
       }
+      company_api_keys: {
+        Row: {
+          api_key: string
+          company_id: string
+          created_at: string
+          id: string
+          service_name: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          company_id: string
+          created_at?: string
+          id?: string
+          service_name: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          service_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_api_keys_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exclusion_list: {
         Row: {
           address: string | null

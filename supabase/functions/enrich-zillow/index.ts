@@ -1,9 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+async function getApiKey(req: Request, serviceName: string, envVarName: string): Promise<string | null> {
+  // Try to get from company_api_keys via user's auth token
+  const authHeader = req.headers.get("authorization");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (authHeader && supabaseUrl && serviceRoleKey) {
+    try {
+      const token = authHeader.replace("Bearer ", "");
+      const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || "", {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      
+      if (user) {
+        const adminClient = createClient(supabaseUrl, serviceRoleKey);
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("company_id")
+          .eq("id", user.id)
+          .single();
+        
+        if (profile?.company_id) {
+          const { data: keyRow } = await adminClient
+            .from("company_api_keys")
+            .select("api_key")
+            .eq("company_id", profile.company_id)
+            .eq("service_name", serviceName)
+            .single();
+          
+          if (keyRow?.api_key) {
+            console.log(`Using company-level ${serviceName} API key`);
+            return keyRow.api_key;
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Could not fetch company API key for ${serviceName}, falling back to env var:`, e);
+    }
+  }
+
+  // Fallback to environment variable
+  return Deno.env.get(envVarName) || null;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,10 +57,10 @@ serve(async (req) => {
   }
 
   try {
-    const RAPIDAPI_KEY = Deno.env.get("RAPIDAPI_KEY");
+    const RAPIDAPI_KEY = await getApiKey(req, "rapidapi", "RAPIDAPI_KEY");
     if (!RAPIDAPI_KEY) {
       return new Response(
-        JSON.stringify({ error: "RAPIDAPI_KEY is not configured. Please add it in Settings." }),
+        JSON.stringify({ error: "RapidAPI key is not configured. Please add it in Settings > Integrations." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

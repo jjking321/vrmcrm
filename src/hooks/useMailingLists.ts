@@ -225,10 +225,11 @@ export const useMailingListItems = (listId: string | null) => {
         });
       });
       
-      // Attach properties to items
+      // Attach properties to items (include ownerId for CSV export)
       return allItems.map(item => ({
         ...transformMailingListItem(item),
         property: propertyMap.get(item.property_id),
+        ownerId: ownerMap.get(item.property_id)?.id as string | undefined,
       }));
     },
     enabled: !!listId && !!company?.id,

@@ -12,6 +12,7 @@ export interface DerivedMailingItem {
   mailingZip: string;
   propertyAddress: string;
   isCanadian: boolean;
+  ownerId?: string;
 }
 
 /**
@@ -42,6 +43,7 @@ export function useMailingListFiltering(items: MailingListItem[]) {
           mailingZip: derived.mailingZip,
           propertyAddress,
           isCanadian: derived.isCanadian,
+          ownerId: (item as any).ownerId,
         };
       });
   }, [items]);

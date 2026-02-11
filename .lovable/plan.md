@@ -1,125 +1,119 @@
 
 
-# Fix: Improve Address Matching for Exclusion List
+# Postalytics Webhook Integration: PURL Scan Tracking
 
-## The Problem
+## Overview
 
-The exclusion list has `104 W Leon Ln, Cocoa Beach, FL 32931, USA` but the database has `104 Leon Ln W`. These don't match because:
+When you send direct mail through Postalytics, each piece has a personalized URL (PURL). When a recipient scans/visits that PURL, Postalytics fires a webhook. We'll catch that webhook and automatically log a "mail" activity note on the corresponding owner/property in the CRM.
 
-| Source | Normalized Address |
-|--------|-------------------|
-| Database | `104 leon ln w cocoa beach fl` |
-| Exclusion | `104 w leon ln cocoa beach fl 32931 usa` |
+## Unique Contact ID Strategy
 
-**Two issues:**
-1. **Direction position**: `W` appears at different locations
-2. **Extra data**: Exclusion has zip code and "USA" that database doesn't have
+Since you upload CSVs to Postalytics, the best approach is to use the **owner record's UUID** (`owners.id`) as a unique contact identifier. Postalytics supports custom variable fields (`var_field_1` through `var_field_30`) on each contact.
 
-## Solution
+**How it works:**
+1. When you export your mailing list CSV, we'll add a new column called `ContactID` containing the owner's database UUID
+2. You map that column to `var_field_1` in Postalytics when uploading
+3. When someone scans the PURL, the webhook payload includes `var_field_1` with the UUID
+4. Our webhook handler uses that UUID to instantly find the right owner and log the activity
 
-Enhance `normalizeAddressForMatch()` to:
-1. **Normalize directional prefixes/suffixes** - Move all directions (N, S, E, W, NE, NW, SE, SW) to a consistent position
-2. **Extract core address components** - Compare just street number + street name + suffix + city + state (ignore zip and country)
+This is the most reliable approach because:
+- No fuzzy address matching needed -- it's an exact UUID lookup
+- Works even if the owner has multiple properties
+- No new database columns required (the `owners.id` already exists)
 
 ## Implementation
 
-### File: `src/lib/exclusionUtils.ts`
+### Step 1: Add ContactID to Mailing List CSV Export
 
-Update `normalizeAddressForMatch()` function:
+Update `src/components/crm/MailingListsView.tsx` to include the owner's UUID in the exported CSV as a `ContactID` column.
 
-```typescript
-export const normalizeAddressForMatch = (
-  address: string,
-  city: string,
-  state: string
-): string => {
-  if (!address) return '';
-  
-  // Direction mappings
-  const directions: Record<string, string> = {
-    'north': 'n', 'n': 'n',
-    'south': 's', 's': 's', 
-    'east': 'e', 'e': 'e',
-    'west': 'w', 'w': 'w',
-    'northeast': 'ne', 'ne': 'ne',
-    'northwest': 'nw', 'nw': 'nw',
-    'southeast': 'se', 'se': 'se',
-    'southwest': 'sw', 'sw': 'sw',
-  };
+**Before:** `Name, Address, City, State, ZIP, Property_Address`
+**After:** `Name, Address, City, State, ZIP, Property_Address, ContactID`
 
-  const streetSuffixes: Record<string, string> = {
-    'street': 'st', 'st': 'st',
-    'avenue': 'ave', 'ave': 'ave',
-    'drive': 'dr', 'dr': 'dr',
-    'road': 'rd', 'rd': 'rd',
-    'lane': 'ln', 'ln': 'ln',
-    'boulevard': 'blvd', 'blvd': 'blvd',
-    'court': 'ct', 'ct': 'ct',
-    'circle': 'cir', 'cir': 'cir',
-    'place': 'pl', 'pl': 'pl',
-    'way': 'way',
-    'trail': 'trl', 'trl': 'trl',
-  };
+The `ContactID` value will be the `owners.id` UUID for each record. When uploading to Postalytics, you'll map this column to `var_field_1`.
 
-  // Start with just address (ignore city/state from exclusion if embedded)
-  let normalized = address
-    .toLowerCase()
-    .replace(/[.,#\-']/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+### Step 2: Create Webhook Edge Function
 
-  // Remove zip codes (5 or 9 digit)
-  normalized = normalized.replace(/\b\d{5}(-\d{4})?\b/g, '');
-  
-  // Remove country names
-  normalized = normalized.replace(/\b(usa|united states|us)\b/gi, '');
+**File:** `supabase/functions/postalytics-webhook/index.ts`
 
-  // Normalize street suffixes
-  for (const [full, abbr] of Object.entries(streetSuffixes)) {
-    normalized = normalized.replace(new RegExp(`\\b${full}\\b`, 'g'), abbr);
-  }
+A public endpoint (no JWT required) that:
+1. Receives POST requests from Postalytics when a PURL is scanned
+2. Extracts `var_field_1` (the owner UUID) from the payload
+3. Looks up the owner record using the service role key (bypasses RLS since this is a server-to-server call)
+4. Creates an activity log entry with type `mail` and content like "PURL scanned by recipient" along with event metadata
+5. Returns 200 OK to acknowledge the webhook
 
-  // Extract and normalize direction
-  let direction = '';
-  for (const [full, abbr] of Object.entries(directions)) {
-    const regex = new RegExp(`\\b${full}\\b`, 'gi');
-    if (regex.test(normalized)) {
-      direction = abbr;
-      normalized = normalized.replace(regex, '');
-      break;
-    }
-  }
+The function will handle the Postalytics event payload which includes fields like:
+- `event_name` (e.g., "pURL Opened", "purl Completed")
+- `first_name`, `last_name`, `address`, `city`, `state`, `zip`
+- `var_field_1` (our ContactID / owner UUID)
+- `metadata` (contains the visited URL for online events)
+- `event_date`
 
-  // Clean up and rebuild with direction at consistent position (end of street)
-  normalized = normalized.replace(/\s+/g, ' ').trim();
-  
-  // Add city and state
-  if (city) normalized += ` ${city.toLowerCase()}`;
-  if (state) normalized += ` ${state.toLowerCase()}`;
-  
-  // Append direction at the end for consistent comparison
-  if (direction) normalized += ` ${direction}`;
+### Step 3: Update config.toml
 
-  return normalized.replace(/\s+/g, ' ').trim();
-};
+Add the new function with `verify_jwt = false` since Postalytics can't send auth tokens.
+
+### Step 4: Webhook Security
+
+Since this is a public endpoint, we'll add basic security:
+- Validate that `var_field_1` contains a valid UUID
+- Validate that the owner exists before creating an activity
+- Log but ignore unrecognized event types
+- Optionally support a shared secret via query parameter or header that you configure in Postalytics
+
+## Webhook URL
+
+After deployment, your webhook URL to configure in Postalytics will be:
+
+```text
+https://csizkmiplkjyawbscrlx.supabase.co/functions/v1/postalytics-webhook
 ```
 
-### Result After Fix
+You'll set this as the `url` field when creating a webhook in the Postalytics dashboard.
 
-| Source | New Normalized Address |
-|--------|----------------------|
-| Database (`104 Leon Ln W`) | `104 leon ln cocoa beach fl w` |
-| Exclusion (`104 W Leon Ln, Cocoa Beach, FL 32931, USA`) | `104 leon ln cocoa beach fl w` |
+## Files to Create/Modify
 
-**Now they match!**
+| File | Action | Purpose |
+|------|--------|---------|
+| `supabase/functions/postalytics-webhook/index.ts` | Create | Webhook handler edge function |
+| `supabase/config.toml` | Modify | Add function config with `verify_jwt = false` |
+| `src/components/crm/MailingListsView.tsx` | Modify | Add `ContactID` column to CSV export |
 
-## Files to Modify
+## What You'll Need To Do
 
-| File | Changes |
-|------|---------|
-| `src/lib/exclusionUtils.ts` | Update `normalizeAddressForMatch()` to handle directional variations and strip zip/country |
+1. After I build this, export a mailing list CSV (it will now include the `ContactID` column)
+2. When uploading to Postalytics, map the `ContactID` column to `var_field_1`
+3. In the Postalytics dashboard, create a webhook pointing to the URL above
+4. Enable the webhook events you want to track (at minimum "pURL Opened")
 
-## Testing
+## Technical Details
 
-After implementation, the property at `104 Leon Ln W, Cocoa Beach` will correctly match the exclusion list entry for `104 W Leon Ln, Cocoa Beach, FL 32931, USA`.
+### Activity Log Entry Format
+
+When a PURL scan is detected, the activity will be logged as:
+
+| Field | Value |
+|-------|-------|
+| type | `mail` |
+| content | "PURL scanned: [event details]" |
+| outcome | Event name (e.g., "pURL Opened") |
+| owner_name | Looked up from owner record |
+| property_id | Looked up from owner record |
+| company_id | Looked up from owner record |
+| created_by | null (system-generated) |
+
+### Edge Function Pseudocode
+
+```text
+1. Parse POST body from Postalytics
+2. Extract var_field_1 (owner UUID)
+3. Validate UUID format
+4. Query owners table by id (using service role)
+5. If not found, return 200 with "owner not found" (don't retry)
+6. Get property_id and company_id from owner
+7. Get owner display name
+8. Insert into activity_logs
+9. Return 200 OK
+```
 

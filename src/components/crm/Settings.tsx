@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType, PipelineStage } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -103,6 +103,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [stageName, setStageName] = useState('');
   const [stageColor, setStageColor] = useState('blue');
   const [deleteStageDialog, setDeleteStageDialog] = useState<{ open: boolean; stage?: PipelineStage }>({ open: false });
+  const [campaignName, setCampaignName] = useState('');
 
   const isAdmin = role === 'admin';
 
@@ -237,7 +238,29 @@ export const Settings: React.FC<SettingsProps> = ({
       color: 'amber',
       configured: true,
     },
+    {
+      name: 'Postalytics',
+      description: 'Direct mail PURL scan tracking',
+      color: 'rose',
+      configured: true,
+    },
   ];
+
+
+
+  const webhookBaseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/postalytics-webhook`;
+  const webhookUrl = campaignName.trim()
+    ? `${webhookBaseUrl}?campaign=${encodeURIComponent(campaignName.trim())}`
+    : webhookBaseUrl;
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      toast.success('Webhook URL copied!');
+    } catch {
+      toast.error('Failed to copy URL');
+    }
+  };
 
   return (
     <div className="max-w-4xl animate-fade-in">
@@ -732,14 +755,16 @@ export const Settings: React.FC<SettingsProps> = ({
                   integration.color === 'emerald' && "bg-emerald-100",
                   integration.color === 'blue' && "bg-blue-100",
                   integration.color === 'violet' && "bg-violet-100",
-                  integration.color === 'amber' && "bg-amber-100"
+                  integration.color === 'amber' && "bg-amber-100",
+                  integration.color === 'rose' && "bg-rose-100"
                 )}>
                   <CheckCircle className={cn(
                     "w-5 h-5",
                     integration.color === 'emerald' && "text-emerald-600",
                     integration.color === 'blue' && "text-blue-600",
                     integration.color === 'violet' && "text-violet-600",
-                    integration.color === 'amber' && "text-amber-600"
+                    integration.color === 'amber' && "text-amber-600",
+                    integration.color === 'rose' && "text-rose-600"
                   )} />
                 </div>
                 <div className="flex-1">
@@ -754,6 +779,47 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
             </div>
           ))}
+
+          {/* Postalytics Webhook URL Section */}
+          <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Link className="w-4 h-4 text-rose-600" />
+              <h3 className="font-semibold text-foreground">Postalytics Webhook URL</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Paste this URL into the webhook configuration for each Postalytics campaign.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Campaign Name (optional)</label>
+                <input
+                  type="text"
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  placeholder="e.g. Spring Mailer 2025"
+                  className="w-full p-2.5 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Webhook URL</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={webhookUrl}
+                    className="flex-1 p-2.5 border border-input rounded-lg text-sm bg-muted/50 text-muted-foreground font-mono truncate"
+                  />
+                  <button
+                    onClick={handleCopyWebhook}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors whitespace-nowrap"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

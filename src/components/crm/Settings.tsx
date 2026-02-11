@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType, PipelineStage } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link, Save, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { usePipelineStages, useAddPipelineStage, useUpdatePipelineStage, useDeletePipelineStage, useReorderPipelineStages } from '@/hooks/usePipelineStages';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useCompanyApiKeys, useUpsertApiKey, useDeleteApiKey, SERVICES } from '@/hooks/useCompanyApiKeys';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,9 @@ export const Settings: React.FC<SettingsProps> = ({
 }) => {
   const { role, profile } = useAuth();
   const { teamMembers, isLoading: isLoadingTeam, createTeamMember, deleteTeamMember, updateMemberRole, resetMemberPassword } = useTeamMembers();
+  const { data: apiKeys = [], isLoading: isLoadingApiKeys } = useCompanyApiKeys();
+  const upsertApiKey = useUpsertApiKey();
+  const deleteApiKey = useDeleteApiKey();
   const { data: stages = [], isLoading: isLoadingStages } = usePipelineStages();
   const addStageMutation = useAddPipelineStage();
   const updateStageMutation = useUpdatePipelineStage();
@@ -104,6 +108,8 @@ export const Settings: React.FC<SettingsProps> = ({
   const [stageColor, setStageColor] = useState('blue');
   const [deleteStageDialog, setDeleteStageDialog] = useState<{ open: boolean; stage?: PipelineStage }>({ open: false });
   const [campaignName, setCampaignName] = useState('');
+  const [editingService, setEditingService] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState('');
 
   const isAdmin = role === 'admin';
 
@@ -212,39 +218,6 @@ export const Settings: React.FC<SettingsProps> = ({
       toast.error('Failed to reorder stages');
     }
   };
-
-  const integrations = [
-    {
-      name: 'Geocodio',
-      description: 'Address verification and standardization',
-      color: 'emerald',
-      configured: true,
-    },
-    {
-      name: 'RapidAPI (Zillow)',
-      description: 'Property valuations and market data',
-      color: 'blue',
-      configured: true,
-    },
-    {
-      name: 'Airbnb',
-      description: 'Airbnb revenue estimates and analytics',
-      color: 'violet',
-      configured: true,
-    },
-    {
-      name: 'Lovable AI',
-      description: 'AI-powered marketing copy generation',
-      color: 'amber',
-      configured: true,
-    },
-    {
-      name: 'Postalytics',
-      description: 'Direct mail PURL scan tracking',
-      color: 'rose',
-      configured: true,
-    },
-  ];
 
 
 
@@ -741,44 +714,116 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {activeTab === 'integrations' && (
         <div className="space-y-4">
-          <div className="bg-card rounded-xl shadow-soft border border-border p-6 mb-4">
-            <p className="text-sm text-muted-foreground">
-              API integrations are managed securely as backend secrets. Contact your administrator to update API keys.
-            </p>
-          </div>
+          {isAdmin && (
+            <div className="bg-card rounded-xl shadow-soft border border-border p-6 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Key className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground">API Keys</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Manage your API keys for each integration. Keys are stored securely per-company.
+              </p>
 
-          {integrations.map((integration) => (
-            <div key={integration.name} className="bg-card rounded-xl shadow-soft border border-border p-6">
-              <div className="flex items-start gap-4">
-                <div className={cn(
-                  "w-10 h-10 rounded-lg flex items-center justify-center",
-                  integration.color === 'emerald' && "bg-emerald-100",
-                  integration.color === 'blue' && "bg-blue-100",
-                  integration.color === 'violet' && "bg-violet-100",
-                  integration.color === 'amber' && "bg-amber-100",
-                  integration.color === 'rose' && "bg-rose-100"
-                )}>
-                  <CheckCircle className={cn(
-                    "w-5 h-5",
-                    integration.color === 'emerald' && "text-emerald-600",
-                    integration.color === 'blue' && "text-blue-600",
-                    integration.color === 'violet' && "text-violet-600",
-                    integration.color === 'amber' && "text-amber-600",
-                    integration.color === 'rose' && "text-rose-600"
-                  )} />
+              {isLoadingApiKeys ? (
+                <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+              ) : (
+                <div className="space-y-3">
+                  {SERVICES.map((service) => {
+                    const existingKey = apiKeys.find(k => k.service_name === service.name);
+                    const isEditing = editingService === service.name;
+                    const maskedKey = existingKey ? `${'•'.repeat(8)}${existingKey.api_key.slice(-4)}` : null;
+
+                    return (
+                      <div key={service.name} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-foreground">{service.label}</span>
+                            {existingKey && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Active</span>
+                            )}
+                            {!existingKey && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Not set</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{service.description}</p>
+                        </div>
+
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="password"
+                              value={editingKey}
+                              onChange={(e) => setEditingKey(e.target.value)}
+                              placeholder="Paste API key"
+                              className="w-64 p-2 border border-input rounded-lg text-sm bg-card focus:ring-2 focus:ring-brand-100 focus:border-brand outline-none"
+                              autoFocus
+                            />
+                            <button
+                              onClick={async () => {
+                                if (editingKey.trim()) {
+                                  await upsertApiKey.mutateAsync({ serviceName: service.name, apiKey: editingKey.trim() });
+                                  setEditingService(null);
+                                  setEditingKey('');
+                                }
+                              }}
+                              disabled={!editingKey.trim() || upsertApiKey.isPending}
+                              className="p-2 bg-brand text-brand-foreground rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                            >
+                              {upsertApiKey.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingService(null); setEditingKey(''); }}
+                              className="p-2 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {maskedKey && (
+                              <span className="text-xs font-mono text-muted-foreground">{maskedKey}</span>
+                            )}
+                            <button
+                              onClick={() => { setEditingService(service.name); setEditingKey(''); }}
+                              className="p-2 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                              title={existingKey ? 'Update key' : 'Add key'}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {existingKey && (
+                              <button
+                                onClick={() => deleteApiKey.mutate(service.name)}
+                                className="p-2 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                                title="Remove key"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground">{integration.name}</h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                      Configured
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{integration.description}</p>
+              )}
+            </div>
+          )}
+
+          {/* Lovable AI - always configured */}
+          <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-100">
+                <CheckCircle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground">Lovable AI</h3>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Configured</span>
                 </div>
+                <p className="text-sm text-muted-foreground">AI-powered marketing copy generation</p>
               </div>
             </div>
-          ))}
+          </div>
 
           {/* Postalytics Webhook URL Section */}
           <div className="bg-card rounded-xl shadow-soft border border-border p-6">

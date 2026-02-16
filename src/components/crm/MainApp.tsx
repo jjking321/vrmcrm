@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition } from '@/types';
+import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition, Deal } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_COLUMNS } from '@/data/mockData';
 import { useProperties, useTotalPropertyCount, useUpdateProperty, useDeleteProperties, useAddProperty, usePropertyById } from '@/hooks/useProperties';
@@ -11,6 +11,7 @@ import { usePropertyFiltering } from '@/hooks/usePropertyFiltering';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
 import { useAllOwners } from '@/hooks/useAllOwners';
 import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
+import { useDeals, useAddDeal, useUpdateDeal } from '@/hooks/useDeals';
 import { usePagination } from '@/hooks/usePagination';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
@@ -138,6 +139,9 @@ const MainApp: React.FC = () => {
   const { data: stages = [], isLoading: stagesLoading } = usePipelineStages();
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
   const { data: ownersData, isLoading: ownersLoading } = useAllOwners();
+  const { data: deals = [] } = useDeals();
+  const addDealMutation = useAddDeal();
+  const updateDealMutation = useUpdateDeal();
   const { mutate: initStages } = useInitializePipelineStages();
   const { mutate: initFields } = useInitializeFieldDefinitions();
 
@@ -564,7 +568,9 @@ const MainApp: React.FC = () => {
             <KanbanBoard
               properties={displayProperties}
               stages={stages}
+              deals={deals}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
+              onMoveDeal={(dealId, newStageId) => updateDealMutation.mutate({ id: dealId, updates: { stageId: newStageId } })}
               onSelectProperty={handleSelectProperty}
               onNewDeal={() => setIsNewDealOpen(true)}
             />
@@ -677,6 +683,13 @@ const MainApp: React.FC = () => {
         stages={stages}
         onAddToPipeline={handleAddToPipeline}
         onCreateProperty={handleCreatePropertyWithStage}
+        onCreateDeal={(data) => {
+          addDealMutation.mutate(data, {
+            onSuccess: () => {
+              toast.success('Contact deal added to pipeline');
+            }
+          });
+        }}
       />
     </div>
   );

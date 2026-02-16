@@ -5,7 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Search, Plus, Loader2, MapPin, User, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +26,14 @@ interface NewDealModalProps {
     ownerPhone: string;
     stageId: string;
   }) => void;
+  onCreateDeal?: (data: {
+    contactName: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    notes?: string;
+    dealValue?: number;
+    stageId: string;
+  }) => void;
 }
 
 export const NewDealModal: React.FC<NewDealModalProps> = ({
@@ -32,7 +42,9 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   stages,
   onAddToPipeline,
   onCreateProperty,
+  onCreateDeal,
 }) => {
+  const [tab, setTab] = useState('search');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -48,7 +60,14 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
 
-  const { data: searchResults = [], isFetching } = usePropertySearch(debouncedSearch, isOpen);
+  // Contact-only deal state
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactNotes, setContactNotes] = useState('');
+  const [dealValue, setDealValue] = useState('');
+
+  const { data: searchResults = [], isFetching } = usePropertySearch(debouncedSearch, isOpen && tab === 'search');
 
   // Debounce search
   useEffect(() => {
@@ -68,6 +87,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      setTab('search');
       setSearchTerm('');
       setDebouncedSearch('');
       setSelectedProperty(null);
@@ -80,6 +100,11 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       setOwnerName('');
       setOwnerEmail('');
       setOwnerPhone('');
+      setContactName('');
+      setContactPhone('');
+      setContactEmail('');
+      setContactNotes('');
+      setDealValue('');
     }
   }, [isOpen, stages]);
 
@@ -106,6 +131,20 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
     }
   };
 
+  const handleCreateDeal = () => {
+    if (contactName && selectedStageId && onCreateDeal) {
+      onCreateDeal({
+        contactName,
+        contactPhone: contactPhone || undefined,
+        contactEmail: contactEmail || undefined,
+        notes: contactNotes || undefined,
+        dealValue: dealValue ? Number(dealValue) : undefined,
+        stageId: selectedStageId,
+      });
+      onClose();
+    }
+  };
+
   const renderSearchResults = () => {
     if (isFetching) {
       return (
@@ -119,7 +158,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       return (
         <div className="text-center py-8">
           <p className="text-muted-foreground mb-4">No properties found matching "{debouncedSearch}"</p>
-          <Button variant="outline" onClick={() => setShowCreateForm(true)}>
+          <Button variant="outline" onClick={() => { setTab('property'); }}>
             <Plus className="w-4 h-4 mr-2" />
             Create New Property
           </Button>
@@ -195,50 +234,23 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
 
   const renderCreateForm = () => (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">Create New Property</h3>
-        <Button variant="ghost" size="sm" onClick={() => setShowCreateForm(false)}>
-          Back to search
-        </Button>
-      </div>
-      
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <Label htmlFor="address">Street Address *</Label>
-          <Input
-            id="address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="123 Main St"
-          />
+          <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St" />
         </div>
         <div>
           <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City"
-          />
+          <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label htmlFor="state">State</Label>
-            <Input
-              id="state"
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              placeholder="FL"
-            />
+            <Input id="state" value={state} onChange={(e) => setState(e.target.value)} placeholder="FL" />
           </div>
           <div>
             <Label htmlFor="zip">Zip</Label>
-            <Input
-              id="zip"
-              value={zip}
-              onChange={(e) => setZip(e.target.value)}
-              placeholder="32931"
-            />
+            <Input id="zip" value={zip} onChange={(e) => setZip(e.target.value)} placeholder="32931" />
           </div>
         </div>
       </div>
@@ -248,32 +260,15 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
             <Label htmlFor="ownerName">Owner Name</Label>
-            <Input
-              id="ownerName"
-              value={ownerName}
-              onChange={(e) => setOwnerName(e.target.value)}
-              placeholder="John Smith"
-            />
+            <Input id="ownerName" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="John Smith" />
           </div>
           <div>
             <Label htmlFor="ownerEmail">Email</Label>
-            <Input
-              id="ownerEmail"
-              type="email"
-              value={ownerEmail}
-              onChange={(e) => setOwnerEmail(e.target.value)}
-              placeholder="john@example.com"
-            />
+            <Input id="ownerEmail" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="john@example.com" />
           </div>
           <div>
             <Label htmlFor="ownerPhone">Phone</Label>
-            <Input
-              id="ownerPhone"
-              type="tel"
-              value={ownerPhone}
-              onChange={(e) => setOwnerPhone(e.target.value)}
-              placeholder="(555) 123-4567"
-            />
+            <Input id="ownerPhone" type="tel" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} placeholder="(555) 123-4567" />
           </div>
         </div>
       </div>
@@ -281,26 +276,61 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       <div>
         <Label>Pipeline Stage *</Label>
         <Select value={selectedStageId} onValueChange={setSelectedStageId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a stage" />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Select a stage" /></SelectTrigger>
           <SelectContent>
             {stages.map((stage) => (
-              <SelectItem key={stage.id} value={stage.id}>
-                {stage.name}
-              </SelectItem>
+              <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={handleCreateProperty} disabled={!address || !selectedStageId}>
-          Create & Add to Pipeline
-        </Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={handleCreateProperty} disabled={!address || !selectedStageId}>Create & Add to Pipeline</Button>
+      </div>
+    </div>
+  );
+
+  const renderContactForm = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2">
+          <Label htmlFor="contactName">Contact Name *</Label>
+          <Input id="contactName" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Jane Doe" autoFocus />
+        </div>
+        <div>
+          <Label htmlFor="contactPhone">Phone</Label>
+          <Input id="contactPhone" type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="(555) 123-4567" />
+        </div>
+        <div>
+          <Label htmlFor="contactEmail">Email</Label>
+          <Input id="contactEmail" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="jane@example.com" />
+        </div>
+        <div>
+          <Label htmlFor="dealValue">Deal Value ($)</Label>
+          <Input id="dealValue" type="number" value={dealValue} onChange={(e) => setDealValue(e.target.value)} placeholder="0" />
+        </div>
+        <div>
+          <Label>Pipeline Stage *</Label>
+          <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+            <SelectTrigger><SelectValue placeholder="Select a stage" /></SelectTrigger>
+            <SelectContent>
+              {stages.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-2">
+          <Label htmlFor="contactNotes">Notes</Label>
+          <Textarea id="contactNotes" value={contactNotes} onChange={(e) => setContactNotes(e.target.value)} placeholder="Any notes about this lead..." rows={3} />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={handleCreateDeal} disabled={!contactName || !selectedStageId}>Add Contact Deal</Button>
       </div>
     </div>
   );
@@ -310,25 +340,17 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       <div>
         <Label>Add to Pipeline Stage</Label>
         <Select value={selectedStageId} onValueChange={setSelectedStageId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a stage" />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Select a stage" /></SelectTrigger>
           <SelectContent>
             {stages.map((stage) => (
-              <SelectItem key={stage.id} value={stage.id}>
-                {stage.name}
-              </SelectItem>
+              <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => setSelectedProperty(null)}>
-          Back
-        </Button>
-        <Button onClick={handleAddToPipeline}>
-          Add to Pipeline
-        </Button>
+        <Button variant="outline" onClick={() => setSelectedProperty(null)}>Back</Button>
+        <Button onClick={handleAddToPipeline}>Add to Pipeline</Button>
       </div>
     </div>
   );
@@ -340,44 +362,54 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
           <DialogTitle>New Deal</DialogTitle>
         </DialogHeader>
 
-        {showCreateForm ? (
-          renderCreateForm()
-        ) : (
-          <div className="space-y-4">
-            {stages.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>Loading pipeline stages...</p>
-              </div>
-            ) : (
-              <>
-                {!selectedProperty && (
-                  <>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by address or owner name..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                        autoFocus
-                      />
-                    </div>
-                    {renderSearchResults()}
-                    {debouncedSearch.length < 2 && (
-                      <div className="flex justify-center pt-2">
-                        <Button variant="outline" onClick={() => setShowCreateForm(true)}>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create New Property
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {selectedProperty && renderStageSelection()}
-              </>
-            )}
+        {stages.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>Loading pipeline stages...</p>
           </div>
+        ) : (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="w-full">
+              <TabsTrigger value="search" className="flex-1 gap-1.5">
+                <Search className="w-3.5 h-3.5" />
+                Search Property
+              </TabsTrigger>
+              <TabsTrigger value="property" className="flex-1 gap-1.5">
+                <Plus className="w-3.5 h-3.5" />
+                New Property
+              </TabsTrigger>
+              <TabsTrigger value="contact" className="flex-1 gap-1.5">
+                <User className="w-3.5 h-3.5" />
+                Contact Only
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="search">
+              {!selectedProperty && (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by address or owner name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                      autoFocus
+                    />
+                  </div>
+                  {renderSearchResults()}
+                </>
+              )}
+              {selectedProperty && renderStageSelection()}
+            </TabsContent>
+
+            <TabsContent value="property">
+              {renderCreateForm()}
+            </TabsContent>
+
+            <TabsContent value="contact">
+              {renderContactForm()}
+            </TabsContent>
+          </Tabs>
         )}
       </DialogContent>
     </Dialog>

@@ -8,8 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Search, Plus, Loader2, MapPin, User, Check } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Search, Plus, Loader2, MapPin, User, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NewDealModalProps {
   isOpen: boolean;
@@ -44,6 +47,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   onCreateProperty,
   onCreateDeal,
 }) => {
+  const { profile } = useAuth();
   const [tab, setTab] = useState('search');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -59,6 +63,10 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   const [ownerName, setOwnerName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
+
+  // Duplicate check state
+  const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
 
   // Contact-only deal state
   const [contactName, setContactName] = useState('');
@@ -105,6 +113,8 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       setContactEmail('');
       setContactNotes('');
       setDealValue('');
+      setDuplicateMatches([]);
+      setIsCheckingDuplicates(false);
     }
   }, [isOpen, stages]);
 
@@ -115,7 +125,36 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
     }
   };
 
-  const handleCreateProperty = () => {
+  const handleCreateProperty = async () => {
+    if (!address || !selectedStageId) return;
+
+    // Check for duplicates first
+    setIsCheckingDuplicates(true);
+    try {
+      const query = supabase
+        .from('properties')
+        .select('id, address, city, state, zip, stage_id')
+        .ilike('address', `%${address.trim()}%`);
+
+      if (profile?.company_id) {
+        query.eq('company_id', profile.company_id);
+      }
+
+      const { data: matches } = await query.limit(10);
+
+      if (matches && matches.length > 0) {
+        setDuplicateMatches(matches);
+        setIsCheckingDuplicates(false);
+        return; // Show warning instead of creating
+      }
+    } catch (err) {
+      // If check fails, proceed with creation
+    }
+    setIsCheckingDuplicates(false);
+    handleForceCreate();
+  };
+
+  const handleForceCreate = () => {
     if (address && selectedStageId) {
       onCreateProperty({
         address,
@@ -129,6 +168,11 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       });
       onClose();
     }
+  };
+
+  const handleUseExisting = (propertyId: string) => {
+    onAddToPipeline(propertyId, selectedStageId);
+    onClose();
   };
 
   const handleCreateDeal = () => {
@@ -285,9 +329,48 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
         </Select>
       </div>
 
+      {/* Duplicate warning */}
+      {duplicateMatches.length > 0 && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-foreground">
+          <AlertTriangle className="h-4 w-4 !text-amber-500" />
+          <AlertTitle className="text-amber-600">Possible duplicate found</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              We found {duplicateMatches.length} existing {duplicateMatches.length === 1 ? 'property' : 'properties'} with a similar address:
+            </p>
+            <div className="space-y-2">
+              {duplicateMatches.map((match) => {
+                const stageName = stages.find(s => s.id === match.stage_id)?.name;
+                return (
+                  <div key={match.id} className="flex items-center justify-between p-2 rounded-md border bg-background">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{match.address}</p>
+                      <p className="text-xs text-muted-foreground">{match.city}, {match.state} {match.zip}</p>
+                      {stageName && <p className="text-xs text-muted-foreground">Pipeline: {stageName}</p>}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => handleUseExisting(match.id)}>
+                      Use This
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" variant="ghost" onClick={() => setDuplicateMatches([])}>Back</Button>
+              <Button size="sm" variant="outline" onClick={handleForceCreate}>Create Anyway</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={handleCreateProperty} disabled={!address || !selectedStageId}>Create & Add to Pipeline</Button>
+        <Button 
+          onClick={handleCreateProperty} 
+          disabled={!address || !selectedStageId || isCheckingDuplicates || duplicateMatches.length > 0}
+        >
+          {isCheckingDuplicates ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Checking...</> : 'Create & Add to Pipeline'}
+        </Button>
       </div>
     </div>
   );

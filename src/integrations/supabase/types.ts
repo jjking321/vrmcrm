@@ -210,6 +210,51 @@ export type Database = {
           },
         ]
       }
+      deals: {
+        Row: {
+          company_id: string
+          contact_email: string | null
+          contact_name: string
+          contact_phone: string | null
+          created_at: string
+          created_by: string | null
+          deal_value: number | null
+          id: string
+          notes: string | null
+          property_id: string | null
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contact_email?: string | null
+          contact_name?: string
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_value?: number | null
+          id?: string
+          notes?: string | null
+          property_id?: string | null
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contact_email?: string | null
+          contact_name?: string
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          deal_value?: number | null
+          id?: string
+          notes?: string | null
+          property_id?: string | null
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exclusion_list: {
         Row: {
           address: string | null

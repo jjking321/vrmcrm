@@ -253,6 +253,21 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
+export interface Deal {
+  id: string;
+  companyId: string;
+  stageId: string;
+  propertyId?: string;
+  contactName: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  notes?: string;
+  dealValue?: number;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer' | 'mailingLists';
 export type ListViewMode = 'table' | 'kanban';
 

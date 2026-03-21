@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard' as ViewMode, label: 'Dashboard', icon: BarChart3 },
     { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: totalPropertyCount || propertyCount },
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users, count: ownerCount },
+    { id: 'realtors' as ViewMode, label: 'Realtors', icon: Building2, count: realtorCount },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
     { id: 'callLists' as ViewMode, label: 'Call Lists', icon: Phone },
     { id: 'mailingLists' as ViewMode, label: 'Mailing Lists', icon: Mail },

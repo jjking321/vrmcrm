@@ -141,6 +141,7 @@ const MainApp: React.FC = () => {
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
   const { data: ownersData, isLoading: ownersLoading } = useAllOwners();
   const { data: deals = [] } = useDeals();
+  const { data: realtors = [] } = useRealtors();
   const addDealMutation = useAddDeal();
   const updateDealMutation = useUpdateDeal();
   const { mutate: initStages } = useInitializePipelineStages();

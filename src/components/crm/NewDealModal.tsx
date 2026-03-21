@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Property, PipelineStage } from '@/types';
+import { Property, PipelineStage, Realtor } from '@/types';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
+import { useRealtors, useAddRealtor } from '@/hooks/useRealtors';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Search, Plus, Loader2, MapPin, User, Check, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Loader2, MapPin, User, Check, AlertTriangle, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';

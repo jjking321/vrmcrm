@@ -77,6 +77,19 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   const [contactNotes, setContactNotes] = useState('');
   const [dealValue, setDealValue] = useState('');
 
+  // Realtor deal state
+  const [realtorMode, setRealtorMode] = useState<'select' | 'create'>('select');
+  const [selectedRealtorId, setSelectedRealtorId] = useState<string>('');
+  const [realtorName, setRealtorName] = useState('');
+  const [realtorPhone, setRealtorPhone] = useState('');
+  const [realtorEmail, setRealtorEmail] = useState('');
+  const [realtorNotes, setRealtorNotes] = useState('');
+  const [realtorDealValue, setRealtorDealValue] = useState('');
+  const [isCreatingRealtor, setIsCreatingRealtor] = useState(false);
+
+  const { data: realtors = [] } = useRealtors();
+  const addRealtorMutation = useAddRealtor();
+
   const { data: searchResults = [], isFetching } = usePropertySearch(debouncedSearch, isOpen && tab === 'search');
 
   // Debounce search

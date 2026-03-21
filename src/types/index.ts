@@ -253,11 +253,23 @@ export interface ColumnDefinition {
   render?: (property: Property) => React.ReactNode;
 }
 
+export interface Realtor {
+  id: string;
+  companyId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Deal {
   id: string;
   companyId: string;
   stageId: string;
   propertyId?: string;
+  realtorId?: string;
   contactName: string;
   contactPhone?: string;
   contactEmail?: string;

@@ -222,6 +222,7 @@ export type Database = {
           id: string
           notes: string | null
           property_id: string | null
+          realtor_id: string | null
           stage_id: string
           updated_at: string
         }
@@ -236,6 +237,7 @@ export type Database = {
           id?: string
           notes?: string | null
           property_id?: string | null
+          realtor_id?: string | null
           stage_id: string
           updated_at?: string
         }
@@ -250,10 +252,19 @@ export type Database = {
           id?: string
           notes?: string | null
           property_id?: string | null
+          realtor_id?: string | null
           stage_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "deals_realtor_id_fkey"
+            columns: ["realtor_id"]
+            isOneToOne: false
+            referencedRelation: "realtors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       exclusion_list: {
         Row: {
@@ -697,6 +708,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      realtors: {
+        Row: {
+          company_id: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       saved_lists: {
         Row: {

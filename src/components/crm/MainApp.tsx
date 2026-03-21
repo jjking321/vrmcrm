@@ -12,6 +12,7 @@ import { usePropertySearch } from '@/hooks/usePropertySearch';
 import { useAllOwners } from '@/hooks/useAllOwners';
 import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
 import { useDeals, useAddDeal, useUpdateDeal } from '@/hooks/useDeals';
+import { useRealtors } from '@/hooks/useRealtors';
 import { usePagination } from '@/hooks/usePagination';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';
@@ -140,6 +141,7 @@ const MainApp: React.FC = () => {
   const { data: fieldDefinitions = [], isLoading: fieldsLoading } = useFieldDefinitions();
   const { data: ownersData, isLoading: ownersLoading } = useAllOwners();
   const { data: deals = [] } = useDeals();
+  const { data: realtors = [] } = useRealtors();
   const addDealMutation = useAddDeal();
   const updateDealMutation = useUpdateDeal();
   const { mutate: initStages } = useInitializePipelineStages();
@@ -569,6 +571,7 @@ const MainApp: React.FC = () => {
               properties={displayProperties}
               stages={stages}
               deals={deals}
+              realtors={realtors}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
               onMoveDeal={(dealId, newStageId) => updateDealMutation.mutate({ id: dealId, updates: { stageId: newStageId } })}
               onSelectProperty={handleSelectProperty}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Property, PipelineStage } from '@/types';
+import { Property, PipelineStage, Realtor } from '@/types';
 import { usePropertySearch } from '@/hooks/usePropertySearch';
+import { useRealtors, useAddRealtor } from '@/hooks/useRealtors';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Search, Plus, Loader2, MapPin, User, Check, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Loader2, MapPin, User, Check, AlertTriangle, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +37,7 @@ interface NewDealModalProps {
     notes?: string;
     dealValue?: number;
     stageId: string;
+    realtorId?: string;
   }) => void;
 }
 
@@ -74,6 +76,19 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
   const [contactEmail, setContactEmail] = useState('');
   const [contactNotes, setContactNotes] = useState('');
   const [dealValue, setDealValue] = useState('');
+
+  // Realtor deal state
+  const [realtorMode, setRealtorMode] = useState<'select' | 'create'>('select');
+  const [selectedRealtorId, setSelectedRealtorId] = useState<string>('');
+  const [realtorName, setRealtorName] = useState('');
+  const [realtorPhone, setRealtorPhone] = useState('');
+  const [realtorEmail, setRealtorEmail] = useState('');
+  const [realtorNotes, setRealtorNotes] = useState('');
+  const [realtorDealValue, setRealtorDealValue] = useState('');
+  const [isCreatingRealtor, setIsCreatingRealtor] = useState(false);
+
+  const { data: realtors = [] } = useRealtors();
+  const addRealtorMutation = useAddRealtor();
 
   const { data: searchResults = [], isFetching } = usePropertySearch(debouncedSearch, isOpen && tab === 'search');
 
@@ -115,6 +130,14 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       setDealValue('');
       setDuplicateMatches([]);
       setIsCheckingDuplicates(false);
+      setRealtorMode('select');
+      setSelectedRealtorId('');
+      setRealtorName('');
+      setRealtorPhone('');
+      setRealtorEmail('');
+      setRealtorNotes('');
+      setRealtorDealValue('');
+      setIsCreatingRealtor(false);
     }
   }, [isOpen, stages]);
 
@@ -187,6 +210,45 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       });
       onClose();
     }
+  };
+
+  const handleCreateRealtorDeal = async () => {
+    if (!selectedStageId || !onCreateDeal) return;
+
+    let realtorId = selectedRealtorId;
+
+    if (realtorMode === 'create') {
+      if (!realtorName) return;
+      setIsCreatingRealtor(true);
+      try {
+        const newRealtor = await addRealtorMutation.mutateAsync({
+          name: realtorName,
+          phone: realtorPhone || undefined,
+          email: realtorEmail || undefined,
+          notes: realtorNotes || undefined,
+        });
+        realtorId = newRealtor.id;
+      } catch {
+        setIsCreatingRealtor(false);
+        return;
+      }
+      setIsCreatingRealtor(false);
+    }
+
+    if (!realtorId) return;
+
+    const selectedRealtor = realtorMode === 'select' ? realtors.find(r => r.id === realtorId) : null;
+
+    onCreateDeal({
+      contactName: selectedRealtor?.name || realtorName,
+      contactPhone: selectedRealtor?.phone || realtorPhone || undefined,
+      contactEmail: selectedRealtor?.email || realtorEmail || undefined,
+      notes: realtorNotes || undefined,
+      dealValue: realtorDealValue ? Number(realtorDealValue) : undefined,
+      stageId: selectedStageId,
+      realtorId,
+    });
+    onClose();
   };
 
   const renderSearchResults = () => {
@@ -462,7 +524,11 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
               </TabsTrigger>
               <TabsTrigger value="contact" className="flex-1 gap-1.5">
                 <User className="w-3.5 h-3.5" />
-                Contact Only
+                Contact
+              </TabsTrigger>
+              <TabsTrigger value="realtor" className="flex-1 gap-1.5">
+                <Building2 className="w-3.5 h-3.5" />
+                Realtor
               </TabsTrigger>
             </TabsList>
 
@@ -491,6 +557,102 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
 
             <TabsContent value="contact">
               {renderContactForm()}
+            </TabsContent>
+
+            <TabsContent value="realtor">
+              <div className="space-y-4">
+                {/* Mode toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={realtorMode === 'select' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRealtorMode('select')}
+                    disabled={realtors.length === 0}
+                  >
+                    Select Existing
+                  </Button>
+                  <Button
+                    variant={realtorMode === 'create' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRealtorMode('create')}
+                  >
+                    Create New
+                  </Button>
+                </div>
+
+                {realtorMode === 'select' && (
+                  <div>
+                    <Label>Select Realtor</Label>
+                    <Select value={selectedRealtorId} onValueChange={setSelectedRealtorId}>
+                      <SelectTrigger><SelectValue placeholder="Choose a realtor..." /></SelectTrigger>
+                      <SelectContent>
+                        {realtors.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.name}{r.phone ? ` — ${r.phone}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {realtors.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No realtors yet. Create one first.</p>
+                    )}
+                  </div>
+                )}
+
+                {realtorMode === 'create' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <Label htmlFor="realtorName">Realtor Name *</Label>
+                      <Input id="realtorName" value={realtorName} onChange={(e) => setRealtorName(e.target.value)} placeholder="Jane Realtor" autoFocus />
+                    </div>
+                    <div>
+                      <Label htmlFor="realtorPhone">Phone</Label>
+                      <Input id="realtorPhone" type="tel" value={realtorPhone} onChange={(e) => setRealtorPhone(e.target.value)} placeholder="(555) 123-4567" />
+                    </div>
+                    <div>
+                      <Label htmlFor="realtorEmail">Email</Label>
+                      <Input id="realtorEmail" type="email" value={realtorEmail} onChange={(e) => setRealtorEmail(e.target.value)} placeholder="jane@realty.com" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="realtorDealValue">Deal Value ($)</Label>
+                    <Input id="realtorDealValue" type="number" value={realtorDealValue} onChange={(e) => setRealtorDealValue(e.target.value)} placeholder="0" />
+                  </div>
+                  <div>
+                    <Label>Pipeline Stage *</Label>
+                    <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+                      <SelectTrigger><SelectValue placeholder="Select a stage" /></SelectTrigger>
+                      <SelectContent>
+                        {stages.map((stage) => (
+                          <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="realtorDealNotes">Notes</Label>
+                    <Textarea id="realtorDealNotes" value={realtorNotes} onChange={(e) => setRealtorNotes(e.target.value)} placeholder="Notes about this realtor deal..." rows={3} />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={onClose}>Cancel</Button>
+                  <Button
+                    onClick={handleCreateRealtorDeal}
+                    disabled={
+                      !selectedStageId ||
+                      isCreatingRealtor ||
+                      (realtorMode === 'select' && !selectedRealtorId) ||
+                      (realtorMode === 'create' && !realtorName)
+                    }
+                  >
+                    {isCreatingRealtor ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...</> : 'Add Realtor Deal'}
+                  </Button>
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         )}

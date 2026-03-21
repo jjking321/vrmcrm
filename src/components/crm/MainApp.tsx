@@ -284,6 +284,7 @@ const MainApp: React.FC = () => {
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
+  const [selectedRealtorId, setSelectedRealtorId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 

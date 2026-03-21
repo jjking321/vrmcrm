@@ -557,7 +557,18 @@ const MainApp: React.FC = () => {
     }
 
     if (view === 'realtors') {
-      return <RealtorsView />;
+      if (selectedRealtorId) {
+        const realtor = realtors.find(r => r.id === selectedRealtorId);
+        if (realtor) {
+          return (
+            <RealtorDetail
+              realtor={realtor}
+              onBack={() => setSelectedRealtorId(null)}
+            />
+          );
+        }
+      }
+      return <RealtorsView onSelectRealtor={(id) => setSelectedRealtorId(id)} />;
     }
 
     if (view === 'owners') {

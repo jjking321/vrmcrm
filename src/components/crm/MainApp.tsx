@@ -571,6 +571,7 @@ const MainApp: React.FC = () => {
               properties={displayProperties}
               stages={stages}
               deals={deals}
+              realtors={realtors}
               onMoveProperty={(pId, sId) => handleUpdateProperty(pId, { stageId: sId })}
               onMoveDeal={(dealId, newStageId) => updateDealMutation.mutate({ id: dealId, updates: { stageId: newStageId } })}
               onSelectProperty={handleSelectProperty}

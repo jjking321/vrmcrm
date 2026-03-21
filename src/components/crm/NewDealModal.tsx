@@ -558,6 +558,102 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
             <TabsContent value="contact">
               {renderContactForm()}
             </TabsContent>
+
+            <TabsContent value="realtor">
+              <div className="space-y-4">
+                {/* Mode toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={realtorMode === 'select' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRealtorMode('select')}
+                    disabled={realtors.length === 0}
+                  >
+                    Select Existing
+                  </Button>
+                  <Button
+                    variant={realtorMode === 'create' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRealtorMode('create')}
+                  >
+                    Create New
+                  </Button>
+                </div>
+
+                {realtorMode === 'select' && (
+                  <div>
+                    <Label>Select Realtor</Label>
+                    <Select value={selectedRealtorId} onValueChange={setSelectedRealtorId}>
+                      <SelectTrigger><SelectValue placeholder="Choose a realtor..." /></SelectTrigger>
+                      <SelectContent>
+                        {realtors.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.name}{r.phone ? ` — ${r.phone}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {realtors.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No realtors yet. Create one first.</p>
+                    )}
+                  </div>
+                )}
+
+                {realtorMode === 'create' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <Label htmlFor="realtorName">Realtor Name *</Label>
+                      <Input id="realtorName" value={realtorName} onChange={(e) => setRealtorName(e.target.value)} placeholder="Jane Realtor" autoFocus />
+                    </div>
+                    <div>
+                      <Label htmlFor="realtorPhone">Phone</Label>
+                      <Input id="realtorPhone" type="tel" value={realtorPhone} onChange={(e) => setRealtorPhone(e.target.value)} placeholder="(555) 123-4567" />
+                    </div>
+                    <div>
+                      <Label htmlFor="realtorEmail">Email</Label>
+                      <Input id="realtorEmail" type="email" value={realtorEmail} onChange={(e) => setRealtorEmail(e.target.value)} placeholder="jane@realty.com" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="realtorDealValue">Deal Value ($)</Label>
+                    <Input id="realtorDealValue" type="number" value={realtorDealValue} onChange={(e) => setRealtorDealValue(e.target.value)} placeholder="0" />
+                  </div>
+                  <div>
+                    <Label>Pipeline Stage *</Label>
+                    <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+                      <SelectTrigger><SelectValue placeholder="Select a stage" /></SelectTrigger>
+                      <SelectContent>
+                        {stages.map((stage) => (
+                          <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="realtorDealNotes">Notes</Label>
+                    <Textarea id="realtorDealNotes" value={realtorNotes} onChange={(e) => setRealtorNotes(e.target.value)} placeholder="Notes about this realtor deal..." rows={3} />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={onClose}>Cancel</Button>
+                  <Button
+                    onClick={handleCreateRealtorDeal}
+                    disabled={
+                      !selectedStageId ||
+                      isCreatingRealtor ||
+                      (realtorMode === 'select' && !selectedRealtorId) ||
+                      (realtorMode === 'create' && !realtorName)
+                    }
+                  >
+                    {isCreatingRealtor ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Creating...</> : 'Add Realtor Deal'}
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
           </Tabs>
         )}
       </DialogContent>

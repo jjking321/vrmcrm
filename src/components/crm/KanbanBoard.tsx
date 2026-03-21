@@ -133,37 +133,46 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             {/* Cards */}
             <div className="p-2 space-y-2 max-h-[calc(100vh-320px)] overflow-y-auto">
               {/* Deal Cards */}
-              {stageDeals.map((deal) => (
+              {stageDeals.map((deal) => {
+                const isRealtorDeal = !!deal.realtorId;
+                const realtor = isRealtorDeal ? realtors.find(r => r.id === deal.realtorId) : null;
+                return (
                 <div
                   key={`deal-${deal.id}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, deal.id, 'deal')}
                   className={cn(
-                    "bg-card rounded-lg p-3 shadow-soft border cursor-grab hover:shadow-medium transition-all border-primary/20",
+                    "bg-card rounded-lg p-3 shadow-soft border cursor-grab hover:shadow-medium transition-all",
+                    isRealtorDeal ? "border-teal-400/40" : "border-primary/20",
                     draggedId === deal.id && draggedType === 'deal' && "opacity-50"
                   )}
                 >
-                  <div className="bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mb-2">
-                    <User className="w-3 h-3" />
-                    Contact Deal
+                  <div className={cn(
+                    "text-xs px-1.5 py-0.5 rounded flex items-center gap-1 w-fit mb-2",
+                    isRealtorDeal
+                      ? "bg-teal-500/10 text-teal-700"
+                      : "bg-primary/10 text-primary"
+                  )}>
+                    {isRealtorDeal ? <Building2 className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                    {isRealtorDeal ? 'Realtor Deal' : 'Contact Deal'}
                   </div>
                   <div className="space-y-1.5">
                     <div className="flex items-start gap-1.5">
-                      <User className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
-                      <p className="text-sm font-medium text-foreground leading-tight">{deal.contactName || 'Unnamed'}</p>
+                      {isRealtorDeal ? <Building2 className="w-3.5 h-3.5 text-teal-600 mt-0.5 flex-shrink-0" /> : <User className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />}
+                      <p className="text-sm font-medium text-foreground leading-tight">{realtor?.name || deal.contactName || 'Unnamed'}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 grid grid-cols-2 gap-2">
-                        {deal.contactPhone && (
+                        {(realtor?.phone || deal.contactPhone) && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
                             <Phone className="w-3 h-3" />
-                            <span className="truncate">{deal.contactPhone}</span>
+                            <span className="truncate">{realtor?.phone || deal.contactPhone}</span>
                           </div>
                         )}
-                        {deal.contactEmail && (
+                        {(realtor?.email || deal.contactEmail) && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 p-1.5 rounded">
                             <Mail className="w-3 h-3" />
-                            <span className="truncate">{deal.contactEmail}</span>
+                            <span className="truncate">{realtor?.email || deal.contactEmail}</span>
                           </div>
                         )}
                       </div>
@@ -176,7 +185,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {/* Property Cards */}
               {stageProperties.map((property) => {

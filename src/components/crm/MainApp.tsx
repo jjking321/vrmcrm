@@ -12,6 +12,7 @@ import { usePropertySearch } from '@/hooks/usePropertySearch';
 import { useAllOwners } from '@/hooks/useAllOwners';
 import { useServerFilteredProperties } from '@/hooks/useServerFilteredProperties';
 import { useDeals, useAddDeal, useUpdateDeal } from '@/hooks/useDeals';
+import { useRealtors } from '@/hooks/useRealtors';
 import { usePagination } from '@/hooks/usePagination';
 import { Sidebar } from './Sidebar';
 import { FilterBar } from './FilterBar';

@@ -8,6 +8,7 @@ const mapRow = (row: any): Deal => ({
   companyId: row.company_id,
   stageId: row.stage_id,
   propertyId: row.property_id || undefined,
+  realtorId: row.realtor_id || undefined,
   contactName: row.contact_name,
   contactPhone: row.contact_phone || undefined,
   contactEmail: row.contact_email || undefined,

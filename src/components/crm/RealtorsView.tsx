@@ -192,7 +192,7 @@ export const RealtorsView: React.FC<RealtorsViewProps> = ({ onSelectRealtor }) =
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  onClick={() => openEdit(r, { stopPropagation: () => {} } as any)}
+                  onClick={() => onSelectRealtor ? onSelectRealtor(r.id) : openEdit(r, { stopPropagation: () => {} } as any)}
                   className="hover:bg-muted/30 cursor-pointer transition-colors"
                 >
                   <td className="px-4 py-4">

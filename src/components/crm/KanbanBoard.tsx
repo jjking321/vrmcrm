@@ -15,6 +15,7 @@ interface KanbanBoardProps {
   onNewDeal?: () => void;
   deals?: Deal[];
   onMoveDeal?: (dealId: string, newStageId: string) => void;
+  realtors?: Realtor[];
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({

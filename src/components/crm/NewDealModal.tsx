@@ -37,6 +37,7 @@ interface NewDealModalProps {
     notes?: string;
     dealValue?: number;
     stageId: string;
+    realtorId?: string;
   }) => void;
 }
 

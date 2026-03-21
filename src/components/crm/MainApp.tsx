@@ -271,6 +271,7 @@ const MainApp: React.FC = () => {
     setViewInternal(newView);
     setSelectedPropertyId(null);
     setSelectedOwnerName(null);
+    setSelectedRealtorId(null);
     setSelectedIds(new Set());
   };
 

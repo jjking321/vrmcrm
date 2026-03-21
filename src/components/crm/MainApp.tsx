@@ -33,6 +33,7 @@ import { ExclusionListManager } from './ExclusionListManager';
 import { CallListsView } from './CallListsView';
 import { CallDialer } from './CallDialer';
 import { MailingListsView } from './MailingListsView';
+import { RealtorsView } from './RealtorsView';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';

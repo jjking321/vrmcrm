@@ -553,6 +553,10 @@ const MainApp: React.FC = () => {
       return <MailingListsView />;
     }
 
+    if (view === 'realtors') {
+      return <RealtorsView />;
+    }
+
     if (view === 'owners') {
       return (
         <OwnersView

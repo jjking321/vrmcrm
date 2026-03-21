@@ -15,6 +15,7 @@ interface SidebarProps {
   propertyCount: number;
   totalPropertyCount?: number;
   ownerCount?: number;
+  realtorCount?: number;
   savedLists: SavedList[];
   onLoadList: (list: SavedList) => void;
   onDeleteList: (id: string) => void;

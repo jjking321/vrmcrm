@@ -1,33 +1,83 @@
 
-# Duplicate Property Check Before Creating a New Deal
 
-## What Will Change
+# Add Realtors as a Deal Type in the Pipeline
 
-When a user fills out the "New Property" form in the New Deal modal and clicks "Create & Add to Pipeline", the system will first check the database for existing properties with the same or similar address. If a match is found, the user will see a warning with the matching property details and can choose to either use the existing property or proceed with creating a new one anyway.
+## What We'll Build
 
-## How It Works
+A dedicated `realtors` table to store realtor profiles (name, phone, email, notes) that can be reused across multiple deals. Deals can then be linked to a realtor via a `realtor_id` column. On the Kanban board, realtor-linked deals will appear with a distinct visual style. The New Deal modal gets a fourth tab for creating or selecting a realtor deal.
 
-1. User fills in the address fields on the "New Property" tab
-2. On submit, before creating anything, a query runs against the `properties` table looking for matches on address (case-insensitive)
-3. If matches are found, a warning panel appears showing the matching properties with their details (address, city/state, owner name, pipeline status)
-4. The user can either:
-   - **Use existing property** -- adds that property to the selected pipeline stage (same as the Search tab flow)
-   - **Create anyway** -- proceeds to create a new property despite the match
+## Changes
+
+### 1. Database: New `realtors` table + deal linkage
+
+- Create `realtors` table: `id`, `company_id`, `name`, `phone`, `email`, `notes`, `created_at`, `updated_at`
+- RLS policies scoped to company (same pattern as other tables)
+- Add `realtor_id` (nullable uuid) column to the `deals` table for linking a deal to a realtor
+
+### 2. New hook: `src/hooks/useRealtors.ts`
+
+- `useRealtors()` -- fetch all realtors for the company
+- `useAddRealtor()` -- create a new realtor
+- `useUpdateRealtor()` -- edit realtor info
+- `useDeleteRealtor()` -- remove a realtor
+
+### 3. Update `src/types/index.ts`
+
+- Add `Realtor` interface: `id`, `companyId`, `name`, `phone?`, `email?`, `notes?`, `createdAt`, `updatedAt`
+- Add `realtorId?` to the `Deal` type
+
+### 4. Update `NewDealModal.tsx`
+
+- Add a 4th tab: "Realtor" with a form for name, phone, email, notes
+- Include a searchable dropdown to pick an existing realtor or create a new one inline
+- On submit, creates the realtor (if new), then creates a deal linked via `realtor_id`
+
+### 5. Update `KanbanBoard.tsx`
+
+- Realtor-linked deals get a distinct badge (e.g. "Realtor Deal" in a different color) and show the realtor's name/phone
+- No structural changes needed -- they're still `Deal` cards
+
+### 6. Update `useDeals.ts` and `MainApp.tsx`
+
+- `useDeals` maps the new `realtor_id` field
+- `useAddDeal` accepts optional `realtorId`
+- `MainApp` passes the new `onCreateRealtorDeal` callback to `NewDealModal`
 
 ## Technical Details
 
-### Changes to `NewDealModal.tsx`
+### Migration SQL
 
-- Add state for `duplicateMatches` (array of matching properties) and `duplicateChecked` (boolean)
-- Modify `handleCreateProperty` to:
-  1. Query `properties` table for address matches using `ilike` before creating
-  2. If matches found, set `duplicateMatches` state and show warning UI instead of creating
-  3. If no matches, proceed with creation as before
-- Add a `handleForceCreate` function that bypasses the check and creates the property
-- Add a `handleUseExisting` function that calls `onAddToPipeline` with the selected existing property
-- Render a warning section when `duplicateMatches` has entries, showing each match with address, owner, and pipeline status
-- Add a "Use This Property" button on each match and a "Create Anyway" button at the bottom
+```sql
+CREATE TABLE public.realtors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL,
+  name text NOT NULL,
+  phone text,
+  email text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-### No database or schema changes needed
+ALTER TABLE public.realtors ENABLE ROW LEVEL SECURITY;
 
-The duplicate check uses a simple `SELECT` query against the existing `properties` table filtered by `company_id` and address similarity.
+CREATE POLICY "Users can view their company realtors"
+  ON public.realtors FOR SELECT
+  USING (company_id = get_user_company_id(auth.uid()));
+CREATE POLICY "Users can insert realtors for their company"
+  ON public.realtors FOR INSERT
+  WITH CHECK (company_id = get_user_company_id(auth.uid()));
+CREATE POLICY "Users can update their company realtors"
+  ON public.realtors FOR UPDATE
+  USING (company_id = get_user_company_id(auth.uid()));
+CREATE POLICY "Users can delete their company realtors"
+  ON public.realtors FOR DELETE
+  USING (company_id = get_user_company_id(auth.uid()));
+
+ALTER TABLE public.deals ADD COLUMN realtor_id uuid;
+```
+
+### Kanban card differentiation
+
+Deals with a `realtor_id` show a teal "Realtor Deal" badge (vs blue "Contact Deal" for standard contact-only deals). The realtor's name displays prominently on the card.
+

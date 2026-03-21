@@ -13,7 +13,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const RealtorsView: React.FC = () => {
+interface RealtorsViewProps {
+  onSelectRealtor?: (id: string) => void;
+}
+
+export const RealtorsView: React.FC<RealtorsViewProps> = ({ onSelectRealtor }) => {
   const { data: realtors = [], isLoading } = useRealtors();
   const addMutation = useAddRealtor();
   const updateMutation = useUpdateRealtor();

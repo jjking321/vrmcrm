@@ -29,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   propertyCount,
   totalPropertyCount,
   ownerCount,
+  realtorCount,
   savedLists,
   onLoadList,
   onDeleteList,

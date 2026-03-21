@@ -524,7 +524,11 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
               </TabsTrigger>
               <TabsTrigger value="contact" className="flex-1 gap-1.5">
                 <User className="w-3.5 h-3.5" />
-                Contact Only
+                Contact
+              </TabsTrigger>
+              <TabsTrigger value="realtor" className="flex-1 gap-1.5">
+                <Building2 className="w-3.5 h-3.5" />
+                Realtor
               </TabsTrigger>
             </TabsList>
 

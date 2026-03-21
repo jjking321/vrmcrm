@@ -3,7 +3,7 @@ import { ViewMode, SavedList } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Building, Users, LayoutGrid, Settings, LogOut, 
-  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail
+  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,7 @@ interface SidebarProps {
   propertyCount: number;
   totalPropertyCount?: number;
   ownerCount?: number;
+  realtorCount?: number;
   savedLists: SavedList[];
   onLoadList: (list: SavedList) => void;
   onDeleteList: (id: string) => void;
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   propertyCount,
   totalPropertyCount,
   ownerCount,
+  realtorCount,
   savedLists,
   onLoadList,
   onDeleteList,
@@ -39,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard' as ViewMode, label: 'Dashboard', icon: BarChart3 },
     { id: 'properties' as ViewMode, label: 'Properties', icon: Building, count: totalPropertyCount || propertyCount },
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users, count: ownerCount },
+    { id: 'realtors' as ViewMode, label: 'Realtors', icon: Building2, count: realtorCount },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
     { id: 'callLists' as ViewMode, label: 'Call Lists', icon: Phone },
     { id: 'mailingLists' as ViewMode, label: 'Mailing Lists', icon: Mail },

@@ -33,6 +33,7 @@ import { ExclusionListManager } from './ExclusionListManager';
 import { CallListsView } from './CallListsView';
 import { CallDialer } from './CallDialer';
 import { MailingListsView } from './MailingListsView';
+import { RealtorsView } from './RealtorsView';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -552,6 +553,10 @@ const MainApp: React.FC = () => {
       return <MailingListsView />;
     }
 
+    if (view === 'realtors') {
+      return <RealtorsView />;
+    }
+
     if (view === 'owners') {
       return (
         <OwnersView
@@ -640,7 +645,8 @@ const MainApp: React.FC = () => {
         onAddPropertyClick={() => setIsAddPropertyOpen(true)}
         propertyCount={allProperties.length}
         totalPropertyCount={totalPropertyCount}
-        ownerCount={ownersData?.owners.length}
+          ownerCount={ownersData?.owners.length}
+          realtorCount={realtors.length}
         savedLists={savedLists}
         onLoadList={handleLoadList}
         onDeleteList={handleDeleteList}

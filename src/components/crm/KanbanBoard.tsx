@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Property, PipelineStage, Deal } from '@/types';
-import { MapPin, DollarSign, User, Ban, Plus, Phone, Mail } from 'lucide-react';
+import { Property, PipelineStage, Deal, Realtor } from '@/types';
+import { MapPin, DollarSign, User, Ban, Plus, Phone, Mail, Building2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { getPrimaryOwnerName } from '@/lib/ownerUtils';

@@ -130,6 +130,14 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
       setDealValue('');
       setDuplicateMatches([]);
       setIsCheckingDuplicates(false);
+      setRealtorMode('select');
+      setSelectedRealtorId('');
+      setRealtorName('');
+      setRealtorPhone('');
+      setRealtorEmail('');
+      setRealtorNotes('');
+      setRealtorDealValue('');
+      setIsCreatingRealtor(false);
     }
   }, [isOpen, stages]);
 

@@ -26,6 +26,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onNewDeal,
   deals = [],
   onMoveDeal,
+  realtors = [],
 }) => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedType, setDraggedType] = useState<'property' | 'deal' | null>(null);

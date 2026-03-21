@@ -62,7 +62,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [showFilters, setShowFilters] = useState(rules.length > 0);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync showFilters state when rules change (e.g., when loading a smart list)
   useEffect(() => {

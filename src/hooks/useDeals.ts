@@ -46,8 +46,9 @@ export function useAddDeal() {
       notes?: string;
       dealValue?: number;
       stageId: string;
+      realtorId?: string;
     }) => {
-      const { error } = await supabase.from('deals').insert({
+      const insert: any = {
         company_id: company!.id,
         stage_id: deal.stageId,
         contact_name: deal.contactName,
@@ -56,7 +57,9 @@ export function useAddDeal() {
         notes: deal.notes || null,
         deal_value: deal.dealValue ?? null,
         created_by: user?.id || null,
-      });
+      };
+      if (deal.realtorId) insert.realtor_id = deal.realtorId;
+      const { error } = await supabase.from('deals').insert(insert);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),

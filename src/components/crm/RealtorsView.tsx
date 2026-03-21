@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Realtor } from '@/types';
 import { useRealtors, useAddRealtor, useUpdateRealtor, useDeleteRealtor } from '@/hooks/useRealtors';
 import { Input } from '@/components/ui/input';
@@ -6,8 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Building2, Plus, Search, Phone, Mail, Trash2, Pencil, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import {
+  Building2, Plus, Search, Phone, Mail, Trash2, Pencil, Loader2, X,
+  ArrowUpDown, ArrowUp, ArrowDown,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 export const RealtorsView: React.FC = () => {
@@ -19,6 +22,10 @@ export const RealtorsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRealtor, setEditingRealtor] = useState<Realtor | null>(null);
+  const [sortConfig, setSortConfig] = usePersistedState<{ field: string; direction: 'asc' | 'desc' }>(
+    'crm-realtor-sort-config',
+    { field: 'name', direction: 'asc' }
+  );
 
   // Form state
   const [name, setName] = useState('');
@@ -26,33 +33,56 @@ export const RealtorsView: React.FC = () => {
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
 
-  const filtered = realtors.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.email?.toLowerCase().includes(search.toLowerCase()) ||
-    r.phone?.includes(search)
-  );
+  const filtered = useMemo(() => {
+    let list = realtors;
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      list = list.filter(r =>
+        r.name.toLowerCase().includes(term) ||
+        r.email?.toLowerCase().includes(term) ||
+        r.phone?.includes(term)
+      );
+    }
+    const sorted = [...list].sort((a, b) => {
+      const { field, direction } = sortConfig;
+      let cmp = 0;
+      if (field === 'name') cmp = a.name.localeCompare(b.name);
+      else if (field === 'email') cmp = (a.email || '').localeCompare(b.email || '');
+      else if (field === 'phone') cmp = (a.phone || '').localeCompare(b.phone || '');
+      return direction === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [realtors, search, sortConfig]);
+
+  const handleSort = (field: string) => {
+    setSortConfig(prev => ({
+      field,
+      direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  };
+
+  const getSortIcon = (field: string) => {
+    if (sortConfig.field !== field) return <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-60" />;
+    return sortConfig.direction === 'asc'
+      ? <ArrowUp className="w-3 h-3 text-brand" />
+      : <ArrowDown className="w-3 h-3 text-brand" />;
+  };
 
   const openCreate = () => {
     setEditingRealtor(null);
-    setName('');
-    setPhone('');
-    setEmail('');
-    setNotes('');
+    setName(''); setPhone(''); setEmail(''); setNotes('');
     setIsModalOpen(true);
   };
 
-  const openEdit = (r: Realtor) => {
+  const openEdit = (r: Realtor, e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditingRealtor(r);
-    setName(r.name);
-    setPhone(r.phone || '');
-    setEmail(r.email || '');
-    setNotes(r.notes || '');
+    setName(r.name); setPhone(r.phone || ''); setEmail(r.email || ''); setNotes(r.notes || '');
     setIsModalOpen(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!name.trim()) return;
-
     if (editingRealtor) {
       updateMutation.mutate(
         { id: editingRealtor.id, updates: { name, phone: phone || undefined, email: email || undefined, notes: notes || undefined } },
@@ -66,20 +96,11 @@ export const RealtorsView: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Delete this realtor? Any linked deals will keep their data but lose the realtor link.')) return;
-    deleteMutation.mutate(id, {
-      onSuccess: () => toast.success('Realtor deleted'),
-    });
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Delete this realtor? Linked deals will lose their realtor link.')) return;
+    deleteMutation.mutate(id, { onSuccess: () => toast.success('Realtor deleted') });
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -91,65 +112,139 @@ export const RealtorsView: React.FC = () => {
         </Button>
       </div>
 
-      <div className="relative mb-4 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search realtors..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
+        {/* Header with search and count */}
+        <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-muted-foreground" />
+            <h2 className="font-semibold text-foreground">
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading realtors...
+                </span>
+              ) : search ? (
+                <span>{filtered.length.toLocaleString()} of {realtors.length.toLocaleString()} Realtors</span>
+              ) : (
+                <span>{realtors.length.toLocaleString()} Realtors</span>
+              )}
+            </h2>
+          </div>
 
-      {filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Building2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>{realtors.length === 0 ? 'No realtors yet. Add your first one!' : 'No realtors match your search.'}</p>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, email, or phone..."
+              className="w-full pl-10 pr-10 py-2 border border-input rounded-lg text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((r) => (
-            <div
-              key={r.id}
-              className="bg-card border border-border rounded-lg p-4 hover:shadow-medium transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-medium text-sm">
-                    {r.name.charAt(0).toUpperCase()}
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border">
+                <th
+                  onClick={() => handleSort('name')}
+                  className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    Realtor
+                    {getSortIcon('name')}
                   </div>
-                  <h3 className="font-semibold text-foreground">{r.name}</h3>
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(r)} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(r.id)} className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                {r.phone && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-3.5 h-3.5" />
-                    <a href={`tel:${r.phone}`} className="hover:text-foreground">{r.phone}</a>
+                </th>
+                <th
+                  onClick={() => handleSort('phone')}
+                  className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    Phone
+                    {getSortIcon('phone')}
                   </div>
-                )}
-                {r.email && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="w-3.5 h-3.5" />
-                    <a href={`mailto:${r.email}`} className="hover:text-foreground truncate">{r.email}</a>
+                </th>
+                <th
+                  onClick={() => handleSort('email')}
+                  className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:bg-muted/50 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    Email
+                    {getSortIcon('email')}
                   </div>
-                )}
-                {r.notes && (
-                  <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{r.notes}</p>
-                )}
-              </div>
-            </div>
-          ))}
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Notes</th>
+                <th className="px-4 py-3 w-20"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => openEdit(r, { stopPropagation: () => {} } as any)}
+                  className="hover:bg-muted/30 cursor-pointer transition-colors"
+                >
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 font-semibold text-sm">
+                        {r.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="font-medium text-foreground">{r.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    {r.phone ? (
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Phone className="w-3.5 h-3.5" />
+                        {r.phone}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/40">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    {r.email ? (
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Mail className="w-3.5 h-3.5" />
+                        {r.email}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/40">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-sm text-muted-foreground line-clamp-1">{r.notes || '—'}</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-1">
+                      <button onClick={(e) => openEdit(r, e)} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={(e) => handleDelete(r.id, e)} className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        {!isLoading && filtered.length === 0 && (
+          <div className="p-12 text-center text-muted-foreground">
+            <Building2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+            <p>{realtors.length === 0 ? 'No realtors yet. Add your first one!' : 'No realtors match your search.'}</p>
+          </div>
+        )}
+      </div>
 
       {/* Create / Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && setIsModalOpen(false)}>

@@ -212,6 +212,45 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
     }
   };
 
+  const handleCreateRealtorDeal = async () => {
+    if (!selectedStageId || !onCreateDeal) return;
+
+    let realtorId = selectedRealtorId;
+
+    if (realtorMode === 'create') {
+      if (!realtorName) return;
+      setIsCreatingRealtor(true);
+      try {
+        const newRealtor = await addRealtorMutation.mutateAsync({
+          name: realtorName,
+          phone: realtorPhone || undefined,
+          email: realtorEmail || undefined,
+          notes: realtorNotes || undefined,
+        });
+        realtorId = newRealtor.id;
+      } catch {
+        setIsCreatingRealtor(false);
+        return;
+      }
+      setIsCreatingRealtor(false);
+    }
+
+    if (!realtorId) return;
+
+    const selectedRealtor = realtorMode === 'select' ? realtors.find(r => r.id === realtorId) : null;
+
+    onCreateDeal({
+      contactName: selectedRealtor?.name || realtorName,
+      contactPhone: selectedRealtor?.phone || realtorPhone || undefined,
+      contactEmail: selectedRealtor?.email || realtorEmail || undefined,
+      notes: realtorNotes || undefined,
+      dealValue: realtorDealValue ? Number(realtorDealValue) : undefined,
+      stageId: selectedStageId,
+      realtorId,
+    });
+    onClose();
+  };
+
   const renderSearchResults = () => {
     if (isFetching) {
       return (

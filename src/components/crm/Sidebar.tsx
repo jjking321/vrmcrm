@@ -3,7 +3,7 @@ import { ViewMode, SavedList } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Home, Building, Users, LayoutGrid, Settings, LogOut, 
-  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail
+  Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

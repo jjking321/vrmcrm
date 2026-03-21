@@ -34,6 +34,7 @@ import { CallListsView } from './CallListsView';
 import { CallDialer } from './CallDialer';
 import { MailingListsView } from './MailingListsView';
 import { RealtorsView } from './RealtorsView';
+import { RealtorDetail } from './RealtorDetail';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -270,6 +271,7 @@ const MainApp: React.FC = () => {
     setViewInternal(newView);
     setSelectedPropertyId(null);
     setSelectedOwnerName(null);
+    setSelectedRealtorId(null);
     setSelectedIds(new Set());
   };
 
@@ -283,6 +285,7 @@ const MainApp: React.FC = () => {
   const [listViewMode, setListViewMode] = useState<ListViewMode>('table');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState<string | null>(null);
+  const [selectedRealtorId, setSelectedRealtorId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_COLUMNS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -554,7 +557,18 @@ const MainApp: React.FC = () => {
     }
 
     if (view === 'realtors') {
-      return <RealtorsView />;
+      if (selectedRealtorId) {
+        const realtor = realtors.find(r => r.id === selectedRealtorId);
+        if (realtor) {
+          return (
+            <RealtorDetail
+              realtor={realtor}
+              onBack={() => setSelectedRealtorId(null)}
+            />
+          );
+        }
+      }
+      return <RealtorsView onSelectRealtor={(id) => setSelectedRealtorId(id)} />;
     }
 
     if (view === 'owners') {

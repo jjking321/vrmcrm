@@ -24,7 +24,8 @@ export type Database = {
           id: string
           outcome: string | null
           owner_name: string | null
-          property_id: string
+          property_id: string | null
+          realtor_id: string | null
           type: string
         }
         Insert: {
@@ -36,7 +37,8 @@ export type Database = {
           id?: string
           outcome?: string | null
           owner_name?: string | null
-          property_id: string
+          property_id?: string | null
+          realtor_id?: string | null
           type: string
         }
         Update: {
@@ -48,7 +50,8 @@ export type Database = {
           id?: string
           outcome?: string | null
           owner_name?: string | null
-          property_id?: string
+          property_id?: string | null
+          realtor_id?: string | null
           type?: string
         }
         Relationships: [
@@ -64,6 +67,13 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_realtor_id_fkey"
+            columns: ["realtor_id"]
+            isOneToOne: false
+            referencedRelation: "realtors"
             referencedColumns: ["id"]
           },
         ]

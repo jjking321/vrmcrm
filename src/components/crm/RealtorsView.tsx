@@ -13,7 +13,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const RealtorsView: React.FC = () => {
+interface RealtorsViewProps {
+  onSelectRealtor?: (id: string) => void;
+}
+
+export const RealtorsView: React.FC<RealtorsViewProps> = ({ onSelectRealtor }) => {
   const { data: realtors = [], isLoading } = useRealtors();
   const addMutation = useAddRealtor();
   const updateMutation = useUpdateRealtor();
@@ -188,7 +192,7 @@ export const RealtorsView: React.FC = () => {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  onClick={() => openEdit(r, { stopPropagation: () => {} } as any)}
+                  onClick={() => onSelectRealtor ? onSelectRealtor(r.id) : openEdit(r, { stopPropagation: () => {} } as any)}
                   className="hover:bg-muted/30 cursor-pointer transition-colors"
                 >
                   <td className="px-4 py-4">

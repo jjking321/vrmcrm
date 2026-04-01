@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Deal } from '@/types';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 
 const mapRow = (row: any): Deal => ({
   id: row.id,
@@ -21,6 +22,7 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
+  useRealtimeSubscription('deals', ['deals', company?.id ?? '']);
   return useQuery({
     queryKey: ['deals', company?.id],
     queryFn: async () => {

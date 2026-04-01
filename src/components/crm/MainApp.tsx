@@ -674,7 +674,9 @@ const MainApp: React.FC = () => {
       />
 
       <main className="flex-1 p-6 overflow-auto">
-        {renderContent()}
+        <Suspense fallback={<LazyFallback />}>
+          {renderContent()}
+        </Suspense>
       </main>
 
       <AddPropertyModal

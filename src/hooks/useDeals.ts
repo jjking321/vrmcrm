@@ -22,7 +22,7 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
-  const queryKey = useMemo(() => ['deals', company?.id], [company?.id]);
+  const queryKey = ['deals', company?.id];
   useRealtimeSubscription('deals', queryKey);
   return useQuery({
     queryKey,

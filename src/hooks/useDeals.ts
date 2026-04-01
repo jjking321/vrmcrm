@@ -22,6 +22,7 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
+  useRealtimeSubscription('deals', ['deals', company?.id ?? '']);
   return useQuery({
     queryKey: ['deals', company?.id],
     queryFn: async () => {

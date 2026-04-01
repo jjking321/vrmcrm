@@ -685,19 +685,23 @@ const MainApp: React.FC = () => {
         onAdd={handleAddProperty}
       />
 
-      <ImportWizard
-        isOpen={isImportOpen}
-        onClose={() => {
-          setIsImportOpen(false);
-          setPreLoadedImportData(undefined);
-          setPreLoadedImportHeaders(undefined);
-        }}
-        onImport={handleImportData}
-        fields={fields}
-        existingProperties={allProperties}
-        preLoadedData={preLoadedImportData}
-        preLoadedHeaders={preLoadedImportHeaders}
-      />
+      {isImportOpen && (
+        <Suspense fallback={null}>
+          <ImportWizard
+            isOpen={isImportOpen}
+            onClose={() => {
+              setIsImportOpen(false);
+              setPreLoadedImportData(undefined);
+              setPreLoadedImportHeaders(undefined);
+            }}
+            onImport={handleImportData}
+            fields={fields}
+            existingProperties={allProperties}
+            preLoadedData={preLoadedImportData}
+            preLoadedHeaders={preLoadedImportHeaders}
+          />
+        </Suspense>
+      )}
 
       <BulkActionsBar
         selectedIds={selectedIds}

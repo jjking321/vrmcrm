@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { Property, ViewMode, ListViewMode, SavedList, FilterRule, FieldDefinition, Deal } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_COLUMNS } from '@/data/mockData';
@@ -20,24 +20,31 @@ import { PropertyTable } from './PropertyTable';
 import { KanbanBoard } from './KanbanBoard';
 import { AddPropertyModal } from './AddPropertyModal';
 import { NewDealModal } from './NewDealModal';
-import { ImportWizard } from './ImportWizard';
-import { Settings } from './Settings';
-import { OwnerTable } from './OwnerTable';
-import { OwnersView } from './OwnersView';
-import { OwnerDetail } from './OwnerDetail';
-import { Dashboard } from './Dashboard';
 import { BulkActionsBar } from './BulkActionsBar';
-import PropertyDetail from './PropertyDetail';
-import { DataCleanupTool } from './DataCleanupTool';
-import { ExclusionListManager } from './ExclusionListManager';
-import { CallListsView } from './CallListsView';
-import { CallDialer } from './CallDialer';
-import { MailingListsView } from './MailingListsView';
-import { RealtorsView } from './RealtorsView';
-import { RealtorDetail } from './RealtorDetail';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+
+// Lazy-load heavy components that aren't needed on initial render
+const ImportWizard = React.lazy(() => import('./ImportWizard').then(m => ({ default: m.ImportWizard })));
+const Settings = React.lazy(() => import('./Settings').then(m => ({ default: m.Settings })));
+const OwnersView = React.lazy(() => import('./OwnersView').then(m => ({ default: m.OwnersView })));
+const OwnerDetail = React.lazy(() => import('./OwnerDetail').then(m => ({ default: m.OwnerDetail })));
+const Dashboard = React.lazy(() => import('./Dashboard').then(m => ({ default: m.Dashboard })));
+const PropertyDetail = React.lazy(() => import('./PropertyDetail'));
+const DataCleanupTool = React.lazy(() => import('./DataCleanupTool').then(m => ({ default: m.DataCleanupTool })));
+const ExclusionListManager = React.lazy(() => import('./ExclusionListManager').then(m => ({ default: m.ExclusionListManager })));
+const CallListsView = React.lazy(() => import('./CallListsView').then(m => ({ default: m.CallListsView })));
+const CallDialer = React.lazy(() => import('./CallDialer').then(m => ({ default: m.CallDialer })));
+const MailingListsView = React.lazy(() => import('./MailingListsView').then(m => ({ default: m.MailingListsView })));
+const RealtorsView = React.lazy(() => import('./RealtorsView').then(m => ({ default: m.RealtorsView })));
+const RealtorDetail = React.lazy(() => import('./RealtorDetail').then(m => ({ default: m.RealtorDetail })));
+
+const LazyFallback = () => (
+  <div className="flex items-center justify-center h-64">
+    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+  </div>
+);
 
 // Separate component for property table with pagination to manage its own state
 const PropertyTableWithPagination: React.FC<{

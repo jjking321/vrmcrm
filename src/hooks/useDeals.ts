@@ -23,9 +23,10 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
-  useRealtimeSubscription('deals', ['deals', company?.id ?? '']);
+  const queryKey = useMemo(() => ['deals', company?.id], [company?.id]);
+  useRealtimeSubscription('deals', queryKey);
   return useQuery({
-    queryKey: ['deals', company?.id],
+    queryKey,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deals')

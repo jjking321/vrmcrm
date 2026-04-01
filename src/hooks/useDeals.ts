@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +22,7 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
-  const queryKey = useMemo(() => ['deals', company?.id], [company?.id]);
+  const queryKey = ['deals', company?.id];
   useRealtimeSubscription('deals', queryKey);
   return useQuery({
     queryKey,

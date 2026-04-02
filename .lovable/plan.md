@@ -1,83 +1,26 @@
 
 
-# Add Realtors as a Deal Type in the Pipeline
+# Fix Stage Filter Not Matching Properties
 
-## What We'll Build
+## Problem
 
-A dedicated `realtors` table to store realtor profiles (name, phone, email, notes) that can be reused across multiple deals. Deals can then be linked to a realtor via a `realtor_id` column. On the Kanban board, realtor-linked deals will appear with a distinct visual style. The New Deal modal gets a fourth tab for creating or selecting a realtor deal.
+When filtering properties by pipeline stage (e.g., "Negotiating"), the server-side filter uses `ilike` (case-insensitive text pattern match) to compare the `stage_id` column. However, `stage_id` is a UUID column, and `ilike` does not work on UUIDs — it requires an exact `eq` match.
 
-## Changes
+The same bug exists in the OR-condition path, where it generates `stage_id.ilike.<uuid>` instead of `stage_id.eq.<uuid>`.
 
-### 1. Database: New `realtors` table + deal linkage
+## Fix
 
-- Create `realtors` table: `id`, `company_id`, `name`, `phone`, `email`, `notes`, `created_at`, `updated_at`
-- RLS policies scoped to company (same pattern as other tables)
-- Add `realtor_id` (nullable uuid) column to the `deals` table for linking a deal to a realtor
+**File: `src/hooks/useServerFilteredProperties.ts`**
 
-### 2. New hook: `src/hooks/useRealtors.ts`
+Change the `equals` case for `stage_id` to use `.eq()` instead of `.ilike()` (AND path, ~line 354), and change the OR path (~line 307) to generate `stage_id.eq.<uuid>` instead of `stage_id.ilike.<uuid>`.
 
-- `useRealtors()` -- fetch all realtors for the company
-- `useAddRealtor()` -- create a new realtor
-- `useUpdateRealtor()` -- edit realtor info
-- `useDeleteRealtor()` -- remove a realtor
+Similarly, the `not_equals` case should use `.neq()` instead of `.not(field, 'ilike', value)` for `stage_id`.
 
-### 3. Update `src/types/index.ts`
+Specifically:
+- AND path `equals`: `query.eq('stage_id', f.value)` instead of `query.ilike(f.field, f.value)`
+- AND path `not_equals`: `query.neq('stage_id', f.value)` instead of `query.not(f.field, 'ilike', f.value)`
+- OR path `equals`: return `stage_id.eq.<uuid>` instead of `stage_id.ilike.<uuid>`
+- OR path `not_equals`: return `stage_id.neq.<uuid>` instead of `stage_id.not.ilike.<uuid>`
 
-- Add `Realtor` interface: `id`, `companyId`, `name`, `phone?`, `email?`, `notes?`, `createdAt`, `updatedAt`
-- Add `realtorId?` to the `Deal` type
-
-### 4. Update `NewDealModal.tsx`
-
-- Add a 4th tab: "Realtor" with a form for name, phone, email, notes
-- Include a searchable dropdown to pick an existing realtor or create a new one inline
-- On submit, creates the realtor (if new), then creates a deal linked via `realtor_id`
-
-### 5. Update `KanbanBoard.tsx`
-
-- Realtor-linked deals get a distinct badge (e.g. "Realtor Deal" in a different color) and show the realtor's name/phone
-- No structural changes needed -- they're still `Deal` cards
-
-### 6. Update `useDeals.ts` and `MainApp.tsx`
-
-- `useDeals` maps the new `realtor_id` field
-- `useAddDeal` accepts optional `realtorId`
-- `MainApp` passes the new `onCreateRealtorDeal` callback to `NewDealModal`
-
-## Technical Details
-
-### Migration SQL
-
-```sql
-CREATE TABLE public.realtors (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id uuid NOT NULL,
-  name text NOT NULL,
-  phone text,
-  email text,
-  notes text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.realtors ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view their company realtors"
-  ON public.realtors FOR SELECT
-  USING (company_id = get_user_company_id(auth.uid()));
-CREATE POLICY "Users can insert realtors for their company"
-  ON public.realtors FOR INSERT
-  WITH CHECK (company_id = get_user_company_id(auth.uid()));
-CREATE POLICY "Users can update their company realtors"
-  ON public.realtors FOR UPDATE
-  USING (company_id = get_user_company_id(auth.uid()));
-CREATE POLICY "Users can delete their company realtors"
-  ON public.realtors FOR DELETE
-  USING (company_id = get_user_company_id(auth.uid()));
-
-ALTER TABLE public.deals ADD COLUMN realtor_id uuid;
-```
-
-### Kanban card differentiation
-
-Deals with a `realtor_id` show a teal "Realtor Deal" badge (vs blue "Contact Deal" for standard contact-only deals). The realtor's name displays prominently on the card.
+No database or UI changes needed.
 

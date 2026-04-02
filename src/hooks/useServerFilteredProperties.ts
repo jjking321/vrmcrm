@@ -356,6 +356,8 @@ export const useServerFilteredProperties = (
               case 'equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   query = query.is('stage_id', null);
+                } else if (f.field === 'stage_id') {
+                  query = query.eq('stage_id', f.value);
                 } else {
                   query = query.ilike(f.field, f.value);
                 }
@@ -363,6 +365,8 @@ export const useServerFilteredProperties = (
               case 'not_equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   query = query.not('stage_id', 'is', null);
+                } else if (f.field === 'stage_id') {
+                  query = query.neq('stage_id', f.value);
                 } else {
                   query = query.not(f.field, 'ilike', f.value);
                 }

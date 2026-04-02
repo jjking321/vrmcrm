@@ -304,10 +304,16 @@ export const useServerFilteredProperties = (
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   return `${f.field}.is.null`;
                 }
+                if (f.field === 'stage_id') {
+                  return `${f.field}.eq.${f.value}`;
+                }
                 return `${f.field}.ilike.${f.value}`;
               case 'not_equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   return `${f.field}.not.is.null`;
+                }
+                if (f.field === 'stage_id') {
+                  return `${f.field}.neq.${f.value}`;
                 }
                 return `${f.field}.not.ilike.${f.value}`;
               case 'contains':

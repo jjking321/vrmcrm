@@ -304,10 +304,16 @@ export const useServerFilteredProperties = (
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   return `${f.field}.is.null`;
                 }
+                if (f.field === 'stage_id') {
+                  return `${f.field}.eq.${f.value}`;
+                }
                 return `${f.field}.ilike.${f.value}`;
               case 'not_equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   return `${f.field}.not.is.null`;
+                }
+                if (f.field === 'stage_id') {
+                  return `${f.field}.neq.${f.value}`;
                 }
                 return `${f.field}.not.ilike.${f.value}`;
               case 'contains':
@@ -350,6 +356,8 @@ export const useServerFilteredProperties = (
               case 'equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   query = query.is('stage_id', null);
+                } else if (f.field === 'stage_id') {
+                  query = query.eq('stage_id', f.value);
                 } else {
                   query = query.ilike(f.field, f.value);
                 }
@@ -357,6 +365,8 @@ export const useServerFilteredProperties = (
               case 'not_equals':
                 if (f.field === 'stage_id' && (f.value === '' || f.value === 'unassigned')) {
                   query = query.not('stage_id', 'is', null);
+                } else if (f.field === 'stage_id') {
+                  query = query.neq('stage_id', f.value);
                 } else {
                   query = query.not(f.field, 'ilike', f.value);
                 }

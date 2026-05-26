@@ -22,6 +22,7 @@ const mapRow = (row: any): Deal => ({
 
 export function useDeals() {
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const queryKey = ['deals', company?.id];
 
   // Keep a stable hook slot before React Query. The previous realtime hook was
@@ -30,7 +31,8 @@ export function useDeals() {
   const queryKeyRef = useRef(queryKey);
   useEffect(() => {
     queryKeyRef.current = queryKey;
-  }, [queryKey]);
+    void queryClient;
+  }, [queryKey, queryClient]);
 
   return useQuery({
     queryKey,

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Deal } from '@/types';
+import { useEffect, useRef } from 'react';
 
 const mapRow = (row: any): Deal => ({
   id: row.id,
@@ -22,6 +23,15 @@ const mapRow = (row: any): Deal => ({
 export function useDeals() {
   const { company } = useAuth();
   const queryKey = ['deals', company?.id];
+
+  // Keep a stable hook slot before React Query. The previous realtime hook was
+  // removed for security, but preserving hook order avoids Fast Refresh/React
+  // reconciliation crashes like "Should have a queue" for active sessions.
+  const queryKeyRef = useRef(queryKey);
+  useEffect(() => {
+    queryKeyRef.current = queryKey;
+  }, [queryKey]);
+
   return useQuery({
     queryKey,
     queryFn: async () => {

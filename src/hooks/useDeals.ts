@@ -29,10 +29,10 @@ export function useDeals() {
   // removed for security, but preserving hook order avoids Fast Refresh/React
   // reconciliation crashes like "Should have a queue" for active sessions.
   const queryKeyRef = useRef(queryKey);
+  queryKeyRef.current = queryKey;
   useEffect(() => {
-    queryKeyRef.current = queryKey;
     void queryClient;
-  }, [queryKey, queryClient]);
+  }, [queryClient]);
 
   return useQuery({
     queryKey,

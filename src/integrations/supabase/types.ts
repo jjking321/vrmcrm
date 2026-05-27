@@ -324,6 +324,36 @@ export type Database = {
           },
         ]
       }
+      deal_stage_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          company_id: string
+          deal_id: string
+          from_stage_id: string | null
+          id: string
+          to_stage_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          company_id: string
+          deal_id: string
+          from_stage_id?: string | null
+          id?: string
+          to_stage_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          company_id?: string
+          deal_id?: string
+          from_stage_id?: string | null
+          id?: string
+          to_stage_id?: string | null
+        }
+        Relationships: []
+      }
       deals: {
         Row: {
           company_id: string

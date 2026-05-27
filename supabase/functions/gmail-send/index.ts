@@ -14,6 +14,31 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function b64urlEncode(s: string): string {
+  return btoa(unescape(encodeURIComponent(s)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Convert plain text body to HTML with auto-linked URLs wrapped in tracking redirects.
+function plainBodyToTrackedHtml(text: string, trackingBase: string, trackingId: string): string {
+  const escaped = escapeHtml(text);
+  // Match http(s) URLs (no surrounding whitespace). Stops at common trailing punctuation.
+  const urlRe = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
+  const linked = escaped.replace(urlRe, (m) => {
+    const tracked = `${trackingBase}/email-track-click?t=${trackingId}&u=${b64urlEncode(m)}`;
+    return `<a href="${tracked}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:underline">${m}</a>`;
+  });
+  return linked;
+}
+
+// Rewrite href attributes inside an existing HTML fragment.
+function rewriteHtmlLinks(html: string, trackingBase: string, trackingId: string): string {
+  return html.replace(/href="(https?:\/\/[^"]+)"/gi, (_m, url) => {
+    const tracked = `${trackingBase}/email-track-click?t=${trackingId}&u=${b64urlEncode(url)}`;
+    return `href="${tracked}"`;
+  });
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>(\n)?/gi, '\n')

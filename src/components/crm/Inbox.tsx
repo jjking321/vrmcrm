@@ -127,6 +127,11 @@ export const Inbox: React.FC = () => {
               onClick={() => setFilter('unread')}
               className={cn('px-3 py-1.5', filter === 'unread' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
             >Unread</button>
+            <button
+              onClick={() => setFilter('unmatched')}
+              className={cn('px-3 py-1.5 border-l border-border', filter === 'unmatched' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+              title="Threads not yet linked to an owner, realtor, or property"
+            >Unmatched</button>
           </div>
           <Button variant="outline" size="sm" onClick={handleSync} disabled={sync.isPending}>
             {sync.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
@@ -203,8 +208,20 @@ export const Inbox: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="p-4 border-b border-border">
-                <h2 className="font-semibold">{selectedThread.subject || '(no subject)'}</h2>
+              <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold truncate">{selectedThread.subject || '(no subject)'}</h2>
+                  {contactMap?.get(selectedThread.id)?.label && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      Linked to {contactMap?.get(selectedThread.id)?.label}
+                    </p>
+                  )}
+                </div>
+                <LinkThreadPicker
+                  threadId={selectedThread.id}
+                  currentKind={contactMap?.get(selectedThread.id)?.kind ?? 'unmatched'}
+                  currentLabel={contactMap?.get(selectedThread.id)?.label}
+                />
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messagesLoading ? (

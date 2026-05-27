@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AttachmentPicker, MessageAttachments, type DraftAttachment } from './EmailAttachments';
+import { ComposeModal } from './ComposeModal';
 
 export const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -17,6 +18,7 @@ export const Inbox: React.FC = () => {
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const { company } = useAuth();
   useRealtimeSubscription('email_threads', ['email-threads']);
@@ -121,8 +123,13 @@ export const Inbox: React.FC = () => {
             {sync.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
             Sync now
           </Button>
+          <Button size="sm" onClick={() => setComposeOpen(true)}>
+            <Mail className="w-4 h-4 mr-2" /> Compose
+          </Button>
         </div>
       </div>
+
+      <ComposeModal open={composeOpen} onOpenChange={setComposeOpen} />
 
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Thread list */}

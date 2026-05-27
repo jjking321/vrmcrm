@@ -6,12 +6,56 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function encodeRaw(headers: Record<string, string>, body: string): string {
+function b64url(s: string): string {
+  return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>(\n)?/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function encodeRawPlain(headers: Record<string, string>, body: string): string {
   const lines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
   lines.push('Content-Type: text/plain; charset="UTF-8"', '', body);
-  const raw = lines.join('\r\n');
-  // base64url
-  return btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return b64url(lines.join('\r\n'));
+}
+
+function encodeRawMultipart(headers: Record<string, string>, textBody: string, htmlBody: string): string {
+  const boundary = `=_lov_${crypto.randomUUID().replace(/-/g, '')}`;
+  const lines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
+  lines.push(
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    textBody,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    htmlBody,
+    '',
+    `--${boundary}--`,
+    '',
+  );
+  return b64url(lines.join('\r\n'));
 }
 
 // Encode a display name for an email header. If it contains non-ASCII or
@@ -59,10 +103,18 @@ Deno.serve(async (req) => {
 
     const accessToken = await refreshAccessTokenIfNeeded(account);
 
-    // Append signature if configured. Signatures are stored as plain text and
-    // sent in the plain-text body (separated by the standard "-- " delimiter).
-    const sig = (account.signature ?? '').trim();
-    const finalBody = sig ? `${body.replace(/\s+$/, '')}\r\n\r\n-- \r\n${sig}` : body;
+    // Signatures are stored as HTML. Build a multipart/alternative message so
+    // recipients see the rich signature, with a plain-text fallback.
+    const sigHtml = (account.signature ?? '').trim();
+    const bodyTrimmed = body.replace(/\s+$/, '');
+    const textBody = sigHtml
+      ? `${bodyTrimmed}\r\n\r\n-- \r\n${stripHtml(sigHtml)}`
+      : body;
+    const htmlBodyInner = `<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${escapeHtml(bodyTrimmed)}</div>`;
+    const htmlSignature = sigHtml
+      ? `<div style="color:#888;font-size:12px;margin-top:16px">-- </div><div>${sigHtml}</div>`
+      : '';
+    const htmlBody = `<!doctype html><html><body>${htmlBodyInner}${htmlSignature}</body></html>`;
 
     const headers: Record<string, string> = {
       To: Array.isArray(to) ? to.join(', ') : to,
@@ -71,7 +123,9 @@ Deno.serve(async (req) => {
     };
     if (cc) headers.Cc = Array.isArray(cc) ? cc.join(', ') : cc;
 
-    const raw = encodeRaw(headers, finalBody);
+    const raw = sigHtml
+      ? encodeRawMultipart(headers, textBody, htmlBody)
+      : encodeRawPlain(headers, textBody);
     const sendBody: any = { raw };
     if (threadId) sendBody.threadId = threadId;
 
@@ -127,7 +181,7 @@ Deno.serve(async (req) => {
           company_id: account.company_id,
           gmail_thread_id: data.threadId,
           subject,
-          snippet: finalBody.slice(0, 200),
+          snippet: textBody.slice(0, 200),
           participants,
           last_message_at: sentAt,
           is_read: true,
@@ -146,9 +200,9 @@ Deno.serve(async (req) => {
           to_emails: toObjs,
           cc_emails: ccObjs,
           subject,
-          body_text: finalBody,
-          body_html: null,
-          snippet: finalBody.slice(0, 200),
+          body_text: textBody,
+          body_html: sigHtml ? htmlBody : null,
+          snippet: textBody.slice(0, 200),
           sent_at: sentAt,
           direction: 'outbound',
           is_read: true,

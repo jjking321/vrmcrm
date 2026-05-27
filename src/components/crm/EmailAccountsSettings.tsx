@@ -102,19 +102,30 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onDisconnect }) => {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`sig-${account.id}`} className="text-xs">
-              Signature
+              Signature (HTML)
             </Label>
             <Textarea
               id={`sig-${account.id}`}
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
-              placeholder={'JJ King\nBeachside VR\n(555) 123-4567'}
-              rows={5}
-              maxLength={2000}
+              placeholder={'<p><strong>JJ King</strong><br/>Beachside VR<br/><a href="tel:5551234567">(555) 123-4567</a></p>'}
+              rows={6}
+              maxLength={5000}
+              className="font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Automatically appended to every email you send from this account.
+              HTML is supported (links, bold, images, etc.). Appended to every email you send from this account.
             </p>
+            {signature.trim() && (
+              <div className="rounded border border-border p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground mb-2">Preview</p>
+                <div
+                  className="text-sm"
+                  // eslint-disable-next-line react/no-danger
+                  dangerouslySetInnerHTML={{ __html: signature }}
+                />
+              </div>
+            )}
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" size="sm" onClick={handleCancel} disabled={update.isPending}>

@@ -6,6 +6,8 @@ export interface GmailAccount {
   id: string;
   user_id: string;
   email_address: string;
+  display_name: string | null;
+  signature: string | null;
   last_synced_at: string | null;
   is_active: boolean;
   created_at: string;
@@ -51,11 +53,23 @@ export const useGmailAccounts = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('gmail_accounts')
-        .select('id, user_id, email_address, last_synced_at, is_active, created_at')
+        .select('id, user_id, email_address, display_name, signature, last_synced_at, is_active, created_at')
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as GmailAccount[];
     },
+  });
+};
+
+export const useUpdateGmailAccount = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { id: string; display_name?: string | null; signature?: string | null }) => {
+      const { id, ...updates } = payload;
+      const { error } = await supabase.from('gmail_accounts').update(updates).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['gmail-accounts'] }),
   });
 };
 

@@ -493,12 +493,14 @@ export type Database = {
           access_token: string | null
           company_id: string
           created_at: string
+          display_name: string | null
           email_address: string
           id: string
           is_active: boolean
           last_history_id: string | null
           last_synced_at: string | null
           refresh_token: string | null
+          signature: string | null
           token_expires_at: string | null
           updated_at: string
           user_id: string
@@ -507,12 +509,14 @@ export type Database = {
           access_token?: string | null
           company_id: string
           created_at?: string
+          display_name?: string | null
           email_address: string
           id?: string
           is_active?: boolean
           last_history_id?: string | null
           last_synced_at?: string | null
           refresh_token?: string | null
+          signature?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id: string
@@ -521,12 +525,14 @@ export type Database = {
           access_token?: string | null
           company_id?: string
           created_at?: string
+          display_name?: string | null
           email_address?: string
           id?: string
           is_active?: boolean
           last_history_id?: string | null
           last_synced_at?: string | null
           refresh_token?: string | null
+          signature?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id?: string

@@ -14,6 +14,10 @@ import { ComposeModal } from './ComposeModal';
 import { ReplyTools } from './ReplyTools';
 import { applyMergeTags } from '@/hooks/useEmailTemplates';
 import { LinkThreadPicker } from './LinkThreadPicker';
+import { InternalNotes } from './InternalNotes';
+import { useThreadDraft, useUpsertThreadDraft, useDeleteThreadDraft, useProfileNames } from '@/hooks/useEmailCollab';
+import { Users } from 'lucide-react';
+import { formatDistanceToNow as fdtn } from 'date-fns';
 
 export const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread' | 'unmatched'>('all');
@@ -27,6 +31,7 @@ export const Inbox: React.FC = () => {
   const { company } = useAuth();
   useRealtimeSubscription('email_threads', ['email-threads']);
   useRealtimeSubscription('email_messages', ['email-messages']);
+  useRealtimeSubscription('email_drafts', ['email-draft']);
 
   const { data: accounts = [] } = useGmailAccounts();
   const { data: threads = [], isLoading } = useEmailThreads(filter === 'unread' ? 'unread' : 'all');
@@ -69,6 +74,48 @@ export const Inbox: React.FC = () => {
     return m;
   }, [allAttachments]);
 
+  // Shared draft for the selected thread.
+  const { user } = useAuth();
+  const { data: sharedDraft } = useThreadDraft(selectedThreadId);
+  const upsertDraft = useUpsertThreadDraft();
+  const deleteDraft = useDeleteThreadDraft();
+  const draftAuthorIds = sharedDraft?.updated_by ? [sharedDraft.updated_by] : [];
+  const { data: draftNames } = useProfileNames(draftAuthorIds);
+  const lastSyncedRef = useRef<{ threadId: string | null; body: string }>({ threadId: null, body: '' });
+
+  // Load shared draft body when switching threads.
+  React.useEffect(() => {
+    if (!selectedThreadId) return;
+    const incoming = sharedDraft?.body ?? '';
+    if (lastSyncedRef.current.threadId !== selectedThreadId) {
+      setReplyBody(incoming);
+      lastSyncedRef.current = { threadId: selectedThreadId, body: incoming };
+    } else if (sharedDraft && sharedDraft.updated_by !== user?.id && incoming !== replyBody) {
+      // Remote update from a teammate — adopt it.
+      setReplyBody(incoming);
+      lastSyncedRef.current = { threadId: selectedThreadId, body: incoming };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedThreadId, sharedDraft?.body, sharedDraft?.updated_by, sharedDraft?.updated_at]);
+
+  // Debounced auto-save of the shared draft.
+  React.useEffect(() => {
+    if (!selectedThreadId) return;
+    if (replyBody === lastSyncedRef.current.body) return;
+    const handle = setTimeout(() => {
+      if (!replyBody.trim()) {
+        // Clear draft when the box is emptied.
+        if (sharedDraft) deleteDraft.mutate(selectedThreadId);
+        lastSyncedRef.current = { threadId: selectedThreadId, body: '' };
+        return;
+      }
+      upsertDraft.mutate({ threadId: selectedThreadId, body: replyBody });
+      lastSyncedRef.current = { threadId: selectedThreadId, body: replyBody };
+    }, 700);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyBody, selectedThreadId]);
+
   const handleSync = async () => {
     try {
       const res = await sync.mutateAsync();
@@ -95,6 +142,10 @@ export const Inbox: React.FC = () => {
       });
       setReplyBody('');
       setReplyAttachments([]);
+      if (selectedThreadId) {
+        deleteDraft.mutate(selectedThreadId);
+        lastSyncedRef.current = { threadId: selectedThreadId, body: '' };
+      }
       toast.success('Reply sent');
     } catch (e: any) {
       toast.error('Failed to send', { description: e.message });

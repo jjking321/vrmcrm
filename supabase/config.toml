@@ -1,12 +1,6 @@
 project_id = "csizkmiplkjyawbscrlx"
 
-[functions.batch-update-contact-names]
-verify_jwt = false
-
 [functions.update-team-member]
-verify_jwt = false
-
-[functions.generate-marketing]
 verify_jwt = false
 
 [functions.enrich-zillow]

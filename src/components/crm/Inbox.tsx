@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts, useAttachmentsForMessages, useThreadContacts, type EmailAttachment } from '@/hooks/useGmail';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';

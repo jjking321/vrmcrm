@@ -296,9 +296,21 @@ export const Inbox: React.FC = () => {
                     </div>
                   ))
                 )}
+                {selectedThread && (
+                  <InternalNotes threadId={selectedThread.id} />
+                )}
               </div>
               {lastMessage && (
                 <div className="border-t border-border p-3">
+                  {sharedDraft && sharedDraft.updated_by && sharedDraft.updated_by !== user?.id && (
+                    <div className="flex items-center gap-1.5 mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>
+                        Shared draft last edited by {draftNames?.get(sharedDraft.updated_by) || 'a teammate'} ·{' '}
+                        {fdtn(new Date(sharedDraft.updated_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                  )}
                   <Textarea
                     ref={replyRef}
                     value={replyBody}

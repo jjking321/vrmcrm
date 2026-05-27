@@ -132,6 +132,23 @@ export const useEmailThreads = (filter?: 'all' | 'unread') => {
   });
 };
 
+export const useThreadsByIds = (threadIds: string[]) => {
+  const sorted = [...threadIds].sort();
+  return useQuery({
+    queryKey: ['email-threads-by-ids', sorted.join(',')],
+    enabled: sorted.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_threads')
+        .select('*')
+        .in('id', sorted)
+        .order('last_message_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as EmailThread[];
+    },
+  });
+};
+
 export const useThreadMessages = (threadId: string | null) => {
   return useQuery({
     queryKey: ['email-messages', threadId],

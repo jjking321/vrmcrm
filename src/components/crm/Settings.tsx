@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType, PipelineStage } from '@/types';
 import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link, Save, X, Mail } from 'lucide-react';
+import { EmailAccountsSettings } from './EmailAccountsSettings';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -875,6 +876,12 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'email' && (
+        <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+          <EmailAccountsSettings />
         </div>
       )}
 

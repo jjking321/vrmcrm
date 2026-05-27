@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   useGmailAccounts,
   useConnectGmail,
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Mail, Loader2, Trash2, RefreshCw, Pencil, Check, X } from 'lucide-react';
+import { Mail, Loader2, Trash2, RefreshCw, Pencil, Check, X, Code } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -25,6 +25,54 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onDisconnect }) => {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(account.display_name ?? '');
   const [signature, setSignature] = useState(account.signature ?? '');
+  const [showHtml, setShowHtml] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  // Initialize / reset the contenteditable when entering edit mode or switching from HTML view
+  useEffect(() => {
+    if (editing && !showHtml && editorRef.current) {
+      if (editorRef.current.innerHTML !== signature) {
+        editorRef.current.innerHTML = signature || '';
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, showHtml]);
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    const toInsert = html || text.replace(/\n/g, '<br/>');
+    // Insert at caret
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const temp = document.createElement('div');
+      temp.innerHTML = toInsert;
+      const frag = document.createDocumentFragment();
+      let node: ChildNode | null;
+      let lastNode: ChildNode | null = null;
+      while ((node = temp.firstChild)) {
+        lastNode = frag.appendChild(node);
+      }
+      range.insertNode(frag);
+      if (lastNode) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(lastNode);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+    } else if (editorRef.current) {
+      editorRef.current.innerHTML += toInsert;
+    }
+    if (editorRef.current) setSignature(editorRef.current.innerHTML);
+  };
+
+  const handleInput = () => {
+    if (editorRef.current) setSignature(editorRef.current.innerHTML);
+  };
 
   const handleSave = async () => {
     try {
@@ -44,6 +92,7 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onDisconnect }) => {
     setDisplayName(account.display_name ?? '');
     setSignature(account.signature ?? '');
     setEditing(false);
+    setShowHtml(false);
   };
 
   return (
@@ -102,30 +151,44 @@ const AccountRow: React.FC<AccountRowProps> = ({ account, onDisconnect }) => {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`sig-${account.id}`} className="text-xs">
-              Signature (HTML)
+              Signature
             </Label>
-            <Textarea
-              id={`sig-${account.id}`}
-              value={signature}
-              onChange={(e) => setSignature(e.target.value)}
-              placeholder={'<p><strong>JJ King</strong><br/>Beachside VR<br/><a href="tel:5551234567">(555) 123-4567</a></p>'}
-              rows={6}
-              maxLength={5000}
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              HTML is supported (links, bold, images, etc.). Appended to every email you send from this account.
-            </p>
-            {signature.trim() && (
-              <div className="rounded border border-border p-3 bg-muted/30">
-                <p className="text-xs text-muted-foreground mb-2">Preview</p>
-                <div
-                  className="text-sm"
-                  // eslint-disable-next-line react/no-danger
-                  dangerouslySetInnerHTML={{ __html: signature }}
-                />
-              </div>
+            {showHtml ? (
+              <Textarea
+                id={`sig-${account.id}`}
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                placeholder={'<p><strong>JJ King</strong><br/>Beachside VR</p>'}
+                rows={8}
+                maxLength={20000}
+                className="font-mono text-xs"
+              />
+            ) : (
+              <div
+                ref={editorRef}
+                id={`sig-${account.id}`}
+                contentEditable
+                suppressContentEditableWarning
+                onPaste={handlePaste}
+                onInput={handleInput}
+                className="min-h-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             )}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Paste directly from Gmail — formatting, links and images are preserved.
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowHtml((v) => !v)}
+              >
+                <Code className="w-3 h-3 mr-1" />
+                {showHtml ? 'Visual' : 'HTML'}
+              </Button>
+            </div>
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" size="sm" onClick={handleCancel} disabled={update.isPending}>

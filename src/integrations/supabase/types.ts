@@ -312,14 +312,49 @@ export type Database = {
         }
         Relationships: []
       }
+      email_events: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          ip: string | null
+          message_id: string
+          type: string
+          url: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          ip?: string | null
+          message_id: string
+          type: string
+          url?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          ip?: string | null
+          message_id?: string
+          type?: string
+          url?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       email_messages: {
         Row: {
           body_html: string | null
           body_text: string | null
           cc_emails: Json | null
+          click_count: number
           company_id: string
           created_at: string
           direction: string
+          first_clicked_at: string | null
           from_email: string | null
           from_name: string | null
           gmail_account_id: string
@@ -327,22 +362,28 @@ export type Database = {
           id: string
           is_read: boolean
           match_status: string | null
+          open_count: number
+          opened_at: string | null
           owner_id: string | null
           property_id: string | null
           realtor_id: string | null
+          replied_at: string | null
           sent_at: string | null
           snippet: string | null
           subject: string | null
           thread_id: string
           to_emails: Json | null
+          tracking_id: string | null
         }
         Insert: {
           body_html?: string | null
           body_text?: string | null
           cc_emails?: Json | null
+          click_count?: number
           company_id: string
           created_at?: string
           direction?: string
+          first_clicked_at?: string | null
           from_email?: string | null
           from_name?: string | null
           gmail_account_id: string
@@ -350,22 +391,28 @@ export type Database = {
           id?: string
           is_read?: boolean
           match_status?: string | null
+          open_count?: number
+          opened_at?: string | null
           owner_id?: string | null
           property_id?: string | null
           realtor_id?: string | null
+          replied_at?: string | null
           sent_at?: string | null
           snippet?: string | null
           subject?: string | null
           thread_id: string
           to_emails?: Json | null
+          tracking_id?: string | null
         }
         Update: {
           body_html?: string | null
           body_text?: string | null
           cc_emails?: Json | null
+          click_count?: number
           company_id?: string
           created_at?: string
           direction?: string
+          first_clicked_at?: string | null
           from_email?: string | null
           from_name?: string | null
           gmail_account_id?: string
@@ -373,14 +420,18 @@ export type Database = {
           id?: string
           is_read?: boolean
           match_status?: string | null
+          open_count?: number
+          opened_at?: string | null
           owner_id?: string | null
           property_id?: string | null
           realtor_id?: string | null
+          replied_at?: string | null
           sent_at?: string | null
           snippet?: string | null
           subject?: string | null
           thread_id?: string
           to_emails?: Json | null
+          tracking_id?: string | null
         }
         Relationships: []
       }

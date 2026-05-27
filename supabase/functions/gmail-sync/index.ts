@@ -115,7 +115,7 @@ async function syncAccount(account: any) {
       // would "match" if our own address is also recorded as an owner/realtor email.
       const externalAddrs = allAddrs.filter((e) => e !== ownEmail);
       const match = findMatch(externalAddrs, index);
-      if (!match) continue; // only store emails matching CRM contacts
+      if (!match && isBulkMail(headers, from)) continue; // skip newsletters / no-reply / list mail
 
       const direction = from?.email?.toLowerCase() === account.email_address.toLowerCase() ? 'outbound' : 'inbound';
       const isRead = !(msg.labelIds ?? []).includes('UNREAD');
@@ -162,7 +162,7 @@ async function syncAccount(account: any) {
         owner_id: match.ownerId ?? null,
         realtor_id: match.realtorId ?? null,
         property_id: match.propertyId ?? null,
-        match_status: 'matched',
+        match_status: match ? 'matched' : 'unmatched',
       }, { onConflict: 'gmail_account_id,gmail_message_id' })
         .select('id')
         .single();

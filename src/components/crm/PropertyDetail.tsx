@@ -981,6 +981,19 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             defaultRecipient={property.owner.email || property.owner.emails?.[0]?.address || ''}
             defaultSubject={property.address ? `Re: ${property.address}` : ''}
             title="Emails"
+            mergeContext={{
+              owner: {
+                name: property.owner.name,
+                email: property.owner.email || property.owner.emails?.[0]?.address || null,
+                phone: property.owner.phone || property.owner.phones?.[0]?.number || null,
+              },
+              property: {
+                address: property.address,
+                city: property.city,
+                state: property.state,
+                zip: property.zip,
+              },
+            }}
           />
 
           {/* Quick Call Log Section */}

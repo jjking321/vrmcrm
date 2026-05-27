@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts, useAttachmentsForMessages, type EmailAttachment } from '@/hooks/useGmail';
+import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts, useAttachmentsForMessages, useThreadContacts, type EmailAttachment } from '@/hooks/useGmail';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Mail, RefreshCw, Inbox as InboxIcon, Send } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Mail, RefreshCw, Inbox as InboxIcon, Send, Search, User, Home, Briefcase } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -15,6 +16,7 @@ export const Inbox: React.FC = () => {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { company } = useAuth();
   useRealtimeSubscription('email_threads', ['email-threads']);
@@ -25,6 +27,22 @@ export const Inbox: React.FC = () => {
   const { data: messages = [], isLoading: messagesLoading } = useThreadMessages(selectedThreadId);
   const sync = useSyncGmail();
   const send = useSendEmail();
+
+  const threadIds = useMemo(() => threads.map((t) => t.id), [threads]);
+  const { data: contactMap } = useThreadContacts(threadIds);
+
+  const visibleThreads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter((t) => {
+      const c = contactMap?.get(t.id);
+      return (
+        (t.subject ?? '').toLowerCase().includes(q) ||
+        (t.snippet ?? '').toLowerCase().includes(q) ||
+        (c?.label ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [threads, contactMap, searchQuery]);
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
   const lastMessage = messages[messages.length - 1];
@@ -109,14 +127,28 @@ export const Inbox: React.FC = () => {
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Thread list */}
         <div className="w-96 border border-border rounded-md overflow-y-auto bg-card">
+          <div className="sticky top-0 z-10 p-2 border-b border-border bg-card">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search contact, subject, snippet…"
+                className="pl-8 h-9"
+              />
+            </div>
+          </div>
           {isLoading ? (
             <div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-          ) : threads.length === 0 ? (
+          ) : visibleThreads.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground text-center">
-              No matched emails yet. Click "Sync now" to fetch the latest.
+              {searchQuery ? 'No threads match your search.' : 'No matched emails yet. Click "Sync now" to fetch the latest.'}
             </div>
           ) : (
-            threads.map((t) => (
+            visibleThreads.map((t) => {
+              const contact = contactMap?.get(t.id);
+              const Icon = contact?.kind === 'realtor' ? Briefcase : contact?.kind === 'property' ? Home : User;
+              return (
               <button
                 key={t.id}
                 onClick={() => setSelectedThreadId(t.id)}
@@ -127,16 +159,23 @@ export const Inbox: React.FC = () => {
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="truncate text-sm">{t.subject || '(no subject)'}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {contact && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                    <span className="truncate text-sm text-foreground">
+                      {contact?.label ?? <span className="italic text-muted-foreground">Unmatched</span>}
+                    </span>
+                  </div>
                   {t.last_message_at && (
                     <span className="text-xs text-muted-foreground shrink-0">
                       {formatDistanceToNow(new Date(t.last_message_at), { addSuffix: false })}
                     </span>
                   )}
                 </div>
+                <p className="text-xs text-foreground/80 truncate">{t.subject || '(no subject)'}</p>
                 <p className="text-xs text-muted-foreground truncate">{t.snippet}</p>
               </button>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -9,8 +9,9 @@ import {
   getAttachmentUrl,
   type EmailAttachment,
 } from '@/hooks/useGmail';
-import type { MergeContext } from '@/hooks/useEmailTemplates';
+import { applyMergeTags, withDerivedOwner, type MergeContext } from '@/hooks/useEmailTemplates';
 import { ComposeModal } from './ComposeModal';
+import { ReplyTools } from './ReplyTools';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -215,14 +216,16 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   const [composing, setComposing] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   const handleReply = async () => {
     if (!lastMessage || (!replyBody.trim() && replyAttachments.length === 0)) return;
+    const resolved = applyMergeTags(replyBody, withDerivedOwner(mergeContext ?? {}));
     try {
       await send.mutateAsync({
         to: lastMessage.from_email!,
         subject: lastMessage.subject?.startsWith('Re:') ? lastMessage.subject : `Re: ${lastMessage.subject ?? ''}`,
-        body: replyBody || '(see attached)',
+        body: resolved || '(see attached)',
         threadId: selectedThread?.gmail_thread_id,
         attachments: replyAttachments.map(({ storage_path, filename, mime_type }) => ({
           storage_path, filename, mime_type,
@@ -345,21 +348,28 @@ export const EmailTab: React.FC<EmailTabProps> = ({
               {lastMessage && (
                 <div className="border-t border-border p-3">
                   <Textarea
+                    ref={replyRef}
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
                     placeholder={`Reply to ${lastMessage.from_name || lastMessage.from_email}...`}
                     rows={3}
                     className="mb-2"
                   />
-                  {company?.id && (
-                    <div className="mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <ReplyTools
+                      textareaRef={replyRef}
+                      value={replyBody}
+                      onChange={setReplyBody}
+                      mergeContext={mergeContext}
+                    />
+                    {company?.id && (
                       <AttachmentPicker
                         companyId={company.id}
                         attachments={replyAttachments}
                         onChange={setReplyAttachments}
                       />
-                    </div>
-                  )}
+                    )}
+                  </div>
                   <div className="flex justify-end">
                     <Button onClick={handleReply} disabled={send.isPending || (!replyBody.trim() && replyAttachments.length === 0)} size="sm">
                       {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}

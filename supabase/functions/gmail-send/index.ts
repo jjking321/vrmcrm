@@ -14,6 +14,21 @@ function encodeRaw(headers: Record<string, string>, body: string): string {
   return btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+// Encode a display name for an email header. If it contains non-ASCII or
+// special characters, use RFC 2047 encoded-word; otherwise wrap in quotes.
+function formatFromHeader(email: string, name?: string | null): string {
+  if (!name || !name.trim()) return email;
+  const trimmed = name.trim();
+  // eslint-disable-next-line no-control-regex
+  const needsEncoding = /[^\x20-\x7E]/.test(trimmed);
+  if (needsEncoding) {
+    const b64 = btoa(unescape(encodeURIComponent(trimmed)));
+    return `=?UTF-8?B?${b64}?= <${email}>`;
+  }
+  const escaped = trimmed.replace(/"/g, '\\"');
+  return `"${escaped}" <${email}>`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -44,14 +59,19 @@ Deno.serve(async (req) => {
 
     const accessToken = await refreshAccessTokenIfNeeded(account);
 
+    // Append signature if configured. Signatures are stored as plain text and
+    // sent in the plain-text body (separated by the standard "-- " delimiter).
+    const sig = (account.signature ?? '').trim();
+    const finalBody = sig ? `${body.replace(/\s+$/, '')}\r\n\r\n-- \r\n${sig}` : body;
+
     const headers: Record<string, string> = {
       To: Array.isArray(to) ? to.join(', ') : to,
       Subject: subject,
-      From: account.email_address,
+      From: formatFromHeader(account.email_address, account.display_name),
     };
     if (cc) headers.Cc = Array.isArray(cc) ? cc.join(', ') : cc;
 
-    const raw = encodeRaw(headers, body);
+    const raw = encodeRaw(headers, finalBody);
     const sendBody: any = { raw };
     if (threadId) sendBody.threadId = threadId;
 
@@ -126,9 +146,9 @@ Deno.serve(async (req) => {
           to_emails: toObjs,
           cc_emails: ccObjs,
           subject,
-          body_text: body,
+          body_text: finalBody,
           body_html: null,
-          snippet: body.slice(0, 200),
+          snippet: finalBody.slice(0, 200),
           sent_at: sentAt,
           direction: 'outbound',
           is_read: true,

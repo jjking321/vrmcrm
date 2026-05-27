@@ -234,11 +234,19 @@ Deno.serve(async (req) => {
     const textBody = sigHtml
       ? `${bodyTrimmed}\r\n\r\n-- \r\n${stripHtml(sigHtml)}`
       : body;
-    const htmlBodyInner = `<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${escapeHtml(bodyTrimmed)}</div>`;
+
+    // Generate tracking ID for opens/clicks. Always send HTML so the pixel works.
+    const trackingId = crypto.randomUUID();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const trackingBase = `${supabaseUrl}/functions/v1`;
+
+    const htmlBodyText = plainBodyToTrackedHtml(bodyTrimmed, trackingBase, trackingId);
+    const htmlBodyInner = `<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${htmlBodyText}</div>`;
     const htmlSignature = sigHtml
-      ? `<div style="color:#888;font-size:12px;margin-top:16px">-- </div><div>${sigHtml}</div>`
+      ? `<div style="color:#888;font-size:12px;margin-top:16px">-- </div><div>${rewriteHtmlLinks(sigHtml, trackingBase, trackingId)}</div>`
       : '';
-    const htmlBody = `<!doctype html><html><body>${htmlBodyInner}${htmlSignature}</body></html>`;
+    const trackingPixel = `<img src="${trackingBase}/email-track-open?t=${trackingId}" width="1" height="1" alt="" style="display:none;border:0;outline:0;width:1px;height:1px" />`;
+    const htmlBody = `<!doctype html><html><body>${htmlBodyInner}${htmlSignature}${trackingPixel}</body></html>`;
 
     const headers: Record<string, string> = {
       To: Array.isArray(to) ? to.join(', ') : to,
@@ -247,11 +255,10 @@ Deno.serve(async (req) => {
     };
     if (cc) headers.Cc = Array.isArray(cc) ? cc.join(', ') : cc;
 
+    // Always include HTML part so tracking pixel and links work.
     const raw = attachments.length > 0
-      ? encodeRawWithAttachments(headers, textBody, sigHtml ? htmlBody : null, attachments)
-      : sigHtml
-        ? encodeRawMultipart(headers, textBody, htmlBody)
-        : encodeRawPlain(headers, textBody);
+      ? encodeRawWithAttachments(headers, textBody, htmlBody, attachments)
+      : encodeRawMultipart(headers, textBody, htmlBody);
     const sendBody: any = { raw };
     if (threadId) sendBody.threadId = threadId;
 

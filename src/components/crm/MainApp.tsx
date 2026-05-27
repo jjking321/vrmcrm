@@ -143,6 +143,23 @@ const MainApp: React.FC = () => {
   const { company } = useAuth();
   const companyId = company?.id;
 
+  // Handle Gmail OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('gmail_connected');
+    if (!status) return;
+    const msg = params.get('msg');
+    if (status === 'success') {
+      toast.success('Gmail connected', { description: msg || undefined });
+    } else {
+      toast.error('Gmail connection failed', { description: msg || undefined });
+    }
+    params.delete('gmail_connected');
+    params.delete('msg');
+    const newUrl = window.location.pathname + (params.toString() ? `?${params}` : '');
+    window.history.replaceState({}, '', newUrl);
+  }, []);
+
   // Data hooks
   const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
   const { data: totalPropertyCount = 0 } = useTotalPropertyCount();

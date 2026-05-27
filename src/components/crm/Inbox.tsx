@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts } from '@/hooks/useGmail';
+import React, { useMemo, useState } from 'react';
+import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts, useAttachmentsForMessages, type EmailAttachment } from '@/hooks/useGmail';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,12 +8,15 @@ import { Loader2, Mail, RefreshCw, Inbox as InboxIcon, Send } from 'lucide-react
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AttachmentPicker, MessageAttachments, type DraftAttachment } from './EmailAttachments';
 
 export const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
 
+  const { company } = useAuth();
   useRealtimeSubscription('email_threads', ['email-threads']);
   useRealtimeSubscription('email_messages', ['email-messages']);
 
@@ -24,6 +28,18 @@ export const Inbox: React.FC = () => {
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
   const lastMessage = messages[messages.length - 1];
+
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const { data: allAttachments = [] } = useAttachmentsForMessages(messageIds);
+  const attachmentsByMessage = useMemo(() => {
+    const m = new Map<string, EmailAttachment[]>();
+    allAttachments.forEach((a) => {
+      const arr = m.get(a.message_id) ?? [];
+      arr.push(a);
+      m.set(a.message_id, arr);
+    });
+    return m;
+  }, [allAttachments]);
 
   const handleSync = async () => {
     try {
@@ -37,15 +53,19 @@ export const Inbox: React.FC = () => {
   };
 
   const handleReply = async () => {
-    if (!lastMessage || !replyBody.trim()) return;
+    if (!lastMessage || (!replyBody.trim() && replyAttachments.length === 0)) return;
     try {
       await send.mutateAsync({
         to: lastMessage.from_email!,
         subject: lastMessage.subject?.startsWith('Re:') ? lastMessage.subject : `Re: ${lastMessage.subject ?? ''}`,
-        body: replyBody,
+        body: replyBody || '(see attached)',
         threadId: selectedThread?.gmail_thread_id,
+        attachments: replyAttachments.map(({ storage_path, filename, mime_type }) => ({
+          storage_path, filename, mime_type,
+        })),
       });
       setReplyBody('');
+      setReplyAttachments([]);
       toast.success('Reply sent');
     } catch (e: any) {
       toast.error('Failed to send', { description: e.message });
@@ -149,6 +169,7 @@ export const Inbox: React.FC = () => {
                       ) : (
                         <pre className="text-sm whitespace-pre-wrap font-sans">{m.body_text || m.snippet}</pre>
                       )}
+                      <MessageAttachments items={attachmentsByMessage.get(m.id) ?? []} />
                     </div>
                   ))
                 )}
@@ -162,8 +183,17 @@ export const Inbox: React.FC = () => {
                     rows={3}
                     className="mb-2"
                   />
+                  {company?.id && (
+                    <div className="mb-2">
+                      <AttachmentPicker
+                        companyId={company.id}
+                        attachments={replyAttachments}
+                        onChange={setReplyAttachments}
+                      />
+                    </div>
+                  )}
                   <div className="flex justify-end">
-                    <Button onClick={handleReply} disabled={send.isPending || !replyBody.trim()} size="sm">
+                    <Button onClick={handleReply} disabled={send.isPending || (!replyBody.trim() && replyAttachments.length === 0)} size="sm">
                       {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                       Send reply
                     </Button>

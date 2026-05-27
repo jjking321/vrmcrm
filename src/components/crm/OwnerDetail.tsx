@@ -17,6 +17,7 @@ import {
 import { useOwnerProperties } from '@/hooks/useOwnerProperties';
 import { useOwnerActivities } from '@/hooks/useOwnerActivities';
 import { EmailTab } from './EmailTab';
+import { InternalNotes } from './InternalNotes';
 
 interface OwnerDetailProps {
   ownerName: string;

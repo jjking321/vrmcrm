@@ -5,6 +5,7 @@ import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
 import { useLogCallActivity } from '@/hooks/useCallLists';
 import ActivityLog from './ActivityLog';
 import { EmailTab } from './EmailTab';
+import { InternalNotes } from './InternalNotes';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { SourceBadge } from './SourceBadge';

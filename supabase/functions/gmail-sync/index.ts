@@ -107,8 +107,14 @@ async function syncAccount(account: any) {
       const dateHeader = getH('Date');
       const sentAt = dateHeader ? new Date(dateHeader).toISOString() : new Date(parseInt(msg.internalDate ?? '0')).toISOString();
 
-      const allAddrs = [from?.email, ...to.map((x) => x.email), ...cc.map((x) => x.email)].filter(Boolean) as string[];
-      const match = findMatch(allAddrs, index);
+      const ownEmail = account.email_address.toLowerCase();
+      const allAddrs = [from?.email, ...to.map((x) => x.email), ...cc.map((x) => x.email)]
+        .filter(Boolean)
+        .map((e) => (e as string).toLowerCase()) as string[];
+      // Exclude the connected mailbox itself — otherwise every newsletter sent TO us
+      // would "match" if our own address is also recorded as an owner/realtor email.
+      const externalAddrs = allAddrs.filter((e) => e !== ownEmail);
+      const match = findMatch(externalAddrs, index);
       if (!match) continue; // only store emails matching CRM contacts
 
       const direction = from?.email?.toLowerCase() === account.email_address.toLowerCase() ? 'outbound' : 'inbound';

@@ -924,6 +924,51 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_opt_outs: {
+        Row: {
+          channel: string
+          company_id: string
+          created_at: string
+          flagged_at: string
+          flagged_by: string | null
+          id: string
+          normalized_value: string
+          notes: string | null
+          owner_id: string | null
+          property_id: string | null
+          source: string | null
+          value: string
+        }
+        Insert: {
+          channel: string
+          company_id: string
+          created_at?: string
+          flagged_at?: string
+          flagged_by?: string | null
+          id?: string
+          normalized_value: string
+          notes?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          source?: string | null
+          value: string
+        }
+        Update: {
+          channel?: string
+          company_id?: string
+          created_at?: string
+          flagged_at?: string
+          flagged_by?: string | null
+          id?: string
+          normalized_value?: string
+          notes?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          source?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       owners: {
         Row: {
           age: number | null

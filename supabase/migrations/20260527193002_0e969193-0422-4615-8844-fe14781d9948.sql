@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Allow role creation during signup" ON public.user_roles;

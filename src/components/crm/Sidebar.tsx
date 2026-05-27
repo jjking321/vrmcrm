@@ -49,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'mailingLists' as ViewMode, label: 'Mailing Lists', icon: Mail },
     { id: 'dataCleanup' as ViewMode, label: 'Data Tools', icon: Wrench },
     { id: 'exclusions' as ViewMode, label: 'Exclusion List', icon: Ban },
+    { id: 'optOuts' as ViewMode, label: 'Marketing Opt-outs', icon: UserX },
     { id: 'dataQuality' as ViewMode, label: 'Data Quality', icon: ShieldAlert },
     { id: 'settings' as ViewMode, label: 'Settings', icon: Settings },
   ];

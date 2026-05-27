@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts, useAttachmentsForMessages, useThreadContacts, type EmailAttachment } from '@/hooks/useGmail';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AttachmentPicker, MessageAttachments, type DraftAttachment } from './EmailAttachments';
 import { ComposeModal } from './ComposeModal';
+import { ReplyTools } from './ReplyTools';
+import { applyMergeTags } from '@/hooks/useEmailTemplates';
 
 export const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -19,6 +21,7 @@ export const Inbox: React.FC = () => {
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [composeOpen, setComposeOpen] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   const { company } = useAuth();
   useRealtimeSubscription('email_threads', ['email-threads']);
@@ -74,11 +77,12 @@ export const Inbox: React.FC = () => {
 
   const handleReply = async () => {
     if (!lastMessage || (!replyBody.trim() && replyAttachments.length === 0)) return;
+    const resolved = applyMergeTags(replyBody, {});
     try {
       await send.mutateAsync({
         to: lastMessage.from_email!,
         subject: lastMessage.subject?.startsWith('Re:') ? lastMessage.subject : `Re: ${lastMessage.subject ?? ''}`,
-        body: replyBody || '(see attached)',
+        body: resolved || '(see attached)',
         threadId: selectedThread?.gmail_thread_id,
         attachments: replyAttachments.map(({ storage_path, filename, mime_type }) => ({
           storage_path, filename, mime_type,
@@ -223,21 +227,27 @@ export const Inbox: React.FC = () => {
               {lastMessage && (
                 <div className="border-t border-border p-3">
                   <Textarea
+                    ref={replyRef}
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
                     placeholder={`Reply to ${lastMessage.from_name || lastMessage.from_email}...`}
                     rows={3}
                     className="mb-2"
                   />
-                  {company?.id && (
-                    <div className="mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <ReplyTools
+                      textareaRef={replyRef}
+                      value={replyBody}
+                      onChange={setReplyBody}
+                    />
+                    {company?.id && (
                       <AttachmentPicker
                         companyId={company.id}
                         attachments={replyAttachments}
                         onChange={setReplyAttachments}
                       />
-                    </div>
-                  )}
+                    )}
+                  </div>
                   <div className="flex justify-end">
                     <Button onClick={handleReply} disabled={send.isPending || (!replyBody.trim() && replyAttachments.length === 0)} size="sm">
                       {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}

@@ -289,7 +289,7 @@ export const Inbox: React.FC = () => {
                         {m.sent_at && <span>{new Date(m.sent_at).toLocaleString()}</span>}
                       </div>
                       {m.body_html ? (
-                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: m.body_html }} />
+                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.body_html, { FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'], FORBID_ATTR: ['onerror', 'onclick', 'onload', 'onmouseover', 'onfocus'] }) }} />
                       ) : (
                         <pre className="text-sm whitespace-pre-wrap font-sans">{m.body_text || m.snippet}</pre>
                       )}

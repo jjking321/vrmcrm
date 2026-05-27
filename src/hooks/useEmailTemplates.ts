@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export interface EmailTemplate {
   id: string;
   company_id: string;
+  created_by?: string | null;
   name: string;
   subject: string;
   body: string;

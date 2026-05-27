@@ -544,6 +544,12 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
           }}
         />
       </div>
+
+      {(owner as any).id && (
+        <div className="mt-6">
+          <InternalNotes ownerId={(owner as any).id} />
+        </div>
+      )}
     </div>
   );
 };

@@ -226,8 +226,8 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
     if (!company?.id) return;
     setMatching(true);
     try {
-      const values = parseValues();
-      if (values.length === 0) {
+      const records = parseRecords();
+      if (records.length === 0) {
         toast.error('No values to match');
         return;
       }
@@ -240,7 +240,7 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
       while (true) {
         const { data, error } = await supabase
           .from('owners')
-          .select('id, property_id, mailing_address, mailing_city, mailing_state, phones, emails')
+          .select('id, property_id, name, mailing_address, mailing_city, mailing_state, phones, emails')
           .eq('company_id', company.id)
           .range(offset, offset + batchSize - 1);
         if (error) throw error;
@@ -250,7 +250,28 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
         offset += batchSize;
       }
 
+      // Pull properties for property-address fallback matching
+      let properties: any[] = [];
+      if (dataType === 'mailing_address') {
+        offset = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('properties')
+            .select('id, address, city, state, zip')
+            .eq('company_id', company.id)
+            .range(offset, offset + batchSize - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          properties = properties.concat(data);
+          if (data.length < batchSize) break;
+          offset += batchSize;
+        }
+      }
+
       // Build indexes
+      const ownerById = new Map<string, any>();
+      for (const o of owners) ownerById.set(o.id, o);
+
       const addrIndex = new Map<string, { ownerId: string; propertyId: string; source: string | null }>();
       const phoneIndex = new Map<string, { ownerId: string; propertyId: string; source: string | null }>();
       const emailIndex = new Map<string, { ownerId: string; propertyId: string; source: string | null }>();
@@ -269,18 +290,81 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
         }
       }
 
-      const index = dataType === 'mailing_address' ? addrIndex : dataType === 'phone' ? phoneIndex : emailIndex;
+      // property address index → list of owners on that property
+      const ownersByPropertyId = new Map<string, any[]>();
+      for (const o of owners) {
+        if (!o.property_id) continue;
+        const arr = ownersByPropertyId.get(o.property_id) || [];
+        arr.push(o);
+        ownersByPropertyId.set(o.property_id, arr);
+      }
+      const propByAddr = new Map<string, string>(); // normalized address → property_id
+      for (const p of properties) {
+        const norm = normalizeAddressForMatch(p.address || '', p.city || '', p.state || '');
+        if (norm && !propByAddr.has(norm)) propByAddr.set(norm, p.id);
+      }
 
-      const results: MatchPreview[] = values.map(v => {
-        const norm = normalizeValue(dataType, v);
-        const hit = index.get(norm);
+      const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
+      const results: MatchPreview[] = records.map(rec => {
+        const normalized = normalizeValue(dataType, rec.value);
+        let ownerId: string | null = null;
+        let propertyId: string | null = null;
+        let source: string | null = null;
+        let matchedBy: MatchPreview['matchedBy'] = null;
+
+        // 1. ContactID (owners.id) direct match — strongest
+        if (rec.contactId && ownerById.has(rec.contactId)) {
+          const o = ownerById.get(rec.contactId);
+          ownerId = o.id;
+          propertyId = o.property_id;
+          matchedBy = 'contact_id';
+        }
+
+        // 2. Fallback for mailing_address: property address (+ optional name)
+        if (!ownerId && dataType === 'mailing_address' && rec.propertyAddress) {
+          const pNorm = normalizeAddressForMatch(rec.propertyAddress, '', '');
+          const pid = propByAddr.get(pNorm);
+          if (pid) {
+            propertyId = pid;
+            const candidates = ownersByPropertyId.get(pid) || [];
+            if (candidates.length === 1) {
+              ownerId = candidates[0].id;
+              matchedBy = 'property_name';
+            } else if (rec.ownerName && candidates.length > 1) {
+              const targetN = norm(rec.ownerName);
+              const hit = candidates.find(o => {
+                const oN = norm(o.name || '');
+                return oN && (oN === targetN || oN.includes(targetN) || targetN.includes(oN));
+              });
+              if (hit) {
+                ownerId = hit.id;
+                matchedBy = 'property_name';
+              }
+            }
+          }
+        }
+
+        // 3. Final fallback: existing normalized-value index match
+        if (!ownerId) {
+          const idx = dataType === 'mailing_address' ? addrIndex : dataType === 'phone' ? phoneIndex : emailIndex;
+          const hit = idx.get(normalized);
+          if (hit) {
+            ownerId = hit.ownerId;
+            propertyId = propertyId || hit.propertyId;
+            source = hit.source;
+            matchedBy = dataType === 'mailing_address' ? 'address' : dataType === 'phone' ? 'phone' : 'email';
+          }
+        }
+
         return {
-          value: v,
-          normalized: norm,
-          ownerId: hit?.ownerId ?? null,
-          propertyId: hit?.propertyId ?? null,
-          source: hit?.source ?? null,
-          matched: !!hit,
+          value: rec.value,
+          normalized,
+          ownerId,
+          propertyId,
+          source,
+          matched: !!ownerId,
+          matchedBy,
         };
       });
       setPreview(results);

@@ -39,6 +39,7 @@ const CallDialer = React.lazy(() => import('./CallDialer').then(m => ({ default:
 const MailingListsView = React.lazy(() => import('./MailingListsView').then(m => ({ default: m.MailingListsView })));
 const RealtorsView = React.lazy(() => import('./RealtorsView').then(m => ({ default: m.RealtorsView })));
 const RealtorDetail = React.lazy(() => import('./RealtorDetail').then(m => ({ default: m.RealtorDetail })));
+const Inbox = React.lazy(() => import('./Inbox').then(m => ({ default: m.Inbox })));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center h-64">
@@ -561,6 +562,10 @@ const MainApp: React.FC = () => {
 
     if (view === 'mailingLists') {
       return <MailingListsView />;
+    }
+
+    if (view === 'inbox') {
+      return <Inbox />;
     }
 
     if (view === 'realtors') {

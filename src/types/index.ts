@@ -280,7 +280,7 @@ export interface Deal {
   updatedAt: string;
 }
 
-export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer' | 'mailingLists' | 'realtors' | 'inbox' | 'emailAnalytics' | 'dataQuality';
+export type ViewMode = 'properties' | 'owners' | 'kanban' | 'settings' | 'dashboard' | 'dataCleanup' | 'exclusions' | 'callLists' | 'dialer' | 'mailingLists' | 'realtors' | 'inbox' | 'emailAnalytics' | 'dataQuality' | 'optOuts';
 export type ListViewMode = 'table' | 'kanban';
 
 export type MailingListStatus = 'pending' | 'sent';

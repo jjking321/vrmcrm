@@ -18,6 +18,7 @@ import { useOwnerProperties } from '@/hooks/useOwnerProperties';
 import { useOwnerActivities } from '@/hooks/useOwnerActivities';
 import { EmailTab } from './EmailTab';
 import { InternalNotes } from './InternalNotes';
+import { OptOutToggle } from './OptOutToggle';
 
 interface OwnerDetailProps {
   ownerName: string;

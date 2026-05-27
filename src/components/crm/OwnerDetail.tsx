@@ -230,6 +230,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                                 </a>
                               )}
                               <SourceBadge source={associatedPhone.source} />
+                              <OptOutToggle channel="phone" value={associatedPhone.number} ownerId={(owner as any)?.id} compact />
                             </div>
                           )}
                           
@@ -243,6 +244,7 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                               {owner.emails?.[0]?.source && (
                                 <SourceBadge source={owner.emails[0].source} />
                               )}
+                              <OptOutToggle channel="email" value={owner.email!} ownerId={(owner as any)?.id} compact />
                             </div>
                           )}
                           

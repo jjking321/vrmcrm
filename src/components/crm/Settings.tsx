@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType, PipelineStage } from '@/types';
-import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link, Save, X } from 'lucide-react';
+import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link, Save, X, Mail } from 'lucide-react';
+import { EmailAccountsSettings } from './EmailAccountsSettings';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -94,7 +95,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const deleteStageMutation = useDeletePipelineStage();
   const reorderMutation = useReorderPipelineStages();
   
-  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations'>('fields');
+  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations' | 'email'>('fields');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text' as CustomFieldType });
@@ -280,6 +281,16 @@ export const Settings: React.FC<SettingsProps> = ({
         >
           <Zap className="w-4 h-4" />
           Integrations
+        </button>
+        <button
+          onClick={() => setActiveTab('email')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeTab === 'email' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Mail className="w-4 h-4" />
+          Email Accounts
         </button>
       </div>
 
@@ -865,6 +876,12 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'email' && (
+        <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+          <EmailAccountsSettings />
         </div>
       )}
 

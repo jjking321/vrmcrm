@@ -276,6 +276,120 @@ export type Database = {
           },
         ]
       }
+      email_messages: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          cc_emails: Json | null
+          company_id: string
+          created_at: string
+          direction: string
+          from_email: string | null
+          from_name: string | null
+          gmail_account_id: string
+          gmail_message_id: string
+          id: string
+          is_read: boolean
+          match_status: string | null
+          owner_id: string | null
+          property_id: string | null
+          realtor_id: string | null
+          sent_at: string | null
+          snippet: string | null
+          subject: string | null
+          thread_id: string
+          to_emails: Json | null
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: Json | null
+          company_id: string
+          created_at?: string
+          direction?: string
+          from_email?: string | null
+          from_name?: string | null
+          gmail_account_id: string
+          gmail_message_id: string
+          id?: string
+          is_read?: boolean
+          match_status?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          realtor_id?: string | null
+          sent_at?: string | null
+          snippet?: string | null
+          subject?: string | null
+          thread_id: string
+          to_emails?: Json | null
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          cc_emails?: Json | null
+          company_id?: string
+          created_at?: string
+          direction?: string
+          from_email?: string | null
+          from_name?: string | null
+          gmail_account_id?: string
+          gmail_message_id?: string
+          id?: string
+          is_read?: boolean
+          match_status?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          realtor_id?: string | null
+          sent_at?: string | null
+          snippet?: string | null
+          subject?: string | null
+          thread_id?: string
+          to_emails?: Json | null
+        }
+        Relationships: []
+      }
+      email_threads: {
+        Row: {
+          company_id: string
+          created_at: string
+          gmail_account_id: string
+          gmail_thread_id: string
+          id: string
+          is_read: boolean
+          last_message_at: string | null
+          participants: Json | null
+          snippet: string | null
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          gmail_account_id: string
+          gmail_thread_id: string
+          id?: string
+          is_read?: boolean
+          last_message_at?: string | null
+          participants?: Json | null
+          snippet?: string | null
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          gmail_account_id?: string
+          gmail_thread_id?: string
+          id?: string
+          is_read?: boolean
+          last_message_at?: string | null
+          participants?: Json | null
+          snippet?: string | null
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exclusion_list: {
         Row: {
           address: string | null
@@ -371,6 +485,51 @@ export type Database = {
           sort_order?: number
           type?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      gmail_accounts: {
+        Row: {
+          access_token: string | null
+          company_id: string
+          created_at: string
+          email_address: string
+          id: string
+          is_active: boolean
+          last_history_id: string | null
+          last_synced_at: string | null
+          refresh_token: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          company_id: string
+          created_at?: string
+          email_address: string
+          id?: string
+          is_active?: boolean
+          last_history_id?: string | null
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          company_id?: string
+          created_at?: string
+          email_address?: string
+          id?: string
+          is_active?: boolean
+          last_history_id?: string | null
+          last_synced_at?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

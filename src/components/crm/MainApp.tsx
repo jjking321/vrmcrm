@@ -39,6 +39,7 @@ const CallDialer = React.lazy(() => import('./CallDialer').then(m => ({ default:
 const MailingListsView = React.lazy(() => import('./MailingListsView').then(m => ({ default: m.MailingListsView })));
 const RealtorsView = React.lazy(() => import('./RealtorsView').then(m => ({ default: m.RealtorsView })));
 const RealtorDetail = React.lazy(() => import('./RealtorDetail').then(m => ({ default: m.RealtorDetail })));
+const Inbox = React.lazy(() => import('./Inbox').then(m => ({ default: m.Inbox })));
 
 const LazyFallback = () => (
   <div className="flex items-center justify-center h-64">
@@ -141,6 +142,23 @@ const PropertyTableWithPagination: React.FC<{
 const MainApp: React.FC = () => {
   const { company } = useAuth();
   const companyId = company?.id;
+
+  // Handle Gmail OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('gmail_connected');
+    if (!status) return;
+    const msg = params.get('msg');
+    if (status === 'success') {
+      toast.success('Gmail connected', { description: msg || undefined });
+    } else {
+      toast.error('Gmail connection failed', { description: msg || undefined });
+    }
+    params.delete('gmail_connected');
+    params.delete('msg');
+    const newUrl = window.location.pathname + (params.toString() ? `?${params}` : '');
+    window.history.replaceState({}, '', newUrl);
+  }, []);
 
   // Data hooks
   const { data: allProperties = [], isLoading: propertiesLoading } = useProperties();
@@ -561,6 +579,10 @@ const MainApp: React.FC = () => {
 
     if (view === 'mailingLists') {
       return <MailingListsView />;
+    }
+
+    if (view === 'inbox') {
+      return <Inbox />;
     }
 
     if (view === 'realtors') {

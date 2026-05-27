@@ -92,6 +92,21 @@ Deno.serve(async (req) => {
       return finishRedirect('error', upsertErr.message);
     }
 
+    // Kick off Gmail watch registration so push notifications start flowing.
+    // Fire-and-forget — failure here shouldn't block the connect flow.
+    try {
+      fetch(`${supabaseUrl}/functions/v1/gmail-watch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+        },
+        body: JSON.stringify({}),
+      }).catch((e) => console.error('watch trigger failed', e));
+    } catch (e) {
+      console.error('watch trigger error', e);
+    }
+
     return finishRedirect('success', emailAddress);
   } catch (e) {
     console.error(e);

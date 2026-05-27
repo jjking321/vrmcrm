@@ -35,3 +35,9 @@ verify_jwt = false
 
 [functions.gmail-sync]
 verify_jwt = false
+
+[functions.gmail-webhook]
+verify_jwt = false
+
+[functions.gmail-watch]
+verify_jwt = false

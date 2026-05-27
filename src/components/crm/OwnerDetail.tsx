@@ -533,6 +533,14 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
           propertyIds={ownerProperties.map(p => p.id)}
           defaultRecipient={owner.email || owner.emails?.[0]?.address || ''}
           title="Emails"
+          mergeContext={{
+            owner: {
+              name: owner.name,
+              email: owner.email || owner.emails?.[0]?.address || null,
+              phone: owner.phone || owner.phones?.[0]?.number || null,
+              mailing_address: owner.mailingAddress ?? (owner as any).mailing_address ?? null,
+            },
+          }}
         />
       </div>
     </div>

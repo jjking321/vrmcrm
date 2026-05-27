@@ -58,6 +58,78 @@ function encodeRawMultipart(headers: Record<string, string>, textBody: string, h
   return b64url(lines.join('\r\n'));
 }
 
+interface OutboundAttachment {
+  filename: string;
+  mime_type: string;
+  storage_path: string;
+  bytes: Uint8Array;
+}
+
+function bytesToBase64Wrapped(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = btoa(bin);
+  // Wrap at 76 chars per RFC 2045
+  return b64.replace(/(.{76})/g, '$1\r\n');
+}
+
+function encodeRawWithAttachments(
+  headers: Record<string, string>,
+  textBody: string,
+  htmlBody: string | null,
+  attachments: OutboundAttachment[],
+): string {
+  const outer = `=_lov_mixed_${crypto.randomUUID().replace(/-/g, '')}`;
+  const alt = `=_lov_alt_${crypto.randomUUID().replace(/-/g, '')}`;
+  const lines = Object.entries(headers).map(([k, v]) => `${k}: ${v}`);
+  lines.push(
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/mixed; boundary="${outer}"`,
+    '',
+    `--${outer}`,
+  );
+  if (htmlBody) {
+    lines.push(
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      `--${alt}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      textBody,
+      '',
+      `--${alt}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      htmlBody,
+      '',
+      `--${alt}--`,
+    );
+  } else {
+    lines.push(
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      textBody,
+    );
+  }
+  for (const att of attachments) {
+    const safeName = att.filename.replace(/"/g, '');
+    lines.push(
+      '',
+      `--${outer}`,
+      `Content-Type: ${att.mime_type || 'application/octet-stream'}; name="${safeName}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${safeName}"`,
+      '',
+      bytesToBase64Wrapped(att.bytes),
+    );
+  }
+  lines.push('', `--${outer}--`, '');
+  return b64url(lines.join('\r\n'));
+}
+
 // Encode a display name for an email header. If it contains non-ASCII or
 // special characters, use RFC 2047 encoded-word; otherwise wrap in quotes.
 function formatFromHeader(email: string, name?: string | null): string {
@@ -90,7 +162,7 @@ Deno.serve(async (req) => {
     if (!claims?.claims) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     const userId = claims.claims.sub;
 
-    const { to, cc, subject, body, threadId, accountId } = await req.json();
+    const { to, cc, subject, body, threadId, accountId, attachments: attRefs } = await req.json();
     if (!to || !subject || !body) return new Response(JSON.stringify({ error: 'to, subject, body required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const db = admin();
@@ -102,6 +174,33 @@ Deno.serve(async (req) => {
     if (!account) return new Response(JSON.stringify({ error: 'No connected Gmail account' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const accessToken = await refreshAccessTokenIfNeeded(account);
+
+    // Resolve attachments — must already be uploaded to email-attachments bucket
+    // under <company_id>/... by the client. Download bytes here so we can attach them.
+    const attachments: OutboundAttachment[] = [];
+    if (Array.isArray(attRefs) && attRefs.length > 0) {
+      for (const a of attRefs) {
+        if (!a?.storage_path || !a?.filename) continue;
+        if (!a.storage_path.startsWith(`${account.company_id}/`)) {
+          console.warn('Attachment outside company scope skipped', a.storage_path);
+          continue;
+        }
+        const { data: blob, error: dlErr } = await db.storage
+          .from('email-attachments')
+          .download(a.storage_path);
+        if (dlErr || !blob) {
+          console.error('Attachment download failed', a.storage_path, dlErr);
+          continue;
+        }
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        attachments.push({
+          filename: a.filename,
+          mime_type: a.mime_type || blob.type || 'application/octet-stream',
+          storage_path: a.storage_path,
+          bytes: buf,
+        });
+      }
+    }
 
     // Signatures are stored as HTML. Build a multipart/alternative message so
     // recipients see the rich signature, with a plain-text fallback.
@@ -123,9 +222,11 @@ Deno.serve(async (req) => {
     };
     if (cc) headers.Cc = Array.isArray(cc) ? cc.join(', ') : cc;
 
-    const raw = sigHtml
-      ? encodeRawMultipart(headers, textBody, htmlBody)
-      : encodeRawPlain(headers, textBody);
+    const raw = attachments.length > 0
+      ? encodeRawWithAttachments(headers, textBody, sigHtml ? htmlBody : null, attachments)
+      : sigHtml
+        ? encodeRawMultipart(headers, textBody, htmlBody)
+        : encodeRawPlain(headers, textBody);
     const sendBody: any = { raw };
     if (threadId) sendBody.threadId = threadId;
 
@@ -190,7 +291,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (threadRow) {
-        await db.from('email_messages').upsert({
+        const { data: outMsg } = await db.from('email_messages').upsert({
           thread_id: threadRow.id,
           gmail_account_id: account.id,
           company_id: account.company_id,
@@ -210,7 +311,35 @@ Deno.serve(async (req) => {
           realtor_id: realtorId,
           property_id: propertyId,
           match_status: ownerId || realtorId ? 'matched' : 'unmatched',
-        }, { onConflict: 'gmail_account_id,gmail_message_id' });
+        }, { onConflict: 'gmail_account_id,gmail_message_id' })
+          .select('id')
+          .single();
+
+        // Move outbound attachments to a permanent path under the message id,
+        // and record metadata so they appear in the thread view.
+        if (outMsg?.id && attachments.length > 0) {
+          for (const att of attachments) {
+            try {
+              const safeName = att.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+              const newPath = `${account.company_id}/${outMsg.id}/${crypto.randomUUID()}/${safeName}`;
+              const { error: mvErr } = await db.storage
+                .from('email-attachments')
+                .move(att.storage_path, newPath);
+              const finalPath = mvErr ? att.storage_path : newPath;
+              if (mvErr) console.warn('attachment move failed; keeping temp path', mvErr);
+              await db.from('email_attachments').insert({
+                message_id: outMsg.id,
+                company_id: account.company_id,
+                filename: att.filename,
+                mime_type: att.mime_type,
+                size_bytes: att.bytes.length,
+                storage_path: finalPath,
+              });
+            } catch (e) {
+              console.error('persist outbound attachment failed', e);
+            }
+          }
+        }
 
         await db.from('activity_logs').insert({
           company_id: account.company_id,

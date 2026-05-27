@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { useAllOwners } from './useAllOwners';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useBadContactData } from './useBadContactData';
 
 export interface SourceQualityRow {
@@ -19,9 +21,34 @@ export function useDataQualityStats(): {
   rows: SourceQualityRow[];
   totalBad: number;
   totalContacts: number;
+  isLoading: boolean;
 } {
-  const { data: ownersData } = useAllOwners();
+  const { company } = useAuth();
   const { data: bad = [] } = useBadContactData();
+
+  const { data: ownersRaw = [], isLoading } = useQuery({
+    queryKey: ['data-quality-owners', company?.id],
+    enabled: !!company?.id,
+    queryFn: async () => {
+      let all: any[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await supabase
+          .from('owners')
+          .select('phones, emails, mailing_address')
+          .eq('company_id', company!.id)
+          .range(offset, offset + batchSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < batchSize) break;
+        offset += batchSize;
+      }
+      return all;
+    },
+  });
 
   return useMemo(() => {
     const map = new Map<string, SourceQualityRow>();
@@ -44,12 +71,10 @@ export function useDataQualityStats(): {
       return map.get(key)!;
     };
 
-    const owners = ownersData?.owners || [];
     let totalContacts = 0;
-    for (const o of owners as any[]) {
-      // mailing addresses sourced from owner-level source if present
-      if (o.mailingAddress) {
-        const row = getRow(o.source || 'unknown');
+    for (const o of ownersRaw as any[]) {
+      if (o.mailing_address) {
+        const row = getRow('unknown'); // mailing address source not tracked yet
         row.addressTotal++;
         totalContacts++;
       }
@@ -80,6 +105,6 @@ export function useDataQualityStats(): {
     });
     rows.sort((a, b) => b.badRate - a.badRate);
 
-    return { rows, totalBad: bad.length, totalContacts };
-  }, [ownersData, bad]);
+    return { rows, totalBad: bad.length, totalContacts, isLoading };
+  }, [ownersRaw, bad, isLoading]);
 }

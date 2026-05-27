@@ -384,6 +384,45 @@ export type Database = {
         }
         Relationships: []
       }
+      email_templates: {
+        Row: {
+          body: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_html: boolean
+          name: string
+          sort_order: number
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_html?: boolean
+          name: string
+          sort_order?: number
+          subject?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_html?: boolean
+          name?: string
+          sort_order?: number
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_threads: {
         Row: {
           company_id: string

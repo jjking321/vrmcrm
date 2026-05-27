@@ -4,6 +4,7 @@ import { useAddActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/us
 import { usePropertyOwnerActivities } from '@/hooks/useOwnerActivities';
 import { useLogCallActivity } from '@/hooks/useCallLists';
 import ActivityLog from './ActivityLog';
+import { EmailTab } from './EmailTab';
 import { Badge, TagBadge } from './Badge';
 import { PropertyImage } from './PropertyImagePlaceholder';
 import { SourceBadge } from './SourceBadge';
@@ -972,6 +973,14 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             onDeleteActivity={(id) => deleteActivity.mutate(id)}
             showPropertyContext={true}
             currentPropertyId={property.id}
+          />
+
+          {/* Emails for this property */}
+          <EmailTab
+            propertyId={property.id}
+            defaultRecipient={property.owner.email || property.owner.emails?.[0]?.address || ''}
+            defaultSubject={property.address ? `Re: ${property.address}` : ''}
+            title="Emails"
           />
 
           {/* Quick Call Log Section */}

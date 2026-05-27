@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ActivityLog from './ActivityLog';
+import { EmailTab } from './EmailTab';
 
 interface RealtorDetailProps {
   realtor: Realtor;
@@ -180,6 +181,13 @@ export const RealtorDetail: React.FC<RealtorDetailProps> = ({ realtor, onBack })
             onAddActivity={handleAddActivity}
             onEditActivity={handleEditActivity}
             onDeleteActivity={handleDeleteActivity}
+          />
+
+          {/* Emails */}
+          <EmailTab
+            realtorId={realtor.id}
+            defaultRecipient={realtor.email ?? ''}
+            title="Emails"
           />
         </div>
       </div>

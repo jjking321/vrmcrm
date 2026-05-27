@@ -152,17 +152,31 @@ export const useMessagesForEntity = (params: {
   ownerId?: string | null;
   realtorId?: string | null;
   propertyId?: string | null;
+  propertyIds?: string[];
+  ownerIds?: string[];
 }) => {
-  const { ownerId, realtorId, propertyId } = params;
-  const key = ownerId ? `owner:${ownerId}` : realtorId ? `realtor:${realtorId}` : propertyId ? `property:${propertyId}` : 'none';
+  const { ownerId, realtorId, propertyId, propertyIds, ownerIds } = params;
+  const key = ownerId
+    ? `owner:${ownerId}`
+    : realtorId
+    ? `realtor:${realtorId}`
+    : propertyId
+    ? `property:${propertyId}`
+    : ownerIds && ownerIds.length
+    ? `owners:${[...ownerIds].sort().join(',')}`
+    : propertyIds && propertyIds.length
+    ? `properties:${[...propertyIds].sort().join(',')}`
+    : 'none';
   return useQuery({
     queryKey: ['email-messages-entity', key],
-    enabled: !!(ownerId || realtorId || propertyId),
+    enabled: !!(ownerId || realtorId || propertyId || (ownerIds && ownerIds.length) || (propertyIds && propertyIds.length)),
     queryFn: async () => {
-      let q = supabase.from('email_messages').select('*').order('sent_at', { ascending: false }).limit(100);
+      let q = supabase.from('email_messages').select('*').order('sent_at', { ascending: false }).limit(200);
       if (ownerId) q = q.eq('owner_id', ownerId);
       else if (realtorId) q = q.eq('realtor_id', realtorId);
       else if (propertyId) q = q.eq('property_id', propertyId);
+      else if (ownerIds && ownerIds.length) q = q.in('owner_id', ownerIds);
+      else if (propertyIds && propertyIds.length) q = q.in('property_id', propertyIds);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as EmailMessage[];

@@ -524,7 +524,7 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
                   <tr>
                     <th className="text-left p-2 font-medium">Value</th>
                     <th className="text-left p-2 font-medium">Match</th>
-                    <th className="text-left p-2 font-medium">Source</th>
+                    <th className="text-left p-2 font-medium">Matched by</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -538,7 +538,14 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
                           <span className="text-muted-foreground text-xs">No match</span>
                         )}
                       </td>
-                      <td className="p-2 text-xs text-muted-foreground">{p.source || '—'}</td>
+                      <td className="p-2 text-xs text-muted-foreground">
+                        {p.matchedBy === 'contact_id' ? 'Contact ID'
+                          : p.matchedBy === 'property_name' ? 'Property + name'
+                          : p.matchedBy === 'address' ? 'Mailing address'
+                          : p.matchedBy === 'phone' ? 'Phone'
+                          : p.matchedBy === 'email' ? 'Email'
+                          : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

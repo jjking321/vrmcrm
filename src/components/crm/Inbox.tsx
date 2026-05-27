@@ -13,9 +13,10 @@ import { AttachmentPicker, MessageAttachments, type DraftAttachment } from './Em
 import { ComposeModal } from './ComposeModal';
 import { ReplyTools } from './ReplyTools';
 import { applyMergeTags } from '@/hooks/useEmailTemplates';
+import { LinkThreadPicker } from './LinkThreadPicker';
 
 export const Inbox: React.FC = () => {
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'unmatched'>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
@@ -38,8 +39,12 @@ export const Inbox: React.FC = () => {
 
   const visibleThreads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return threads;
-    return threads.filter((t) => {
+    let list = threads;
+    if (filter === 'unmatched') {
+      list = list.filter((t) => !contactMap?.get(t.id));
+    }
+    if (!q) return list;
+    return list.filter((t) => {
       const c = contactMap?.get(t.id);
       return (
         (t.subject ?? '').toLowerCase().includes(q) ||
@@ -47,7 +52,7 @@ export const Inbox: React.FC = () => {
         (c?.label ?? '').toLowerCase().includes(q)
       );
     });
-  }, [threads, contactMap, searchQuery]);
+  }, [threads, contactMap, searchQuery, filter]);
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
   const lastMessage = messages[messages.length - 1];

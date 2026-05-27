@@ -29,7 +29,7 @@ export const Inbox: React.FC = () => {
   useRealtimeSubscription('email_messages', ['email-messages']);
 
   const { data: accounts = [] } = useGmailAccounts();
-  const { data: threads = [], isLoading } = useEmailThreads(filter);
+  const { data: threads = [], isLoading } = useEmailThreads(filter === 'unread' ? 'unread' : 'all');
   const { data: messages = [], isLoading: messagesLoading } = useThreadMessages(selectedThreadId);
   const sync = useSyncGmail();
   const send = useSendEmail();

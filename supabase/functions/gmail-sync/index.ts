@@ -1,4 +1,4 @@
-import { admin, refreshAccessTokenIfNeeded, parseAddressHeader, extractBodyParts } from '../_shared/gmail.ts';
+import { admin, refreshAccessTokenIfNeeded, parseAddressHeader, extractBodyParts, extractAttachments, fetchAttachmentBytes } from '../_shared/gmail.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -143,7 +143,7 @@ async function syncAccount(account: any) {
 
       const { text: bodyText, html: bodyHtml } = extractBodyParts(msg.payload);
 
-      await db.from('email_messages').upsert({
+      const { data: msgRow } = await db.from('email_messages').upsert({
         thread_id: threadRow.id,
         gmail_account_id: account.id,
         company_id: account.company_id,
@@ -163,7 +163,51 @@ async function syncAccount(account: any) {
         realtor_id: match.realtorId ?? null,
         property_id: match.propertyId ?? null,
         match_status: 'matched',
-      }, { onConflict: 'gmail_account_id,gmail_message_id' });
+      }, { onConflict: 'gmail_account_id,gmail_message_id' })
+        .select('id')
+        .single();
+
+      // Attachments: download + upload to storage + insert metadata.
+      // Skip if we already have attachments for this message (idempotent re-sync).
+      if (msgRow?.id) {
+        const attRefs = extractAttachments(msg.payload);
+        if (attRefs.length > 0) {
+          const { count: existing } = await db
+            .from('email_attachments')
+            .select('id', { count: 'exact', head: true })
+            .eq('message_id', msgRow.id);
+          if (!existing || existing === 0) {
+            for (const att of attRefs) {
+              try {
+                const bytes = await fetchAttachmentBytes(msg.id, att.attachmentId, accessToken);
+                const safeName = att.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const path = `${account.company_id}/${msgRow.id}/${att.attachmentId}/${safeName}`;
+                const { error: upErr } = await db.storage
+                  .from('email-attachments')
+                  .upload(path, bytes, {
+                    contentType: att.mimeType,
+                    upsert: true,
+                  });
+                if (upErr) {
+                  console.error('attachment upload failed', att.filename, upErr);
+                  continue;
+                }
+                await db.from('email_attachments').insert({
+                  message_id: msgRow.id,
+                  company_id: account.company_id,
+                  filename: att.filename,
+                  mime_type: att.mimeType,
+                  size_bytes: att.size,
+                  storage_path: path,
+                  gmail_attachment_id: att.attachmentId,
+                });
+              } catch (e) {
+                console.error('attachment process failed', att.filename, e);
+              }
+            }
+          }
+        }
+      }
 
       // Activity log entry
       const ownerName = from?.name || from?.email || 'Email contact';

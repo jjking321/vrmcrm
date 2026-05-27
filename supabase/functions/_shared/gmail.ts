@@ -79,3 +79,49 @@ export function extractBodyParts(payload: any): { text: string; html: string } {
   if (!text && !html && payload?.body?.data) text = decodeBase64Url(payload.body.data);
   return { text, html };
 }
+
+export interface GmailAttachmentRef {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+  size: number;
+}
+
+/** Walk a Gmail payload and collect attachment parts (parts with a filename + attachmentId). */
+export function extractAttachments(payload: any): GmailAttachmentRef[] {
+  const out: GmailAttachmentRef[] = [];
+  function walk(p: any) {
+    if (!p) return;
+    if (p.filename && p.body?.attachmentId) {
+      out.push({
+        filename: p.filename,
+        mimeType: p.mimeType || 'application/octet-stream',
+        attachmentId: p.body.attachmentId,
+        size: p.body.size ?? 0,
+      });
+    }
+    if (Array.isArray(p.parts)) p.parts.forEach(walk);
+  }
+  walk(payload);
+  return out;
+}
+
+/** Download an attachment from Gmail and return raw bytes. */
+export async function fetchAttachmentBytes(
+  messageId: string,
+  attachmentId: string,
+  accessToken: string,
+): Promise<Uint8Array> {
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Attachment fetch ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const b64 = (data.data as string).replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}

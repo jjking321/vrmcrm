@@ -1,18 +1,154 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   useMessagesForEntity,
   useSendEmail,
   useGmailAccounts,
   useThreadsByIds,
   useThreadMessages,
+  useAttachmentsForMessages,
+  getAttachmentUrl,
+  type EmailAttachment,
 } from '@/hooks/useGmail';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Loader2, Send, Mail } from 'lucide-react';
+import { Loader2, Send, Mail, Paperclip, X, Download, FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+interface DraftAttachment {
+  storage_path: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+function formatBytes(n: number | null | undefined): string {
+  if (!n || n <= 0) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Inline file picker + upload to the email-attachments bucket. */
+const AttachmentPicker: React.FC<{
+  companyId: string;
+  attachments: DraftAttachment[];
+  onChange: (next: DraftAttachment[]) => void;
+}> = ({ companyId, attachments, onChange }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const added: DraftAttachment[] = [];
+    for (const f of Array.from(files)) {
+      if (f.size > 25 * 1024 * 1024) {
+        toast.error(`${f.name} is too large (max 25 MB)`);
+        continue;
+      }
+      const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${companyId}/_drafts/${crypto.randomUUID()}/${safe}`;
+      const { error } = await supabase.storage
+        .from('email-attachments')
+        .upload(path, f, { contentType: f.type || 'application/octet-stream' });
+      if (error) {
+        toast.error(`Upload failed: ${f.name}`, { description: error.message });
+        continue;
+      }
+      added.push({
+        storage_path: path,
+        filename: f.name,
+        mime_type: f.type || 'application/octet-stream',
+        size_bytes: f.size,
+      });
+    }
+    setUploading(false);
+    if (added.length) onChange([...attachments, ...added]);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  const handleRemove = async (att: DraftAttachment) => {
+    await supabase.storage.from('email-attachments').remove([att.storage_path]);
+    onChange(attachments.filter((a) => a.storage_path !== att.storage_path));
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+      >
+        {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Paperclip className="w-4 h-4 mr-2" />}
+        Attach files
+      </Button>
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {attachments.map((a) => (
+            <div
+              key={a.storage_path}
+              className="flex items-center gap-1.5 text-xs bg-muted/60 rounded px-2 py-1"
+            >
+              <FileIcon className="w-3 h-3 text-muted-foreground" />
+              <span className="truncate max-w-[180px]">{a.filename}</span>
+              <span className="text-muted-foreground">{formatBytes(a.size_bytes)}</span>
+              <button
+                type="button"
+                onClick={() => handleRemove(a)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Remove attachment"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** Render the attachments for a single saved message as download chips. */
+const MessageAttachments: React.FC<{ items: EmailAttachment[] }> = ({ items }) => {
+  if (items.length === 0) return null;
+  const handleOpen = async (att: EmailAttachment) => {
+    try {
+      const url = await getAttachmentUrl(att.storage_path);
+      window.open(url, '_blank', 'noopener');
+    } catch (e: any) {
+      toast.error('Could not open attachment', { description: e.message });
+    }
+  };
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {items.map((a) => (
+        <button
+          key={a.id}
+          onClick={() => handleOpen(a)}
+          className="flex items-center gap-1.5 text-xs bg-muted/60 hover:bg-muted rounded px-2 py-1 transition-colors"
+        >
+          <Download className="w-3 h-3 text-muted-foreground" />
+          <span className="truncate max-w-[200px]">{a.filename}</span>
+          <span className="text-muted-foreground">{formatBytes(a.size_bytes)}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 interface EmailTabProps {
   ownerId?: string;
@@ -31,6 +167,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   ownerId, realtorId, propertyId, ownerIds, propertyIds,
   defaultRecipient, defaultSubject, title = 'Inbox', height = '600px',
 }) => {
+  const { company } = useAuth();
   const { data: entityMessages = [], isLoading } = useMessagesForEntity({
     ownerId, realtorId, propertyId, ownerIds, propertyIds,
   });
@@ -51,6 +188,19 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   const { data: threadMessages = [], isLoading: messagesLoading } = useThreadMessages(selectedThreadId);
   const lastMessage = threadMessages[threadMessages.length - 1];
 
+  // Attachments for all messages currently rendered in the open thread.
+  const messageIds = useMemo(() => threadMessages.map((m) => m.id), [threadMessages]);
+  const { data: allAttachments = [] } = useAttachmentsForMessages(messageIds);
+  const attachmentsByMessage = useMemo(() => {
+    const m = new Map<string, EmailAttachment[]>();
+    allAttachments.forEach((a) => {
+      const arr = m.get(a.message_id) ?? [];
+      arr.push(a);
+      m.set(a.message_id, arr);
+    });
+    return m;
+  }, [allAttachments]);
+
   // Auto-select first thread once loaded
   React.useEffect(() => {
     if (!selectedThreadId && threads.length > 0) {
@@ -63,6 +213,8 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   const [subject, setSubject] = useState(defaultSubject ?? '');
   const [body, setBody] = useState('');
   const [replyBody, setReplyBody] = useState('');
+  const [composeAttachments, setComposeAttachments] = useState<DraftAttachment[]>([]);
+  const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
 
   const handleSend = async () => {
     if (!to.trim() || !subject.trim() || !body.trim()) {
@@ -70,10 +222,18 @@ export const EmailTab: React.FC<EmailTabProps> = ({
       return;
     }
     try {
-      await send.mutateAsync({ to, subject, body });
+      await send.mutateAsync({
+        to,
+        subject,
+        body,
+        attachments: composeAttachments.map(({ storage_path, filename, mime_type }) => ({
+          storage_path, filename, mime_type,
+        })),
+      });
       setComposing(false);
       setSubject('');
       setBody('');
+      setComposeAttachments([]);
       toast.success('Email sent');
     } catch (e: any) {
       toast.error('Failed to send', { description: e.message });
@@ -81,15 +241,19 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   };
 
   const handleReply = async () => {
-    if (!lastMessage || !replyBody.trim()) return;
+    if (!lastMessage || (!replyBody.trim() && replyAttachments.length === 0)) return;
     try {
       await send.mutateAsync({
         to: lastMessage.from_email!,
         subject: lastMessage.subject?.startsWith('Re:') ? lastMessage.subject : `Re: ${lastMessage.subject ?? ''}`,
-        body: replyBody,
+        body: replyBody || '(see attached)',
         threadId: selectedThread?.gmail_thread_id,
+        attachments: replyAttachments.map(({ storage_path, filename, mime_type }) => ({
+          storage_path, filename, mime_type,
+        })),
       });
       setReplyBody('');
+      setReplyAttachments([]);
       toast.success('Reply sent');
     } catch (e: any) {
       toast.error('Failed to send', { description: e.message });
@@ -128,8 +292,15 @@ export const EmailTab: React.FC<EmailTabProps> = ({
           <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="To" />
           <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
           <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={5} />
+          {company?.id && (
+            <AttachmentPicker
+              companyId={company.id}
+              attachments={composeAttachments}
+              onChange={setComposeAttachments}
+            />
+          )}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setComposing(false)}>Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setComposing(false); setComposeAttachments([]); }}>Cancel</Button>
             <Button size="sm" onClick={handleSend} disabled={send.isPending}>
               {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
               Send
@@ -204,6 +375,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                       ) : (
                         <pre className="text-sm whitespace-pre-wrap font-sans">{m.body_text || m.snippet}</pre>
                       )}
+                      <MessageAttachments items={attachmentsByMessage.get(m.id) ?? []} />
                     </div>
                   ))
                 )}
@@ -217,8 +389,17 @@ export const EmailTab: React.FC<EmailTabProps> = ({
                     rows={3}
                     className="mb-2"
                   />
+                  {company?.id && (
+                    <div className="mb-2">
+                      <AttachmentPicker
+                        companyId={company.id}
+                        attachments={replyAttachments}
+                        onChange={setReplyAttachments}
+                      />
+                    </div>
+                  )}
                   <div className="flex justify-end">
-                    <Button onClick={handleReply} disabled={send.isPending || !replyBody.trim()} size="sm">
+                    <Button onClick={handleReply} disabled={send.isPending || (!replyBody.trim() && replyAttachments.length === 0)} size="sm">
                       {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                       Send reply
                     </Button>

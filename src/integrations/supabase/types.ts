@@ -276,6 +276,42 @@ export type Database = {
           },
         ]
       }
+      email_attachments: {
+        Row: {
+          company_id: string
+          created_at: string
+          filename: string
+          gmail_attachment_id: string | null
+          id: string
+          message_id: string
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          filename: string
+          gmail_attachment_id?: string | null
+          id?: string
+          message_id: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          filename?: string
+          gmail_attachment_id?: string | null
+          id?: string
+          message_id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+        }
+        Relationships: []
+      }
       email_messages: {
         Row: {
           body_html: string | null

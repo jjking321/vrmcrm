@@ -263,3 +263,68 @@ export async function getAttachmentUrl(storagePath: string): Promise<string> {
   if (error || !data?.signedUrl) throw error ?? new Error('Could not sign URL');
   return data.signedUrl;
 }
+
+export interface ThreadContact {
+  label: string;
+  kind: 'owner' | 'realtor' | 'property' | 'unmatched';
+}
+
+/** Resolve a contact label per thread by inspecting matched messages. */
+export const useThreadContacts = (threadIds: string[]) => {
+  const sorted = [...threadIds].sort();
+  return useQuery({
+    queryKey: ['email-thread-contacts', sorted.join(',')],
+    enabled: sorted.length > 0,
+    queryFn: async () => {
+      const { data: msgs, error } = await supabase
+        .from('email_messages')
+        .select('thread_id, owner_id, realtor_id, property_id')
+        .in('thread_id', sorted);
+      if (error) throw error;
+
+      const ownerIds = new Set<string>();
+      const realtorIds = new Set<string>();
+      const propertyIds = new Set<string>();
+      (msgs ?? []).forEach((m: any) => {
+        if (m.owner_id) ownerIds.add(m.owner_id);
+        if (m.realtor_id) realtorIds.add(m.realtor_id);
+        if (m.property_id) propertyIds.add(m.property_id);
+      });
+
+      const [owners, realtors, properties] = await Promise.all([
+        ownerIds.size
+          ? supabase.from('owners').select('id, name, contact_name, property_id').in('id', Array.from(ownerIds))
+          : Promise.resolve({ data: [] as any[], error: null }),
+        realtorIds.size
+          ? supabase.from('realtors').select('id, name').in('id', Array.from(realtorIds))
+          : Promise.resolve({ data: [] as any[], error: null }),
+        propertyIds.size
+          ? supabase.from('properties').select('id, address').in('id', Array.from(propertyIds))
+          : Promise.resolve({ data: [] as any[], error: null }),
+      ]);
+
+      const ownerMap = new Map<string, any>((owners.data ?? []).map((o: any) => [o.id, o]));
+      const realtorMap = new Map<string, any>((realtors.data ?? []).map((r: any) => [r.id, r]));
+      const propMap = new Map<string, any>((properties.data ?? []).map((p: any) => [p.id, p]));
+
+      const result = new Map<string, ThreadContact>();
+      (msgs ?? []).forEach((m: any) => {
+        if (result.has(m.thread_id)) return;
+        if (m.owner_id && ownerMap.has(m.owner_id)) {
+          const o = ownerMap.get(m.owner_id);
+          const name = o.contact_name || o.name || 'Owner';
+          const prop = o.property_id ? propMap.get(o.property_id) : null;
+          result.set(m.thread_id, {
+            label: prop?.address ? `${name} · ${prop.address}` : name,
+            kind: 'owner',
+          });
+        } else if (m.realtor_id && realtorMap.has(m.realtor_id)) {
+          result.set(m.thread_id, { label: realtorMap.get(m.realtor_id).name || 'Realtor', kind: 'realtor' });
+        } else if (m.property_id && propMap.has(m.property_id)) {
+          result.set(m.thread_id, { label: propMap.get(m.property_id).address || 'Property', kind: 'property' });
+        }
+      });
+      return result;
+    },
+  });
+};

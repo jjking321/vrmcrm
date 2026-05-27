@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ViewMode, SavedList } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  Home, Building, Users, LayoutGrid, Settings, LogOut, 
+  Home, Building, Users, LayoutGrid, Settings, LogOut, Inbox,
   Upload, Plus, ChevronRight, ChevronDown, ListFilter, Trash2, BarChart3, Wrench, Ban, Phone, Mail, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'owners' as ViewMode, label: 'Owners', icon: Users, count: ownerCount },
     { id: 'realtors' as ViewMode, label: 'Realtors', icon: Building2, count: realtorCount },
     { id: 'kanban' as ViewMode, label: 'Pipeline', icon: LayoutGrid },
+    { id: 'inbox' as ViewMode, label: 'Inbox', icon: Inbox },
     { id: 'callLists' as ViewMode, label: 'Call Lists', icon: Phone },
     { id: 'mailingLists' as ViewMode, label: 'Mailing Lists', icon: Mail },
     { id: 'dataCleanup' as ViewMode, label: 'Data Tools', icon: Wrench },

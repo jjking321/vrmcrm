@@ -78,6 +78,110 @@ export type Database = {
           },
         ]
       }
+      bad_contact_data: {
+        Row: {
+          batch_id: string | null
+          company_id: string
+          created_at: string
+          data_type: string
+          flagged_at: string
+          flagged_by: string | null
+          id: string
+          mailing_list_id: string | null
+          normalized_value: string
+          notes: string | null
+          owner_id: string | null
+          property_id: string | null
+          reason: string
+          source: string | null
+          value: string
+        }
+        Insert: {
+          batch_id?: string | null
+          company_id: string
+          created_at?: string
+          data_type: string
+          flagged_at?: string
+          flagged_by?: string | null
+          id?: string
+          mailing_list_id?: string | null
+          normalized_value: string
+          notes?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          reason?: string
+          source?: string | null
+          value: string
+        }
+        Update: {
+          batch_id?: string | null
+          company_id?: string
+          created_at?: string
+          data_type?: string
+          flagged_at?: string
+          flagged_by?: string | null
+          id?: string
+          mailing_list_id?: string | null
+          normalized_value?: string
+          notes?: string | null
+          owner_id?: string | null
+          property_id?: string | null
+          reason?: string
+          source?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bad_contact_data_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "bad_data_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bad_data_batches: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          data_type: string
+          id: string
+          mailing_list_id: string | null
+          matched_count: number
+          source_label: string
+          total_rows: number
+          unmatched_count: number
+          uploaded_file_name: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          data_type: string
+          id?: string
+          mailing_list_id?: string | null
+          matched_count?: number
+          source_label: string
+          total_rows?: number
+          unmatched_count?: number
+          uploaded_file_name?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_type?: string
+          id?: string
+          mailing_list_id?: string | null
+          matched_count?: number
+          source_label?: string
+          total_rows?: number
+          unmatched_count?: number
+          uploaded_file_name?: string | null
+        }
+        Relationships: []
+      }
       call_list_items: {
         Row: {
           call_count: number | null

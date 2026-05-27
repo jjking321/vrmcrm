@@ -42,6 +42,8 @@ export const useOwnerProperties = (ownerName: string | null) => {
         const ownerData = Array.isArray(p.owners) ? p.owners[0] : p.owners;
         
         const owner: Owner = ownerData ? {
+          // @ts-expect-error - storing the owner row id on the legacy Owner type
+          id: ownerData.id,
           name: ownerData.name || '',
           email: ownerData.email || '',
           phone: ownerData.phone || '',

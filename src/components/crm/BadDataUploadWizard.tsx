@@ -29,6 +29,40 @@ interface MatchPreview {
   propertyId: string | null;
   source: string | null;
   matched: boolean;
+  matchedBy?: 'contact_id' | 'property_name' | 'address' | 'phone' | 'email' | null;
+}
+
+interface ParsedRecord {
+  /** The value being flagged (mailing address, phone, or email). */
+  value: string;
+  /** Optional ContactID hint (e.g. Postalytics VarField2 = owners.id). */
+  contactId?: string | null;
+  /** Optional property address hint (e.g. Postalytics VarField1). */
+  propertyAddress?: string | null;
+  /** Optional owner / company name hint (e.g. Postalytics Company column). */
+  ownerName?: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Minimal CSV row splitter that respects double-quoted fields. */
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      out.push(cur); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
 }
 
 export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({

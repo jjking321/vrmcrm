@@ -63,6 +63,23 @@ function findMatch(
   return null;
 }
 
+// Heuristic: is this message bulk/marketing/automated mail we should drop entirely
+// (rather than surface in the Unmatched triage queue)?
+const BULK_LOCAL_PART = /^(no-?reply|donot-?reply|notifications?|mailer-daemon|postmaster|bounce|alerts?|updates?|news(letter)?|marketing|hello|team|info|support|billing|receipts?)@/i;
+function isBulkMail(headers: any[], from?: { email?: string; name?: string } | null): boolean {
+  const getH = (n: string) => headers.find((h) => h.name?.toLowerCase() === n.toLowerCase())?.value;
+  if (getH('List-Unsubscribe')) return true;
+  if (getH('List-ID') || getH('List-Id')) return true;
+  const prec = (getH('Precedence') || '').toLowerCase();
+  if (prec === 'bulk' || prec === 'list' || prec === 'junk') return true;
+  const auto = (getH('Auto-Submitted') || '').toLowerCase();
+  if (auto && auto !== 'no') return true;
+  if (getH('X-Mailer-Daemon') || getH('Feedback-ID')) return true;
+  const fromEmail = from?.email?.toLowerCase() ?? '';
+  if (fromEmail && BULK_LOCAL_PART.test(fromEmail)) return true;
+  return false;
+}
+
 async function syncAccount(account: any) {
   const db = admin();
   const accessToken = await refreshAccessTokenIfNeeded(account);

@@ -45,6 +45,17 @@ export interface EmailMessage {
   property_id: string | null;
 }
 
+export interface EmailAttachment {
+  id: string;
+  message_id: string;
+  company_id: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string;
+  created_at: string;
+}
+
 export const useGmailAccounts = () => {
   const { company } = useAuth();
   return useQuery({
@@ -211,6 +222,7 @@ export const useSendEmail = () => {
       body: string;
       threadId?: string;
       accountId?: string;
+      attachments?: { storage_path: string; filename: string; mime_type?: string }[];
     }) => {
       const { data, error } = await supabase.functions.invoke('gmail-send', { body: payload });
       if (error) throw error;
@@ -220,6 +232,34 @@ export const useSendEmail = () => {
       qc.invalidateQueries({ queryKey: ['email-threads'] });
       qc.invalidateQueries({ queryKey: ['email-messages'] });
       qc.invalidateQueries({ queryKey: ['email-messages-entity'] });
+      qc.invalidateQueries({ queryKey: ['email-attachments'] });
     },
   });
 };
+
+/** Fetch attachments for a set of message ids. */
+export const useAttachmentsForMessages = (messageIds: string[]) => {
+  const sorted = [...messageIds].sort();
+  return useQuery({
+    queryKey: ['email-attachments', sorted.join(',')],
+    enabled: sorted.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_attachments')
+        .select('*')
+        .in('message_id', sorted)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as EmailAttachment[];
+    },
+  });
+};
+
+/** Generate a short-lived signed URL for an attachment. */
+export async function getAttachmentUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('email-attachments')
+    .createSignedUrl(storagePath, 300);
+  if (error || !data?.signedUrl) throw error ?? new Error('Could not sign URL');
+  return data.signedUrl;
+}

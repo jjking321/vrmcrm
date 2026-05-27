@@ -596,6 +596,10 @@ const MainApp: React.FC = () => {
       return <DataQualityView />;
     }
 
+    if (view === 'optOuts') {
+      return <MarketingOptOutsView />;
+    }
+
     if (view === 'realtors') {
       if (selectedRealtorId) {
         const realtor = realtors.find(r => r.id === selectedRealtorId);

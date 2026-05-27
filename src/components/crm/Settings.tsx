@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FieldDefinition, CustomFieldType, PipelineStage } from '@/types';
 import { Plus, Trash2, Database, Zap, CheckCircle, Eye, EyeOff, Users, Loader2, Key, Layers, ChevronUp, ChevronDown, Pencil, Copy, Link, Save, X, Mail } from 'lucide-react';
 import { EmailAccountsSettings } from './EmailAccountsSettings';
+import { EmailTemplatesSettings } from './EmailTemplatesSettings';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -95,7 +96,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const deleteStageMutation = useDeletePipelineStage();
   const reorderMutation = useReorderPipelineStages();
   
-  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations' | 'email'>('fields');
+  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations' | 'email' | 'templates'>('fields');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text' as CustomFieldType });
@@ -291,6 +292,16 @@ export const Settings: React.FC<SettingsProps> = ({
         >
           <Mail className="w-4 h-4" />
           Email Accounts
+        </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeTab === 'templates' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Mail className="w-4 h-4" />
+          Email Templates
         </button>
       </div>
 
@@ -882,6 +893,12 @@ export const Settings: React.FC<SettingsProps> = ({
       {activeTab === 'email' && (
         <div className="bg-card rounded-xl shadow-soft border border-border p-6">
           <EmailAccountsSettings />
+        </div>
+      )}
+
+      {activeTab === 'templates' && (
+        <div className="bg-card rounded-xl shadow-soft border border-border p-6">
+          <EmailTemplatesSettings />
         </div>
       )}
 

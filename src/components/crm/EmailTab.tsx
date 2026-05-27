@@ -9,11 +9,12 @@ import {
   getAttachmentUrl,
   type EmailAttachment,
 } from '@/hooks/useGmail';
+import type { MergeContext } from '@/hooks/useEmailTemplates';
+import { ComposeModal } from './ComposeModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Loader2, Send, Mail, Paperclip, X, Download, FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -161,11 +162,14 @@ interface EmailTabProps {
   title?: string;
   /** Height of the embedded inbox (e.g. '600px'). Default 600px. */
   height?: string;
+  /** Context used to resolve merge tags like {{owner.first_name}} in templates. */
+  mergeContext?: MergeContext;
 }
 
 export const EmailTab: React.FC<EmailTabProps> = ({
   ownerId, realtorId, propertyId, ownerIds, propertyIds,
   defaultRecipient, defaultSubject, title = 'Inbox', height = '600px',
+  mergeContext,
 }) => {
   const { company } = useAuth();
   const { data: entityMessages = [], isLoading } = useMessagesForEntity({
@@ -209,36 +213,8 @@ export const EmailTab: React.FC<EmailTabProps> = ({
   }, [threads, selectedThreadId]);
 
   const [composing, setComposing] = useState(false);
-  const [to, setTo] = useState(defaultRecipient ?? '');
-  const [subject, setSubject] = useState(defaultSubject ?? '');
-  const [body, setBody] = useState('');
   const [replyBody, setReplyBody] = useState('');
-  const [composeAttachments, setComposeAttachments] = useState<DraftAttachment[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
-
-  const handleSend = async () => {
-    if (!to.trim() || !subject.trim() || !body.trim()) {
-      toast.error('Fill in to, subject, and message');
-      return;
-    }
-    try {
-      await send.mutateAsync({
-        to,
-        subject,
-        body,
-        attachments: composeAttachments.map(({ storage_path, filename, mime_type }) => ({
-          storage_path, filename, mime_type,
-        })),
-      });
-      setComposing(false);
-      setSubject('');
-      setBody('');
-      setComposeAttachments([]);
-      toast.success('Email sent');
-    } catch (e: any) {
-      toast.error('Failed to send', { description: e.message });
-    }
-  };
 
   const handleReply = async () => {
     if (!lastMessage || (!replyBody.trim() && replyAttachments.length === 0)) return;
@@ -287,27 +263,13 @@ export const EmailTab: React.FC<EmailTabProps> = ({
         )}
       </div>
 
-      {composing && (
-        <div className="border-b border-border p-3 space-y-2 bg-muted/20">
-          <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="To" />
-          <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" />
-          <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={5} />
-          {company?.id && (
-            <AttachmentPicker
-              companyId={company.id}
-              attachments={composeAttachments}
-              onChange={setComposeAttachments}
-            />
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => { setComposing(false); setComposeAttachments([]); }}>Cancel</Button>
-            <Button size="sm" onClick={handleSend} disabled={send.isPending}>
-              {send.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-              Send
-            </Button>
-          </div>
-        </div>
-      )}
+      <ComposeModal
+        open={composing}
+        onOpenChange={setComposing}
+        defaultRecipient={defaultRecipient}
+        defaultSubject={defaultSubject}
+        mergeContext={mergeContext}
+      />
 
       <div className="flex" style={{ height }}>
         {/* Thread list */}

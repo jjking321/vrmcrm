@@ -188,6 +188,13 @@ export const RealtorDetail: React.FC<RealtorDetailProps> = ({ realtor, onBack })
             realtorId={realtor.id}
             defaultRecipient={realtor.email ?? ''}
             title="Emails"
+            mergeContext={{
+              realtor: {
+                name: realtor.name,
+                email: realtor.email ?? null,
+                phone: realtor.phone ?? null,
+              },
+            }}
           />
         </div>
       </div>

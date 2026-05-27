@@ -997,6 +997,8 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             }}
           />
 
+          <InternalNotes propertyId={property.id} />
+
           {/* Quick Call Log Section */}
           {callablePhones.length > 0 && (
             <div className="bg-card rounded-xl shadow-soft border border-border p-5">

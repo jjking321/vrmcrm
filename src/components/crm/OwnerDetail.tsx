@@ -526,6 +526,15 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Emails */}
+      <div className="mt-6">
+        <EmailTab
+          propertyIds={ownerProperties.map(p => p.id)}
+          defaultRecipient={owner.email || owner.emails?.[0]?.address || ''}
+          title="Emails"
+        />
+      </div>
     </div>
   );
 };

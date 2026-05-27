@@ -13,9 +13,10 @@ import { AttachmentPicker, MessageAttachments, type DraftAttachment } from './Em
 import { ComposeModal } from './ComposeModal';
 import { ReplyTools } from './ReplyTools';
 import { applyMergeTags } from '@/hooks/useEmailTemplates';
+import { LinkThreadPicker } from './LinkThreadPicker';
 
 export const Inbox: React.FC = () => {
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'unmatched'>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<DraftAttachment[]>([]);
@@ -28,7 +29,7 @@ export const Inbox: React.FC = () => {
   useRealtimeSubscription('email_messages', ['email-messages']);
 
   const { data: accounts = [] } = useGmailAccounts();
-  const { data: threads = [], isLoading } = useEmailThreads(filter);
+  const { data: threads = [], isLoading } = useEmailThreads(filter === 'unread' ? 'unread' : 'all');
   const { data: messages = [], isLoading: messagesLoading } = useThreadMessages(selectedThreadId);
   const sync = useSyncGmail();
   const send = useSendEmail();
@@ -38,8 +39,12 @@ export const Inbox: React.FC = () => {
 
   const visibleThreads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return threads;
-    return threads.filter((t) => {
+    let list = threads;
+    if (filter === 'unmatched') {
+      list = list.filter((t) => !contactMap?.get(t.id));
+    }
+    if (!q) return list;
+    return list.filter((t) => {
       const c = contactMap?.get(t.id);
       return (
         (t.subject ?? '').toLowerCase().includes(q) ||
@@ -47,7 +52,7 @@ export const Inbox: React.FC = () => {
         (c?.label ?? '').toLowerCase().includes(q)
       );
     });
-  }, [threads, contactMap, searchQuery]);
+  }, [threads, contactMap, searchQuery, filter]);
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
   const lastMessage = messages[messages.length - 1];
@@ -122,6 +127,11 @@ export const Inbox: React.FC = () => {
               onClick={() => setFilter('unread')}
               className={cn('px-3 py-1.5', filter === 'unread' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
             >Unread</button>
+            <button
+              onClick={() => setFilter('unmatched')}
+              className={cn('px-3 py-1.5 border-l border-border', filter === 'unmatched' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+              title="Threads not yet linked to an owner, realtor, or property"
+            >Unmatched</button>
           </div>
           <Button variant="outline" size="sm" onClick={handleSync} disabled={sync.isPending}>
             {sync.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
@@ -198,8 +208,20 @@ export const Inbox: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="p-4 border-b border-border">
-                <h2 className="font-semibold">{selectedThread.subject || '(no subject)'}</h2>
+              <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold truncate">{selectedThread.subject || '(no subject)'}</h2>
+                  {contactMap?.get(selectedThread.id)?.label && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      Linked to {contactMap?.get(selectedThread.id)?.label}
+                    </p>
+                  )}
+                </div>
+                <LinkThreadPicker
+                  threadId={selectedThread.id}
+                  currentKind={contactMap?.get(selectedThread.id)?.kind ?? 'unmatched'}
+                  currentLabel={contactMap?.get(selectedThread.id)?.label}
+                />
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messagesLoading ? (

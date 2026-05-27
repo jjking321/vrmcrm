@@ -328,3 +328,86 @@ export const useThreadContacts = (threadIds: string[]) => {
     },
   });
 };
+
+/** Quick multi-entity search for the "link thread" picker. */
+export type EntitySearchHit =
+  | { kind: 'owner'; id: string; label: string; sublabel?: string }
+  | { kind: 'realtor'; id: string; label: string; sublabel?: string }
+  | { kind: 'property'; id: string; label: string; sublabel?: string };
+
+export const useEntitySearch = (query: string) => {
+  const { company } = useAuth();
+  const q = query.trim();
+  return useQuery({
+    queryKey: ['entity-search', company?.id, q],
+    enabled: !!company?.id && q.length >= 2,
+    queryFn: async (): Promise<EntitySearchHit[]> => {
+      const like = `%${q}%`;
+      const [owners, realtors, properties] = await Promise.all([
+        supabase
+          .from('owners')
+          .select('id, name, contact_name, email, phone')
+          .or(`name.ilike.${like},contact_name.ilike.${like},email.ilike.${like},phone.ilike.${like}`)
+          .limit(8),
+        supabase
+          .from('realtors')
+          .select('id, name, email, phone')
+          .or(`name.ilike.${like},email.ilike.${like},phone.ilike.${like}`)
+          .limit(8),
+        supabase
+          .from('properties')
+          .select('id, address, city, state')
+          .or(`address.ilike.${like},city.ilike.${like}`)
+          .limit(8),
+      ]);
+      const hits: EntitySearchHit[] = [];
+      (owners.data ?? []).forEach((o: any) => hits.push({
+        kind: 'owner', id: o.id,
+        label: o.contact_name || o.name || 'Owner',
+        sublabel: o.email || o.phone || undefined,
+      }));
+      (realtors.data ?? []).forEach((r: any) => hits.push({
+        kind: 'realtor', id: r.id,
+        label: r.name || 'Realtor',
+        sublabel: r.email || r.phone || undefined,
+      }));
+      (properties.data ?? []).forEach((p: any) => hits.push({
+        kind: 'property', id: p.id,
+        label: p.address || 'Property',
+        sublabel: [p.city, p.state].filter(Boolean).join(', ') || undefined,
+      }));
+      return hits;
+    },
+  });
+};
+
+/** Link or relink every message in a thread to the chosen entity. */
+export const useLinkThread = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { threadId: string; target: { kind: 'owner' | 'realtor' | 'property'; id: string } | null }) => {
+      const patch: Record<string, any> = {
+        owner_id: null,
+        realtor_id: null,
+        property_id: null,
+        match_status: input.target ? 'matched' : 'unmatched',
+      };
+      if (input.target) {
+        if (input.target.kind === 'owner') patch.owner_id = input.target.id;
+        if (input.target.kind === 'realtor') patch.realtor_id = input.target.id;
+        if (input.target.kind === 'property') patch.property_id = input.target.id;
+      }
+      const { error } = await supabase
+        .from('email_messages')
+        .update(patch)
+        .eq('thread_id', input.threadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['email-thread-contacts'] });
+      qc.invalidateQueries({ queryKey: ['email-messages'] });
+      qc.invalidateQueries({ queryKey: ['email-messages-entity'] });
+      qc.invalidateQueries({ queryKey: ['email-threads'] });
+    },
+  });
+};

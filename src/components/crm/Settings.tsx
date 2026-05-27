@@ -94,7 +94,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const deleteStageMutation = useDeletePipelineStage();
   const reorderMutation = useReorderPipelineStages();
   
-  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations'>('fields');
+  const [activeTab, setActiveTab] = useState<'fields' | 'pipeline' | 'team' | 'integrations' | 'email'>('fields');
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text' as CustomFieldType });
@@ -280,6 +280,16 @@ export const Settings: React.FC<SettingsProps> = ({
         >
           <Zap className="w-4 h-4" />
           Integrations
+        </button>
+        <button
+          onClick={() => setActiveTab('email')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all",
+            activeTab === 'email' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Mail className="w-4 h-4" />
+          Email Accounts
         </button>
       </div>
 

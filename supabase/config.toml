@@ -41,3 +41,9 @@ verify_jwt = false
 
 [functions.gmail-watch]
 verify_jwt = false
+
+[functions.email-track-open]
+verify_jwt = false
+
+[functions.email-track-click]
+verify_jwt = false

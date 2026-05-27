@@ -184,6 +184,26 @@ async function syncAccount(account: any) {
         .select('id')
         .single();
 
+      // Reply tracking: when an inbound message lands, mark the most recent
+      // outbound message in the same thread as replied (first reply only).
+      if (direction === 'inbound' && msgRow?.id) {
+        const { data: prevOutbound } = await db
+          .from('email_messages')
+          .select('id, replied_at')
+          .eq('thread_id', threadRow.id)
+          .eq('direction', 'outbound')
+          .is('replied_at', null)
+          .lt('sent_at', sentAt)
+          .order('sent_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (prevOutbound?.id) {
+          await db.from('email_messages')
+            .update({ replied_at: sentAt })
+            .eq('id', prevOutbound.id);
+        }
+      }
+
       // Attachments: download + upload to storage + insert metadata.
       // Skip if we already have attachments for this message (idempotent re-sync).
       if (msgRow?.id) {

@@ -14,6 +14,31 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function b64urlEncode(s: string): string {
+  return btoa(unescape(encodeURIComponent(s)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Convert plain text body to HTML with auto-linked URLs wrapped in tracking redirects.
+function plainBodyToTrackedHtml(text: string, trackingBase: string, trackingId: string): string {
+  const escaped = escapeHtml(text);
+  // Match http(s) URLs (no surrounding whitespace). Stops at common trailing punctuation.
+  const urlRe = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
+  const linked = escaped.replace(urlRe, (m) => {
+    const tracked = `${trackingBase}/email-track-click?t=${trackingId}&u=${b64urlEncode(m)}`;
+    return `<a href="${tracked}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:underline">${m}</a>`;
+  });
+  return linked;
+}
+
+// Rewrite href attributes inside an existing HTML fragment.
+function rewriteHtmlLinks(html: string, trackingBase: string, trackingId: string): string {
+  return html.replace(/href="(https?:\/\/[^"]+)"/gi, (_m, url) => {
+    const tracked = `${trackingBase}/email-track-click?t=${trackingId}&u=${b64urlEncode(url)}`;
+    return `href="${tracked}"`;
+  });
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>(\n)?/gi, '\n')
@@ -209,11 +234,19 @@ Deno.serve(async (req) => {
     const textBody = sigHtml
       ? `${bodyTrimmed}\r\n\r\n-- \r\n${stripHtml(sigHtml)}`
       : body;
-    const htmlBodyInner = `<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${escapeHtml(bodyTrimmed)}</div>`;
+
+    // Generate tracking ID for opens/clicks. Always send HTML so the pixel works.
+    const trackingId = crypto.randomUUID();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const trackingBase = `${supabaseUrl}/functions/v1`;
+
+    const htmlBodyText = plainBodyToTrackedHtml(bodyTrimmed, trackingBase, trackingId);
+    const htmlBodyInner = `<div style="white-space:pre-wrap;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">${htmlBodyText}</div>`;
     const htmlSignature = sigHtml
-      ? `<div style="color:#888;font-size:12px;margin-top:16px">-- </div><div>${sigHtml}</div>`
+      ? `<div style="color:#888;font-size:12px;margin-top:16px">-- </div><div>${rewriteHtmlLinks(sigHtml, trackingBase, trackingId)}</div>`
       : '';
-    const htmlBody = `<!doctype html><html><body>${htmlBodyInner}${htmlSignature}</body></html>`;
+    const trackingPixel = `<img src="${trackingBase}/email-track-open?t=${trackingId}" width="1" height="1" alt="" style="display:none;border:0;outline:0;width:1px;height:1px" />`;
+    const htmlBody = `<!doctype html><html><body>${htmlBodyInner}${htmlSignature}${trackingPixel}</body></html>`;
 
     const headers: Record<string, string> = {
       To: Array.isArray(to) ? to.join(', ') : to,
@@ -222,11 +255,10 @@ Deno.serve(async (req) => {
     };
     if (cc) headers.Cc = Array.isArray(cc) ? cc.join(', ') : cc;
 
+    // Always include HTML part so tracking pixel and links work.
     const raw = attachments.length > 0
-      ? encodeRawWithAttachments(headers, textBody, sigHtml ? htmlBody : null, attachments)
-      : sigHtml
-        ? encodeRawMultipart(headers, textBody, htmlBody)
-        : encodeRawPlain(headers, textBody);
+      ? encodeRawWithAttachments(headers, textBody, htmlBody, attachments)
+      : encodeRawMultipart(headers, textBody, htmlBody);
     const sendBody: any = { raw };
     if (threadId) sendBody.threadId = threadId;
 
@@ -302,7 +334,7 @@ Deno.serve(async (req) => {
           cc_emails: ccObjs,
           subject,
           body_text: textBody,
-          body_html: sigHtml ? htmlBody : null,
+          body_html: htmlBody,
           snippet: textBody.slice(0, 200),
           sent_at: sentAt,
           direction: 'outbound',
@@ -311,6 +343,7 @@ Deno.serve(async (req) => {
           realtor_id: realtorId,
           property_id: propertyId,
           match_status: ownerId || realtorId ? 'matched' : 'unmatched',
+          tracking_id: trackingId,
         }, { onConflict: 'gmail_account_id,gmail_message_id' })
           .select('id')
           .single();

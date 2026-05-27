@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useMailingLists, useDeleteMailingList, useMailingListItems, useUpdateMailingListExport } from '@/hooks/useMailingLists';
 import { Button } from '@/components/ui/button';
-import { Mail, Trash2, Download, Eye, Loader2, ArrowLeft } from 'lucide-react';
+import { Mail, Trash2, Download, Eye, Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MailingListTable } from './MailingListTable';
 import { MailingListFilterBar } from './MailingListFilterBar';
 import { getBestMailingName } from '@/lib/ownerUtils';
 import { deriveMailingFields } from '@/lib/mailingAddress';
 import { useMailingListFiltering } from '@/hooks/useMailingListFiltering';
+import { BadDataUploadWizard } from './BadDataUploadWizard';
 import { format } from 'date-fns';
 
 export const MailingListsView: React.FC = () => {
@@ -19,6 +20,7 @@ export const MailingListsView: React.FC = () => {
   const { data: listItems = [], isLoading: itemsLoading } = useMailingListItems(selectedListId);
   
   const selectedList = mailingLists.find(l => l.id === selectedListId);
+  const [rtsWizardOpen, setRtsWizardOpen] = useState(false);
   
   // Initialize filtering hook
   const {
@@ -35,6 +37,7 @@ export const MailingListsView: React.FC = () => {
     removeFilterRule,
     clearFilters,
     hasActiveFilters,
+    badExcludedCount,
   } = useMailingListFiltering(listItems);
   
   const handleDelete = (id: string, name: string, e: React.MouseEvent) => {
@@ -119,16 +122,25 @@ export const MailingListsView: React.FC = () => {
                 {selectedList.exportedAt && (
                   <> · Last exported {format(new Date(selectedList.exportedAt), 'MMM d, yyyy')}</>
                 )}
+                {badExcludedCount > 0 && (
+                  <> · <span className="text-amber-700">{badExcludedCount} excluded as returned</span></>
+                )}
               </p>
             </div>
           </div>
-          <Button 
-            onClick={() => handleExportCSV(selectedListId, selectedList.name)}
-            disabled={filteredItems.length === 0}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV{hasActiveFilters && ` (${filteredCount})`}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setRtsWizardOpen(true)}>
+              <ShieldAlert className="w-4 h-4 mr-2" />
+              Mark returned addresses
+            </Button>
+            <Button
+              onClick={() => handleExportCSV(selectedListId, selectedList.name)}
+              disabled={filteredItems.length === 0}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV{hasActiveFilters && ` (${filteredCount})`}
+            </Button>
+          </div>
         </div>
         
         {/* Search and filter bar */}
@@ -163,6 +175,15 @@ export const MailingListsView: React.FC = () => {
         ) : (
           <MailingListTable items={filteredItems.map(d => d.item)} />
         )}
+
+        <BadDataUploadWizard
+          isOpen={rtsWizardOpen}
+          onClose={() => setRtsWizardOpen(false)}
+          defaultType="mailing_address"
+          defaultReason="returned_to_sender"
+          defaultSourceLabel={`${selectedList.name} — returned to sender`}
+          mailingListId={selectedListId}
+        />
       </div>
     );
   }

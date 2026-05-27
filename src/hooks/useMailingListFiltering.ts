@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { MailingListItem, FilterRule, FilterOperator } from '@/types';
 import { deriveMailingFields } from '@/lib/mailingAddress';
 import { getBestMailingName } from '@/lib/ownerUtils';
+import { useBadDataIndex } from './useBadContactData';
+import { normalizeAddressForMatch } from '@/lib/exclusionUtils';
 
 export interface DerivedMailingItem {
   item: MailingListItem;
@@ -22,6 +24,8 @@ export function useMailingListFiltering(items: MailingListItem[]) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
   const [matchType, setMatchType] = useState<'and' | 'or'>('and');
+  const [excludeBadAddresses, setExcludeBadAddresses] = useState(true);
+  const badData = useBadDataIndex();
 
   // Derive mailing fields for each item once
   const derivedItems = useMemo((): DerivedMailingItem[] => {
@@ -48,12 +52,22 @@ export function useMailingListFiltering(items: MailingListItem[]) {
       });
   }, [items]);
 
+  // Auto-exclude addresses flagged as bad (returned-to-sender, etc.)
+  const badExcludedItems = useMemo(() => {
+    if (!excludeBadAddresses || badData.addresses.size === 0) return derivedItems;
+    return derivedItems.filter(d => {
+      const norm = normalizeAddressForMatch(d.mailingAddress, d.mailingCity, d.mailingState);
+      return !badData.addresses.has(norm);
+    });
+  }, [derivedItems, badData.addresses, excludeBadAddresses]);
+  const badExcludedCount = derivedItems.length - badExcludedItems.length;
+
   // Apply search filter
   const searchFiltered = useMemo(() => {
-    if (!searchTerm.trim()) return derivedItems;
+    if (!searchTerm.trim()) return badExcludedItems;
 
     const term = searchTerm.toLowerCase().trim();
-    return derivedItems.filter(d => {
+    return badExcludedItems.filter(d => {
       return (
         d.contactName.toLowerCase().includes(term) ||
         d.mailingAddress.toLowerCase().includes(term) ||
@@ -63,7 +77,7 @@ export function useMailingListFiltering(items: MailingListItem[]) {
         d.propertyAddress.toLowerCase().includes(term)
       );
     });
-  }, [derivedItems, searchTerm]);
+  }, [badExcludedItems, searchTerm]);
 
   // Apply filter rules
   const filteredItems = useMemo(() => {
@@ -123,6 +137,9 @@ export function useMailingListFiltering(items: MailingListItem[]) {
     removeFilterRule,
     clearFilters,
     hasActiveFilters,
+    excludeBadAddresses,
+    setExcludeBadAddresses,
+    badExcludedCount,
   };
 }
 

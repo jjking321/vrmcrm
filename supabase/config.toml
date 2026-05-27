@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.postalytics-webhook]
 verify_jwt = false
+
+[functions.gmail-oauth-callback]
+verify_jwt = false
+
+[functions.gmail-sync]
+verify_jwt = false

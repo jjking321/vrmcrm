@@ -188,11 +188,17 @@ async function syncAccount(account: any) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    let accountId: string | undefined;
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        accountId = body?.account_id;
+      } catch (_) {}
+    }
     const db = admin();
-    const { data: accounts, error } = await db
-      .from('gmail_accounts')
-      .select('*')
-      .eq('is_active', true);
+    let q = db.from('gmail_accounts').select('*').eq('is_active', true);
+    if (accountId) q = q.eq('id', accountId);
+    const { data: accounts, error } = await q;
     if (error) throw error;
 
     const results = [];

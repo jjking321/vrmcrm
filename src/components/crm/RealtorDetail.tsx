@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import ActivityLog from './ActivityLog';
 import { EmailTab } from './EmailTab';
+import { InternalNotes } from './InternalNotes';
 
 interface RealtorDetailProps {
   realtor: Realtor;
@@ -196,6 +197,7 @@ export const RealtorDetail: React.FC<RealtorDetailProps> = ({ realtor, onBack })
               },
             }}
           />
+          <InternalNotes realtorId={realtor.id} />
         </div>
       </div>
     </div>

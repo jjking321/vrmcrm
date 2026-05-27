@@ -17,6 +17,7 @@ import {
 import { useOwnerProperties } from '@/hooks/useOwnerProperties';
 import { useOwnerActivities } from '@/hooks/useOwnerActivities';
 import { EmailTab } from './EmailTab';
+import { InternalNotes } from './InternalNotes';
 
 interface OwnerDetailProps {
   ownerName: string;
@@ -543,6 +544,12 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
           }}
         />
       </div>
+
+      {(owner as any).id && (
+        <div className="mt-6">
+          <InternalNotes ownerId={(owner as any).id} />
+        </div>
+      )}
     </div>
   );
 };

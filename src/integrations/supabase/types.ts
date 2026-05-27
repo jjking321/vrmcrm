@@ -312,6 +312,51 @@ export type Database = {
         }
         Relationships: []
       }
+      email_drafts: {
+        Row: {
+          body: string
+          cc_emails: Json
+          company_id: string
+          created_at: string
+          created_by: string | null
+          gmail_account_id: string | null
+          id: string
+          subject: string
+          thread_id: string
+          to_emails: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body?: string
+          cc_emails?: Json
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          gmail_account_id?: string | null
+          id?: string
+          subject?: string
+          thread_id: string
+          to_emails?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          cc_emails?: Json
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          gmail_account_id?: string | null
+          id?: string
+          subject?: string
+          thread_id?: string
+          to_emails?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       email_events: {
         Row: {
           company_id: string
@@ -432,6 +477,45 @@ export type Database = {
           thread_id?: string
           to_emails?: Json | null
           tracking_id?: string | null
+        }
+        Relationships: []
+      }
+      email_notes: {
+        Row: {
+          body: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          owner_id: string | null
+          property_id: string | null
+          realtor_id: string | null
+          thread_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id?: string | null
+          property_id?: string | null
+          realtor_id?: string | null
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          owner_id?: string | null
+          property_id?: string | null
+          realtor_id?: string | null
+          thread_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

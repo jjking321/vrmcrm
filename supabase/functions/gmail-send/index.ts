@@ -66,6 +66,92 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: data }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Persist outbound message + thread so it appears immediately in the UI
+    try {
+      const toArr = Array.isArray(to) ? to : [to];
+      const ccArr = cc ? (Array.isArray(cc) ? cc : [cc]) : [];
+      const toObjs = toArr.map((e: string) => ({ email: e }));
+      const ccObjs = ccArr.map((e: string) => ({ email: e }));
+      const participants = [account.email_address, ...toArr, ...ccArr];
+      const sentAt = new Date().toISOString();
+
+      // Match against owners/realtors for this company
+      const recipients = [...toArr, ...ccArr].map((e: string) => e.toLowerCase().trim());
+      let ownerId: string | null = null;
+      let realtorId: string | null = null;
+      let propertyId: string | null = null;
+      if (recipients.length) {
+        const { data: ownerMatches } = await db
+          .from('owners')
+          .select('id, property_id, email')
+          .eq('company_id', account.company_id)
+          .in('email', recipients)
+          .limit(1);
+        if (ownerMatches && ownerMatches[0]) {
+          ownerId = ownerMatches[0].id;
+          propertyId = ownerMatches[0].property_id;
+        }
+        const { data: realtorMatches } = await db
+          .from('realtors')
+          .select('id, email')
+          .eq('company_id', account.company_id)
+          .in('email', recipients)
+          .limit(1);
+        if (realtorMatches && realtorMatches[0]) realtorId = realtorMatches[0].id;
+      }
+
+      const { data: threadRow } = await db
+        .from('email_threads')
+        .upsert({
+          gmail_account_id: account.id,
+          company_id: account.company_id,
+          gmail_thread_id: data.threadId,
+          subject,
+          snippet: body.slice(0, 200),
+          participants,
+          last_message_at: sentAt,
+          is_read: true,
+        }, { onConflict: 'gmail_account_id,gmail_thread_id' })
+        .select('id')
+        .single();
+
+      if (threadRow) {
+        await db.from('email_messages').upsert({
+          thread_id: threadRow.id,
+          gmail_account_id: account.id,
+          company_id: account.company_id,
+          gmail_message_id: data.id,
+          from_email: account.email_address,
+          from_name: null,
+          to_emails: toObjs,
+          cc_emails: ccObjs,
+          subject,
+          body_text: body,
+          body_html: null,
+          snippet: body.slice(0, 200),
+          sent_at: sentAt,
+          direction: 'outbound',
+          is_read: true,
+          owner_id: ownerId,
+          realtor_id: realtorId,
+          property_id: propertyId,
+          match_status: ownerId || realtorId ? 'matched' : 'unmatched',
+        }, { onConflict: 'gmail_account_id,gmail_message_id' });
+
+        await db.from('activity_logs').insert({
+          company_id: account.company_id,
+          type: 'email',
+          content: subject || body.slice(0, 80),
+          owner_name: account.email_address,
+          property_id: propertyId,
+          realtor_id: realtorId,
+          date: sentAt,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to persist outbound message', e);
+    }
+
     return new Response(JSON.stringify({ ok: true, messageId: data.id, threadId: data.threadId }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'unknown' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

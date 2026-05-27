@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useEmailThreads, useThreadMessages, useSendEmail, useSyncGmail, useGmailAccounts } from '@/hooks/useGmail';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Mail, RefreshCw, Inbox as InboxIcon, Send } from 'lucide-react';
@@ -11,6 +12,9 @@ export const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
+
+  useRealtimeSubscription('email_threads', ['email-threads']);
+  useRealtimeSubscription('email_messages', ['email-messages']);
 
   const { data: accounts = [] } = useGmailAccounts();
   const { data: threads = [], isLoading } = useEmailThreads(filter);

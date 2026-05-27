@@ -129,24 +129,97 @@ export const BadDataUploadWizard: React.FC<BadDataUploadWizardProps> = ({
     setFileName(file.name);
   };
 
-  const parseValues = (): string[] => {
-    const values: string[] = [];
-    const lines = rawText.split(/\r?\n/);
+  const parseRecords = (): ParsedRecord[] => {
+    const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return [];
+
+    // Detect a CSV with a header row by checking for a comma + known header tokens.
+    const headerLine = lines[0];
+    const looksLikeCsv = headerLine.includes(',') && /[A-Za-z]/.test(headerLine);
+    if (looksLikeCsv) {
+      const headers = splitCsvLine(headerLine).map(h => h.toLowerCase());
+      const idx = (name: string) => headers.findIndex(h => h === name.toLowerCase());
+
+      // Postalytics return-file shape detection
+      const isPostalytics =
+        idx('directmailevent') >= 0 &&
+        idx('varfield1') >= 0 &&
+        idx('varfield2') >= 0;
+
+      // Generic CSV with at least an address column
+      const hasAddressCols = idx('address') >= 0;
+
+      if (isPostalytics || hasAddressCols) {
+        const cAddr = idx('address');
+        const cCity = idx('city');
+        const cState = idx('state');
+        const cZip = idx('zip');
+        const cEmail = idx('emailid') >= 0 ? idx('emailid') : idx('email');
+        const cPhone = idx('phone');
+        const cMobile = idx('mobile');
+        const cCompany = idx('company');
+        const cFirst = idx('firstname');
+        const cLast = idx('lastname');
+        const cVar1 = idx('varfield1'); // property address
+        const cVar2 = idx('varfield2'); // contact id (owners.id)
+        const cEvent = idx('directmailevent');
+
+        const recs: ParsedRecord[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = splitCsvLine(lines[i]);
+          if (cols.length === 0) continue;
+
+          // For Postalytics: only include rows that actually bounced
+          if (cEvent >= 0 && reason === 'returned_to_sender') {
+            const ev = (cols[cEvent] || '').toLowerCase();
+            if (ev && !ev.includes('return')) continue;
+          }
+
+          const contactIdRaw = cVar2 >= 0 ? (cols[cVar2] || '').trim() : '';
+          const contactId = UUID_RE.test(contactIdRaw) ? contactIdRaw : null;
+          const propertyAddress = cVar1 >= 0 ? (cols[cVar1] || '').trim() || null : null;
+          const ownerName =
+            (cCompany >= 0 ? (cols[cCompany] || '').trim() : '') ||
+            [cFirst >= 0 ? cols[cFirst] : '', cLast >= 0 ? cols[cLast] : ''].filter(Boolean).join(' ').trim() ||
+            null;
+
+          let value = '';
+          if (dataType === 'mailing_address') {
+            const parts = [
+              cAddr >= 0 ? cols[cAddr] : '',
+              cCity >= 0 ? cols[cCity] : '',
+              cState >= 0 ? cols[cState] : '',
+              cZip >= 0 ? cols[cZip] : '',
+            ].map(s => (s || '').trim()).filter(Boolean);
+            value = parts.join(', ');
+          } else if (dataType === 'phone') {
+            value = (cPhone >= 0 ? cols[cPhone] : '') || (cMobile >= 0 ? cols[cMobile] : '') || '';
+          } else if (dataType === 'email') {
+            value = cEmail >= 0 ? cols[cEmail] || '' : '';
+          }
+          value = value.trim();
+          if (!value) continue;
+
+          recs.push({ value, contactId, propertyAddress, ownerName });
+        }
+        return recs;
+      }
+    }
+
+    // Fallback: treat each line as a raw value (legacy paste behavior)
+    const recs: ParsedRecord[] = [];
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      // For CSV-style, take the first non-empty field (or join address fields)
       if (dataType === 'mailing_address') {
-        // Strip surrounding quotes from CSV cells but keep commas (full address is fine here)
-        const cleaned = trimmed.replace(/^"|"$/g, '');
-        values.push(cleaned);
+        recs.push({ value: trimmed.replace(/^"|"$/g, '') });
       } else {
-        // For phone/email: split on common separators
-        const parts = trimmed.split(/[,;\t]/).map(p => p.trim().replace(/^"|"$/g, '')).filter(Boolean);
-        for (const p of parts) values.push(p);
+        for (const p of trimmed.split(/[,;\t]/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean)) {
+          recs.push({ value: p });
+        }
       }
     }
-    return values;
+    return recs;
   };
 
   const runMatching = async () => {

@@ -975,6 +975,14 @@ const PropertyDetail: React.FC<PropertyDetailProps> = ({
             currentPropertyId={property.id}
           />
 
+          {/* Emails for this property */}
+          <EmailTab
+            propertyId={property.id}
+            defaultRecipient={property.owner.email || property.owner.emails?.[0]?.address || ''}
+            defaultSubject={property.address ? `Re: ${property.address}` : ''}
+            title="Emails"
+          />
+
           {/* Quick Call Log Section */}
           {callablePhones.length > 0 && (
             <div className="bg-card rounded-xl shadow-soft border border-border p-5">

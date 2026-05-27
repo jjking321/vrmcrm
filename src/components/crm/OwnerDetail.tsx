@@ -329,9 +329,12 @@ export const OwnerDetail: React.FC<OwnerDetailProps> = ({
                 <div className="pt-3 border-t border-border">
                   <div className="flex items-start gap-3">
                     <Home className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-xs text-muted-foreground mb-0.5">Mailing Address</p>
-                      <span className="text-sm text-foreground">{mailingAddr}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-foreground">{mailingAddr}</span>
+                        <OptOutToggle channel="mail" value={mailingAddr} ownerId={(owner as any)?.id} compact />
+                      </div>
                     </div>
                   </div>
                 </div>

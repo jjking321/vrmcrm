@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
           company_id: account.company_id,
           gmail_thread_id: data.threadId,
           subject,
-          snippet: body.slice(0, 200),
+          snippet: finalBody.slice(0, 200),
           participants,
           last_message_at: sentAt,
           is_read: true,

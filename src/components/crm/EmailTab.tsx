@@ -10,17 +10,26 @@ interface EmailTabProps {
   ownerId?: string;
   realtorId?: string;
   propertyId?: string;
+  ownerIds?: string[];
+  propertyIds?: string[];
   defaultRecipient?: string;
+  defaultSubject?: string;
+  title?: string;
 }
 
-export const EmailTab: React.FC<EmailTabProps> = ({ ownerId, realtorId, propertyId, defaultRecipient }) => {
-  const { data: messages = [], isLoading } = useMessagesForEntity({ ownerId, realtorId, propertyId });
+export const EmailTab: React.FC<EmailTabProps> = ({
+  ownerId, realtorId, propertyId, ownerIds, propertyIds,
+  defaultRecipient, defaultSubject, title = 'Emails',
+}) => {
+  const { data: messages = [], isLoading } = useMessagesForEntity({
+    ownerId, realtorId, propertyId, ownerIds, propertyIds,
+  });
   const { data: accounts = [] } = useGmailAccounts();
   const send = useSendEmail();
 
   const [composing, setComposing] = useState(false);
   const [to, setTo] = useState(defaultRecipient ?? '');
-  const [subject, setSubject] = useState('');
+  const [subject, setSubject] = useState(defaultSubject ?? '');
   const [body, setBody] = useState('');
 
   const handleSend = async () => {
@@ -41,21 +50,26 @@ export const EmailTab: React.FC<EmailTabProps> = ({ ownerId, realtorId, property
 
   if (accounts.length === 0) {
     return (
-      <div className="p-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-md">
-        Connect a Gmail account in Settings → Email Accounts to send and view emails.
+      <div className="bg-card rounded-xl border border-border shadow-soft p-5">
+        <h2 className="text-lg font-semibold text-foreground mb-2">{title}</h2>
+        <p className="text-sm text-muted-foreground">
+          Connect a Gmail account in Settings → Email Accounts to send and view emails.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
+    <div className="bg-card rounded-xl border border-border shadow-soft overflow-hidden">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         {!composing && (
-          <Button size="sm" onClick={() => setComposing(true)}>
+          <Button size="sm" variant="outline" onClick={() => setComposing(true)}>
             <Mail className="w-4 h-4 mr-2" /> Compose
           </Button>
         )}
       </div>
+      <div className="p-4 space-y-4">
 
       {composing && (
         <div className="border border-border rounded-md p-3 space-y-2 bg-card">
@@ -75,7 +89,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({ ownerId, realtorId, property
       {isLoading ? (
         <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : messages.length === 0 ? (
-        <div className="p-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-md">
+        <div className="p-4 text-center text-sm text-muted-foreground border border-dashed border-border rounded-md">
           No emails yet.
         </div>
       ) : (
@@ -95,6 +109,7 @@ export const EmailTab: React.FC<EmailTabProps> = ({ ownerId, realtorId, property
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 };

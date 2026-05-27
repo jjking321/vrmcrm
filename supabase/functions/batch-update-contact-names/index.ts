@@ -47,8 +47,33 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
+    // Authenticate the caller
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const authClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: userData, error: userErr } = await authClient.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: profile } = await supabase
+      .from("profiles").select("company_id").eq("id", userData.user.id).maybeSingle();
+    const companyId = profile?.company_id;
+    if (!companyId) {
+      return new Response(JSON.stringify({ error: "No company" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const { records } = await req.json() as { records: UpdateRecord[] };
 
@@ -67,10 +92,11 @@ serve(async (req) => {
     let notFound = 0;
     let errors = 0;
 
-    // Fetch all properties and owners for matching
+    // Fetch properties and owners for matching (scoped to caller's company)
     const { data: properties, error: propError } = await supabase
       .from("properties")
-      .select("id, address, city");
+      .select("id, address, city")
+      .eq("company_id", companyId);
 
     if (propError) {
       console.error("Error fetching properties:", propError);
@@ -82,7 +108,8 @@ serve(async (req) => {
 
     const { data: owners, error: ownerError } = await supabase
       .from("owners")
-      .select("id, property_id, owners, name");
+      .select("id, property_id, owners, name")
+      .eq("company_id", companyId);
 
     if (ownerError) {
       console.error("Error fetching owners:", ownerError);
@@ -185,7 +212,8 @@ serve(async (req) => {
       const { error: updateError } = await supabase
         .from("owners")
         .update({ contact_name: record.contactName })
-        .eq("id", ownerRecord.id);
+        .eq("id", ownerRecord.id)
+        .eq("company_id", companyId);
 
       if (updateError) {
         results.push({

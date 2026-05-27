@@ -1,3 +1,4 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { admin, refreshAccessTokenIfNeeded, parseAddressHeader, extractBodyParts, extractAttachments, fetchAttachmentBytes } from '../_shared/gmail.ts';
 
 const corsHeaders = {
@@ -275,6 +276,39 @@ async function syncAccount(account: any) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    // Require either the service-role bearer (internal/webhook calls) or an authenticated user.
+    // Authenticated users may only sync gmail_accounts within their own company.
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    let isService = !!token && token === serviceKey;
+    let callerCompanyId: string | null = null;
+    if (!isService) {
+      if (!token) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!;
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData, error: userErr } = await authClient.auth.getUser();
+      if (userErr || !userData?.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: prof } = await admin()
+        .from('profiles').select('company_id').eq('id', userData.user.id).maybeSingle();
+      callerCompanyId = prof?.company_id ?? null;
+      if (!callerCompanyId) {
+        return new Response(JSON.stringify({ error: 'No company' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
     let accountId: string | undefined;
     if (req.method === 'POST') {
       try {
@@ -285,6 +319,7 @@ Deno.serve(async (req) => {
     const db = admin();
     let q = db.from('gmail_accounts').select('*').eq('is_active', true);
     if (accountId) q = q.eq('id', accountId);
+    if (!isService && callerCompanyId) q = q.eq('company_id', callerCompanyId);
     const { data: accounts, error } = await q;
     if (error) throw error;
 

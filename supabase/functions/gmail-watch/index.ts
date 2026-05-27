@@ -10,6 +10,14 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceKey || token !== serviceKey) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const topic = Deno.env.get('GMAIL_PUBSUB_TOPIC');
     if (!topic) throw new Error('GMAIL_PUBSUB_TOPIC not configured');
 

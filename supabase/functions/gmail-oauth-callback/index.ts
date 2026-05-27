@@ -17,6 +17,25 @@ Deno.serve(async (req) => {
       } catch (_) {}
     }
 
+    // Allowlist for redirectOrigin to prevent open-redirect attacks.
+    const ALLOWED_ORIGINS = [
+      'https://vrmcrm.lovable.app',
+      'https://id-preview--418f74ad-1fe1-4222-932d-576a56ecad7b.lovable.app',
+    ];
+    const isAllowedOrigin = (origin: string) => {
+      if (!origin) return false;
+      if (ALLOWED_ORIGINS.includes(origin)) return true;
+      try {
+        const u = new URL(origin);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
+        if (u.hostname.endsWith('.lovable.app') || u.hostname.endsWith('.lovableproject.com')) return true;
+      } catch (_) {}
+      return false;
+    };
+    if (redirectOrigin && !isAllowedOrigin(redirectOrigin)) {
+      redirectOrigin = '';
+    }
+
     const finishRedirect = (status: string, message?: string) => {
       const target = redirectOrigin
         ? `${redirectOrigin}/?gmail_connected=${status}${message ? `&msg=${encodeURIComponent(message)}` : ''}`

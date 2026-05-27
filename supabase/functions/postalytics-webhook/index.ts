@@ -23,6 +23,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Shared-secret check. Postalytics is configured to send this token
+    // as a query parameter (?token=...) or X-Webhook-Token header.
+    const expected = Deno.env.get("POSTALYTICS_WEBHOOK_SECRET");
+    if (expected) {
+      const url = new URL(req.url);
+      const provided = url.searchParams.get("token") || req.headers.get("x-webhook-token") || "";
+      if (provided !== expected) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
     const body = await req.json();
     console.log("Postalytics webhook received:", JSON.stringify(body));
 

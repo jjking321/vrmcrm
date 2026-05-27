@@ -3,6 +3,7 @@ import { MailingListItem, FilterRule, FilterOperator } from '@/types';
 import { deriveMailingFields } from '@/lib/mailingAddress';
 import { getBestMailingName } from '@/lib/ownerUtils';
 import { useBadDataIndex } from './useBadContactData';
+import { useOptOutIndex } from './useMarketingOptOuts';
 import { normalizeAddressForMatch } from '@/lib/exclusionUtils';
 
 export interface DerivedMailingItem {
@@ -26,6 +27,7 @@ export function useMailingListFiltering(items: MailingListItem[]) {
   const [matchType, setMatchType] = useState<'and' | 'or'>('and');
   const [excludeBadAddresses, setExcludeBadAddresses] = useState(true);
   const badData = useBadDataIndex();
+  const optOuts = useOptOutIndex();
 
   // Derive mailing fields for each item once
   const derivedItems = useMemo((): DerivedMailingItem[] => {
@@ -54,12 +56,12 @@ export function useMailingListFiltering(items: MailingListItem[]) {
 
   // Auto-exclude addresses flagged as bad (returned-to-sender, etc.)
   const badExcludedItems = useMemo(() => {
-    if (!excludeBadAddresses || badData.addresses.size === 0) return derivedItems;
+    if (!excludeBadAddresses || (badData.addresses.size === 0 && optOuts.mail.size === 0)) return derivedItems;
     return derivedItems.filter(d => {
       const norm = normalizeAddressForMatch(d.mailingAddress, d.mailingCity, d.mailingState);
-      return !badData.addresses.has(norm);
+      return !badData.addresses.has(norm) && !optOuts.mail.has(norm);
     });
-  }, [derivedItems, badData.addresses, excludeBadAddresses]);
+  }, [derivedItems, badData.addresses, optOuts.mail, excludeBadAddresses]);
   const badExcludedCount = derivedItems.length - badExcludedItems.length;
 
   // Apply search filter

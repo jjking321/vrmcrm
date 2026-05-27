@@ -334,7 +334,7 @@ Deno.serve(async (req) => {
           cc_emails: ccObjs,
           subject,
           body_text: textBody,
-          body_html: sigHtml ? htmlBody : null,
+          body_html: htmlBody,
           snippet: textBody.slice(0, 200),
           sent_at: sentAt,
           direction: 'outbound',
@@ -343,6 +343,7 @@ Deno.serve(async (req) => {
           realtor_id: realtorId,
           property_id: propertyId,
           match_status: ownerId || realtorId ? 'matched' : 'unmatched',
+          tracking_id: trackingId,
         }, { onConflict: 'gmail_account_id,gmail_message_id' })
           .select('id')
           .single();

@@ -673,6 +673,7 @@ const MainApp: React.FC = () => {
           onDeduplicateChange={setDeduplicateByOwner}
           resultCount={displayProperties.length}
           isFiltering={isFiltering}
+          onExport={() => exportPropertiesToCsv(displayProperties, visibleColumns, fields, stages)}
         />
 
         <PropertyTableWithPagination 

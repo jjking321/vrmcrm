@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FilterRule, SavedList, PipelineStage, FieldDefinition } from '@/types';
-import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, Filter, Loader2 } from 'lucide-react';
+import { Search, ListFilter, Save, X, Plus, Trash2, Columns, Users, Filter, Loader2, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FilterRuleRow } from './FilterRuleRow';
 import { useUniqueTags } from '@/hooks/useUniqueTags';
@@ -29,6 +29,7 @@ interface FilterBarProps {
   deduplicateByOwner: boolean;
   onDeduplicateChange: (value: boolean) => void;
   resultCount: number;
+  onExport?: () => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -55,6 +56,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   deduplicateByOwner,
   onDeduplicateChange,
   resultCount,
+  onExport,
 }) => {
   const { data: availableTags = [] } = useUniqueTags();
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -318,6 +320,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Export */}
+        {onExport && (
+          <button
+            onClick={onExport}
+            disabled={isFiltering || resultCount === 0}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-input bg-card text-muted-foreground hover:bg-muted/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export current view to CSV"
+          >
+            <Download className="w-4 h-4" />
+            Export{resultCount > 0 ? ` (${resultCount.toLocaleString()})` : ''}
+          </button>
+        )}
       </div>
 
       {/* Filter Rules Section */}

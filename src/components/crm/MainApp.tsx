@@ -24,6 +24,7 @@ import { BulkActionsBar } from './BulkActionsBar';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { exportPropertiesToCsv } from '@/lib/exportProperties';
 
 // Lazy-load heavy components that aren't needed on initial render
 const ImportWizard = React.lazy(() => import('./ImportWizard').then(m => ({ default: m.ImportWizard })));
@@ -673,6 +674,7 @@ const MainApp: React.FC = () => {
           onDeduplicateChange={setDeduplicateByOwner}
           resultCount={displayProperties.length}
           isFiltering={isFiltering}
+          onExport={() => exportPropertiesToCsv(displayProperties, visibleColumns, fields, stages)}
         />
 
         <PropertyTableWithPagination 

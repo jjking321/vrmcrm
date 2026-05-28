@@ -1,5 +1,5 @@
 import { Property, PipelineStage, FieldDefinition } from '@/types';
-import { getPrimaryOwnerName, formatMailingAddress } from '@/lib/ownerUtils';
+import { getPrimaryOwnerName } from '@/lib/ownerUtils';
 
 const escapeCsv = (val: unknown): string => {
   if (val === null || val === undefined) return '';
@@ -8,6 +8,15 @@ const escapeCsv = (val: unknown): string => {
     return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
+};
+
+const MAX_OWNERS = 4;
+const MAX_PHONES = 4;
+const MAX_EMAILS = 4;
+
+type ExportColumn = {
+  header: string;
+  get: (p: Property) => unknown;
 };
 
 const getColumnLabel = (colId: string, fields: FieldDefinition[]): string => {
@@ -19,49 +28,89 @@ const getColumnLabel = (colId: string, fields: FieldDefinition[]): string => {
   return colId.charAt(0).toUpperCase() + colId.slice(1);
 };
 
-const getCellValue = (
-  property: Property,
+const expandColumn = (
   colId: string,
+  fields: FieldDefinition[],
   stages: PipelineStage[]
-): string => {
+): ExportColumn[] => {
   switch (colId) {
     case 'address':
-      return property.address || '';
-    case 'stageId': {
-      const stage = stages.find(s => s.id === property.stageId);
-      return stage?.name || '';
-    }
+      return [{ header: 'Address', get: p => p.address || '' }];
+    case 'stageId':
+      return [{
+        header: 'Stage',
+        get: p => stages.find(s => s.id === p.stageId)?.name || '',
+      }];
     case 'estimatedRevenue':
-      return String(property.marketData?.projectedRevenue ?? 0);
+      return [{
+        header: 'Est. Revenue',
+        get: p => p.marketData?.projectedRevenue ?? 0,
+      }];
     case 'tags':
-      return (property.tags || [])
-        .filter(t => !t.startsWith('list-'))
-        .join('; ');
+      return [{
+        header: 'Tags',
+        get: p => (p.tags || []).filter(t => !t.startsWith('list-')).join('; '),
+      }];
     case 'ownerName': {
-      const primary = getPrimaryOwnerName(property.owner);
-      const owners = property.owner?.owners || [];
-      const names = [primary];
-      for (let i = 1; i < owners.length; i++) {
-        const o = owners[i];
-        const n = `${o.firstName || ''} ${o.lastName || ''}`.trim();
-        if (n) names.push(n);
+      const cols: ExportColumn[] = [];
+      // Primary owner name (normalized)
+      cols.push({
+        header: 'Owner 1 Name',
+        get: p => getPrimaryOwnerName(p.owner),
+      });
+      // Additional owners
+      for (let i = 1; i < MAX_OWNERS; i++) {
+        cols.push({
+          header: `Owner ${i + 1} Name`,
+          get: p => {
+            const o = p.owner?.owners?.[i];
+            if (!o) return '';
+            return `${o.firstName || ''} ${o.lastName || ''}`.trim();
+          },
+        });
       }
-      const phones = (property.owner?.phones || []).map(p => p.number).filter(Boolean);
-      const emails = (property.owner?.emails || []).map(e => e.address).filter(Boolean);
-      const parts = [names.join(' & ')];
-      if (phones.length) parts.push(phones.join('; '));
-      if (emails.length) parts.push(emails.join('; '));
-      return parts.join(' | ');
+      // Phones
+      for (let i = 0; i < MAX_PHONES; i++) {
+        cols.push({
+          header: `Phone ${i + 1}`,
+          get: p => p.owner?.phones?.[i]?.number || '',
+        });
+        cols.push({
+          header: `Phone ${i + 1} DNC`,
+          get: p => (p.owner?.phones?.[i]?.doNotCall ? 'Yes' : ''),
+        });
+      }
+      // Emails
+      for (let i = 0; i < MAX_EMAILS; i++) {
+        cols.push({
+          header: `Email ${i + 1}`,
+          get: p => p.owner?.emails?.[i]?.address || '',
+        });
+        cols.push({
+          header: `Email ${i + 1} Opted Out`,
+          get: p => (p.owner?.emails?.[i]?.optedOut ? 'Yes' : ''),
+        });
+      }
+      return cols;
     }
     case 'mailingAddress':
-      return formatMailingAddress(property.owner) || '';
-    default: {
-      const value = (property as any)[colId] ?? property.customFields?.[colId];
-      if (value === null || value === undefined) return '';
-      if (Array.isArray(value)) return value.join('; ');
-      if (typeof value === 'object') return JSON.stringify(value);
-      return String(value);
-    }
+      return [
+        { header: 'Mailing Street', get: p => p.owner?.mailingAddress || '' },
+        { header: 'Mailing City', get: p => p.owner?.mailingCity || '' },
+        { header: 'Mailing State', get: p => p.owner?.mailingState || '' },
+        { header: 'Mailing Zip', get: p => p.owner?.mailingZip || '' },
+      ];
+    default:
+      return [{
+        header: getColumnLabel(colId, fields),
+        get: p => {
+          const value = (p as any)[colId] ?? p.customFields?.[colId];
+          if (value === null || value === undefined) return '';
+          if (Array.isArray(value)) return value.join('; ');
+          if (typeof value === 'object') return JSON.stringify(value);
+          return value;
+        },
+      }];
   }
 };
 
@@ -71,9 +120,12 @@ export function exportPropertiesToCsv(
   fields: FieldDefinition[],
   stages: PipelineStage[]
 ): void {
-  const header = visibleColumns.map(c => escapeCsv(getColumnLabel(c, fields))).join(',');
+  const columns: ExportColumn[] = visibleColumns.flatMap(c =>
+    expandColumn(c, fields, stages)
+  );
+  const header = columns.map(c => escapeCsv(c.header)).join(',');
   const rows = properties.map(p =>
-    visibleColumns.map(c => escapeCsv(getCellValue(p, c, stages))).join(',')
+    columns.map(c => escapeCsv(c.get(p))).join(',')
   );
   const csv = [header, ...rows].join('\n');
 

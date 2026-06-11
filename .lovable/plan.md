@@ -1,27 +1,34 @@
-## Export Properties to CSV
+## One-Time Core CRM Export
 
-Add an "Export" button to the Properties view that downloads a CSV of the current filtered list using the active columns.
+Generate a downloadable zip containing one CSV per core table, scoped to your company. Raw normalized structure — IDs preserved so foreign-key relationships rebuild cleanly in your new CRM.
 
-### Behavior
+### Tables included (core CRM only)
 
-- Respects all active filters, search, dedupe, and sort (exports `displayProperties` in current order).
-- Columns = currently visible columns (same set, same order as the table).
-- Filename: `properties-YYYY-MM-DD.csv`.
-- Each cell rendered as plain text (no badges/icons). Examples:
-  - Address column → just the street address (bed/bath stays in its own column if visible).
-  - Owner column → primary owner name, plus secondary owner if present, phones joined with `; `.
-  - Mailing address → formatted single-line string.
-  - Stage → stage name.
-  - Est. Revenue → numeric (no `$`).
-  - Tags → joined with `; ` (excluding internal `list-*` tags).
-  - Custom fields and default fields → raw value or empty.
-- Properly CSV-escapes commas, quotes, and newlines.
-- Disabled while filtering is in progress or when result count is 0.
+- `properties` — addresses, enrichment, market data, custom fields, tags
+- `owners` — names, phones, emails (full JSON arrays), mailing address, ownership metadata
+- `pipeline_stages`
+- `deals` + `deal_stage_history`
+- `activity_logs`
+- `realtors`
+- `field_definitions` — custom field schema
+- `saved_lists` — filter definitions
+- `companies` + `profiles` (your company row + team members, for reference)
 
-### Files
+Skipped (per your choice): email/inbox tables, call lists, mailing lists, exclusions, opt-outs, bad-data tracking, gmail accounts, api keys.
 
-- **New** `src/lib/exportProperties.ts` — `exportPropertiesToCsv(properties, visibleColumns, fields, stages)` that builds the CSV and triggers a browser download via a Blob + anchor.
-- **Edit** `src/components/crm/FilterBar.tsx` — add an `onExport` prop and an "Export" button (with download icon) next to the existing column/list controls. Show a small count hint like "Export 1,234".
-- **Edit** `src/components/crm/MainApp.tsx` — pass an `onExport` handler that calls the lib with `displayProperties`, `visibleColumns`, `fields`, `stages`.
+### How it works
 
-No backend changes, no schema changes.
+1. Run a `psql ... COPY (SELECT ... WHERE company_id = '<your-company>') TO STDOUT WITH CSV HEADER` for each table.
+2. Write each result to `/mnt/documents/export/<table>.csv`.
+3. Zip the folder to `/mnt/documents/addressfirst-export-YYYY-MM-DD.zip`.
+4. Surface the zip via a `<presentation-artifact>` tag for one-click download.
+
+### Notes
+
+- JSON columns (phones, emails, owners array, market_data, custom_fields, monthly_metrics, etc.) are exported as raw JSON strings inside their CSV cell — your new CRM can parse them on import.
+- All `id` and `*_id` columns are preserved so you can rebuild relationships (properties ↔ owners ↔ deals ↔ activities ↔ stages).
+- This is a one-time export. No code changes, no UI changes, no schema changes.
+
+### What I'll deliver
+
+A single zip file you can download immediately, containing ~11 CSVs plus a short `README.txt` listing each file, its row count, and the foreign-key relationships.

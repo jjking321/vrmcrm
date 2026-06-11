@@ -1,37 +1,64 @@
-## Flatten enriched JSON into CSV columns
+## Idempotent SQL Dump for Same-Schema Migration
 
-Re-export `properties.csv` (and `owners.csv`) with all JSON columns exploded into one CSV column per field, then re-zip. All other CSVs in the existing export stay as-is.
+Generate a single `import.sql` file containing `INSERT … ON CONFLICT (id) DO UPDATE` statements for every core CRM row, in foreign-key order, with all original UUIDs preserved (so properties ↔ owners ↔ deals ↔ activities ↔ stages relink automatically).
 
-### properties.csv — new columns
+### What's included
 
-Existing columns stay. Add, from `market_data` JSON:
+In FK order:
 
-- `md_adr`, `md_occupancy_rate`, `md_projected_revenue`
-- `md_airbnb_rating`, `md_review_count`
-- `md_market_avg_adr`, `md_market_avg_occupancy`, `md_market_avg_revenue`, `md_comparable_count`, `md_data_source`
-- `md_property_value`
-- `md_ttm_revenue`, `md_ttm_avg_occupancy`, `md_ttm_avg_adr`
-- `md_monthly_revenue_distribution` (kept as JSON string — 12 numbers)
-- `md_monthly_metrics` (kept as JSON string — variable-length time series)
+1. `pipeline_stages`
+2. `realtors`
+3. `field_definitions`
+4. `saved_lists`
+5. `properties`
+6. `owners`
+7. `deals`
+8. `activity_logs`
+9. `deal_stage_history`
 
-From `custom_fields` JSON: one `cf_<field_key>` column per custom field defined in `field_definitions` (skips system fields already on the row). Discovered dynamically from the table so it includes everything you've added.
+Skipped (per your choice): `companies`, `profiles`. You'll create the company in the new CRM by signing up, then paste its UUID at the top of the script.
 
-The original `market_data` and `custom_fields` JSON columns are dropped from this CSV to avoid duplication (still present in the raw zip if needed — we can keep them too if you prefer).
+### How company/user IDs are handled
 
-### owners.csv — new columns
+The top of `import.sql` looks like:
 
-Explode `phones`, `emails`, and `owners` JSON arrays into numbered columns (matches the export-properties pattern already in the app):
+```sql
+-- 1. Paste the destination company UUID here:
+\set new_company_id '00000000-0000-0000-0000-000000000000'
 
-- `owner_1_first_name`, `owner_1_last_name` … up to `owner_4_*`
-- `phone_1`, `phone_1_type`, `phone_1_dnc`, `phone_1_status`, `phone_1_source` … up to `phone_6`
-- `email_1`, `email_1_type`, `email_1_opted_out`, `email_1_status`, `email_1_source` … up to `email_4`
+BEGIN;
+-- inserts use :'new_company_id' for company_id and NULL for created_by
+...
+COMMIT;
+```
 
-Original `phones` / `emails` / `owners` JSON columns dropped.
-
-### Deliverable
-
-New zip: `/mnt/documents/addressfirst-export-flat-YYYY-MM-DD.zip` containing the same 11 CSVs (flattened properties + owners, others unchanged) and an updated `README.txt` documenting the new columns.
+- Every `company_id` is rewritten on import via the `psql` variable — no global replace needed in the file.
+- Every `created_by` (auth user id) is set to `NULL`, since auth users differ between projects.
+- Every other UUID (row IDs, `property_id`, `owner_id`, `stage_id`, `realtor_id`, `deal_id`) is kept verbatim so relationships survive.
 
 ### How it's built
 
-A single Python script using `psql ... COPY ... TO STDOUT WITH CSV HEADER` to load rows, then pandas to flatten JSON columns into the new schema and write back to CSV. No app code changes, no schema changes.
+A Python script that:
+
+1. Reads each table via `psql ... COPY ... TO STDOUT` (or `SELECT to_jsonb(t)` for clean JSON), scoped to your company.
+2. For each row, emits an `INSERT INTO public.<table> (...) VALUES (...) ON CONFLICT (id) DO UPDATE SET <col> = EXCLUDED.<col>, ...` line, with proper escaping for text, JSONB, arrays, timestamps, booleans, and NULLs.
+3. Substitutes `company_id` with `:'new_company_id'` and `created_by` with `NULL`.
+4. Writes everything to one `import.sql` wrapped in a transaction.
+
+### Deliverable
+
+A zip at `/mnt/documents/addressfirst-sql-dump-YYYY-MM-DD.zip` containing:
+
+- `import.sql` — the full upsert dump (single file, transaction-wrapped)
+- `README.md` — step-by-step import instructions for the destination CRM:
+  1. Sign up / log in to the new CRM, note your `companies.id`
+  2. Edit `import.sql`, paste that UUID into `\set new_company_id`
+  3. Run `psql "<destination connection string>" -f import.sql`
+  4. Done — re-run anytime; conflicts upsert in place
+
+### Notes
+
+- Single-transaction so a partial failure rolls back cleanly.
+- Idempotent: safe to re-run after fixing data and re-exporting.
+- All Airbnb/Zillow enrichment travels inside `properties.market_data` and the flat columns; nothing is dropped.
+- No code or schema changes to this project.

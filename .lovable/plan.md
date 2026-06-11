@@ -1,34 +1,37 @@
-## One-Time Core CRM Export
+## Flatten enriched JSON into CSV columns
 
-Generate a downloadable zip containing one CSV per core table, scoped to your company. Raw normalized structure — IDs preserved so foreign-key relationships rebuild cleanly in your new CRM.
+Re-export `properties.csv` (and `owners.csv`) with all JSON columns exploded into one CSV column per field, then re-zip. All other CSVs in the existing export stay as-is.
 
-### Tables included (core CRM only)
+### properties.csv — new columns
 
-- `properties` — addresses, enrichment, market data, custom fields, tags
-- `owners` — names, phones, emails (full JSON arrays), mailing address, ownership metadata
-- `pipeline_stages`
-- `deals` + `deal_stage_history`
-- `activity_logs`
-- `realtors`
-- `field_definitions` — custom field schema
-- `saved_lists` — filter definitions
-- `companies` + `profiles` (your company row + team members, for reference)
+Existing columns stay. Add, from `market_data` JSON:
 
-Skipped (per your choice): email/inbox tables, call lists, mailing lists, exclusions, opt-outs, bad-data tracking, gmail accounts, api keys.
+- `md_adr`, `md_occupancy_rate`, `md_projected_revenue`
+- `md_airbnb_rating`, `md_review_count`
+- `md_market_avg_adr`, `md_market_avg_occupancy`, `md_market_avg_revenue`, `md_comparable_count`, `md_data_source`
+- `md_property_value`
+- `md_ttm_revenue`, `md_ttm_avg_occupancy`, `md_ttm_avg_adr`
+- `md_monthly_revenue_distribution` (kept as JSON string — 12 numbers)
+- `md_monthly_metrics` (kept as JSON string — variable-length time series)
 
-### How it works
+From `custom_fields` JSON: one `cf_<field_key>` column per custom field defined in `field_definitions` (skips system fields already on the row). Discovered dynamically from the table so it includes everything you've added.
 
-1. Run a `psql ... COPY (SELECT ... WHERE company_id = '<your-company>') TO STDOUT WITH CSV HEADER` for each table.
-2. Write each result to `/mnt/documents/export/<table>.csv`.
-3. Zip the folder to `/mnt/documents/addressfirst-export-YYYY-MM-DD.zip`.
-4. Surface the zip via a `<presentation-artifact>` tag for one-click download.
+The original `market_data` and `custom_fields` JSON columns are dropped from this CSV to avoid duplication (still present in the raw zip if needed — we can keep them too if you prefer).
 
-### Notes
+### owners.csv — new columns
 
-- JSON columns (phones, emails, owners array, market_data, custom_fields, monthly_metrics, etc.) are exported as raw JSON strings inside their CSV cell — your new CRM can parse them on import.
-- All `id` and `*_id` columns are preserved so you can rebuild relationships (properties ↔ owners ↔ deals ↔ activities ↔ stages).
-- This is a one-time export. No code changes, no UI changes, no schema changes.
+Explode `phones`, `emails`, and `owners` JSON arrays into numbered columns (matches the export-properties pattern already in the app):
 
-### What I'll deliver
+- `owner_1_first_name`, `owner_1_last_name` … up to `owner_4_*`
+- `phone_1`, `phone_1_type`, `phone_1_dnc`, `phone_1_status`, `phone_1_source` … up to `phone_6`
+- `email_1`, `email_1_type`, `email_1_opted_out`, `email_1_status`, `email_1_source` … up to `email_4`
 
-A single zip file you can download immediately, containing ~11 CSVs plus a short `README.txt` listing each file, its row count, and the foreign-key relationships.
+Original `phones` / `emails` / `owners` JSON columns dropped.
+
+### Deliverable
+
+New zip: `/mnt/documents/addressfirst-export-flat-YYYY-MM-DD.zip` containing the same 11 CSVs (flattened properties + owners, others unchanged) and an updated `README.txt` documenting the new columns.
+
+### How it's built
+
+A single Python script using `psql ... COPY ... TO STDOUT WITH CSV HEADER` to load rows, then pandas to flatten JSON columns into the new schema and write back to CSV. No app code changes, no schema changes.
